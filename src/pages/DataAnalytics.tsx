@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { 
-  Database, Filter, Download, ChevronDown, TrendingUp, TrendingDown,
+  Database, Download, ChevronDown, TrendingUp, TrendingDown,
   DollarSign, Target, MousePointer, Eye, ShoppingCart, CreditCard,
-  AlertCircle, RefreshCw, Calendar, ChevronLeft, ChevronRight
+  AlertCircle, RefreshCw
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
@@ -46,12 +46,11 @@ export default function DataAnalytics() {
   // State
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
-  const [dateRange, setDateRange] = useState({ start: '', end: '' })
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Fetch clients from Superbase
-  const { data: clients, error: clientsError } = useQuery({
+  const { data: clients } = useQuery({
     queryKey: ['clients'],
     queryFn: async () => {
       try {
@@ -75,7 +74,7 @@ export default function DataAnalytics() {
   })
 
   // Fetch campaigns with filters
-  const { data: campaigns, error: campaignsError } = useQuery({
+  const { data: campaigns } = useQuery({
     queryKey: ['campaigns', selectedClient, selectedPlatform],
     queryFn: async () => {
       try {
@@ -105,7 +104,7 @@ export default function DataAnalytics() {
   })
 
   // Fetch daily metrics for chart
-  const { data: dailyMetrics, error: metricsError } = useQuery({
+  const { data: dailyMetrics } = useQuery({
     queryKey: ['dailyMetrics', selectedClient, selectedPlatform],
     queryFn: async () => {
       try {

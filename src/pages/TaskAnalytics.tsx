@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { BarChart, BarChart3, CheckCircle, Clock, AlertCircle, Loader2 } from 'lucide-react'
+import { BarChart3, CheckCircle, Clock, AlertCircle, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 

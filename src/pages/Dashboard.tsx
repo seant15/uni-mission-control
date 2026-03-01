@@ -10,7 +10,7 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null)
 
   // Agent data with error handling
-  const { data: agentHealth, error: healthError } = useQuery({
+  const { data: agentHealth } = useQuery({
     queryKey: ['agentHealth'],
     queryFn: async () => {
       try {
@@ -27,7 +27,7 @@ export default function Dashboard() {
     },
   })
 
-  const { data: tasks, error: tasksError } = useQuery({
+  const { data: tasks } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
       try {
@@ -249,49 +249,5 @@ function StatCard({ title, value, total, icon: Icon, color, subtitle, trend, tre
         </div>
       </div>
     </div>
-  )
-}
-
-interface PlatformRowProps {
-  platform: string
-  icon: string
-  spend: string
-  impressions: string
-  clicks: string
-  ctr: string
-  conversions: string
-  status: 'active' | 'warning' | 'error'
-}
-
-function PlatformRow({ platform, icon, spend, impressions, clicks, ctr, conversions, status }: PlatformRowProps) {
-  const statusColors = {
-    active: 'bg-emerald-100 text-emerald-700',
-    warning: 'bg-amber-100 text-amber-700',
-    error: 'bg-red-100 text-red-700',
-  }
-
-  return (
-    <tr className="hover:bg-gray-50">
-      <td className="px-6 py-4">
-        <div className="flex items-center gap-3">
-          <span className="text-xl">{icon}</span>
-          <span className="font-medium text-gray-900">{platform}</span>
-          <span className={`text-xs px-2 py-1 rounded-full ${statusColors[status]}`}>
-            {status}
-          </span>
-        </div>
-      </td>
-      <td className="px-6 py-4 text-right font-medium text-gray-900">{spend}</td>
-      <td className="px-6 py-4 text-right text-gray-600">{impressions}</td>
-      <td className="px-6 py-4 text-right text-gray-600">{clicks}</td>
-      <td className="px-6 py-4 text-right">
-        <span className="text-emerald-600 font-medium">{ctr}</span>
-      </td>
-      <td className="px-6 py-4 text-right">
-        <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-sm font-medium">
-          {conversions}
-        </span>
-      </td>
-    </tr>
   )
 }
