@@ -3,7 +3,10 @@ import { Activity, Users, Zap, AlertCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 export default function Dashboard() {
-  const { data: agentHealth } = useQuery({
+  const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL
+  const hasEnvVars = supabaseUrl && supabaseUrl !== 'https://placeholder.supabase.co'
+
+  const { data: agentHealth, error: healthError } = useQuery({
     queryKey: ['agentHealth'],
     queryFn: async () => {
       const { data } = await supabase.from('agent_health').select('*')
@@ -11,7 +14,7 @@ export default function Dashboard() {
     },
   })
 
-  const { data: tasks } = useQuery({
+  const { data: tasks, error: tasksError } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
       const { data } = await supabase.from('agent_tasks').select('*')
@@ -25,6 +28,15 @@ export default function Dashboard() {
 
   return (
     <div>
+      {!hasEnvVars && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+          <p className="text-yellow-800 font-medium">⚠️ Configuration Required</p>
+          <p className="text-yellow-700 text-sm mt-1">
+            Please set <code className="bg-yellow-100 px-1 rounded">VITE_SUPABASE_URL</code> and{' '}
+            <code className="bg-yellow-100 px-1 rounded">VITE_SUPABASE_ANON_KEY</code> in your Vercel dashboard.
+          </p>
+        </div>
+      )}
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard Overview</h1>
       
       {/* Stats Grid */}
