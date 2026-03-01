@@ -1,8 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Rocket, BarChart3, Settings as SettingsIcon, Bell, Search } from 'lucide-react'
+import { LayoutDashboard, Rocket, BarChart3, Settings as SettingsIcon, Bell, Search, Database } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import MissionControl from './pages/MissionControl'
-import Analytics from './pages/Analytics'
+import DataAnalytics from './pages/DataAnalytics'
+import TaskAnalytics from './pages/TaskAnalytics'
 import SettingsPage from './pages/Settings'
 
 function App() {
@@ -31,7 +32,8 @@ function App() {
             </div>
             <NavLink to="/" icon={LayoutDashboard} label="Overview" />
             <NavLink to="/mission-control" icon={Rocket} label="Mission Control" />
-            <NavLink to="/analytics" icon={BarChart3} label="Analytics" />
+            <NavLink to="/data-analytics" icon={Database} label="Data Analytics" />
+            <NavLink to="/task-analytics" icon={BarChart3} label="Task Analytics" />
             
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-6 px-4">
               System
@@ -82,7 +84,8 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/mission-control" element={<MissionControl />} />
-              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/data-analytics" element={<DataAnalytics />} />
+              <Route path="/task-analytics" element={<TaskAnalytics />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </main>

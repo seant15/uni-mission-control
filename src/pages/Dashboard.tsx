@@ -1,39 +1,48 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { 
   Activity, Users, Zap, Clock, ArrowRight,
-  DollarSign, MousePointer, Eye, Target, BarChart3
+  BarChart3, AlertCircle, Rocket, Database
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 export default function Dashboard() {
-  // Agent data
-  const { data: agentHealth } = useQuery({
+  const [error, setError] = useState<string | null>(null)
+
+  // Agent data with error handling
+  const { data: agentHealth, error: healthError } = useQuery({
     queryKey: ['agentHealth'],
     queryFn: async () => {
-      const { data } = await supabase.from('agent_health').select('*')
-      return data || []
+      try {
+        const { data, error } = await supabase.from('agent_health').select('*')
+        if (error) {
+          setError(`Agent health error: ${error.message}`)
+          return []
+        }
+        return data || []
+      } catch (err: any) {
+        setError(`Agent health exception: ${err.message}`)
+        return []
+      }
     },
   })
 
-  const { data: tasks } = useQuery({
+  const { data: tasks, error: tasksError } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
-      const { data } = await supabase.from('agent_tasks').select('*')
-      return data || []
+      try {
+        const { data, error } = await supabase.from('agent_tasks').select('*')
+        if (error) {
+          setError(`Tasks error: ${error.message}`)
+          return []
+        }
+        return data || []
+      } catch (err: any) {
+        setError(`Tasks exception: ${err.message}`)
+        return []
+      }
     },
   })
-
-  // Sample analytics data (would come from your analytics API)
-  const analyticsData = {
-    impressions: 2450000,
-    clicks: 45200,
-    conversions: 1840,
-    spend: 28500,
-    ctr: 1.84,
-    cpc: 0.63,
-    conversionRate: 4.07,
-    roas: 3.2
-  }
 
   const onlineAgents = agentHealth?.filter(a => a.consecutive_failures === 0).length || 0
   const pendingTasks = tasks?.filter(t => t.status === 'pending').length || 0
@@ -41,11 +50,22 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
+      {/* Error Notification */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+          <AlertCircle className="text-red-600" size={20} />
+          <div className="flex-1">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+          <button onClick={() => setError(null)} className="text-red-600 hover:text-red-800">✕</button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard Overview</h1>
-          <p className="text-gray-500 mt-1">Agent fleet status + Marketing analytics</p>
+          <p className="text-gray-500 mt-1">Agent fleet management dashboard</p>
         </div>
         <div className="flex items-center gap-3">
           <span className="px-4 py-2 bg-green-50 text-green-700 rounded-full text-sm font-medium flex items-center gap-2">
@@ -94,113 +114,51 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* ANALYTICS SECTION */}
+      {/* AGENT STATUS CARDS */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <BarChart3 size={20} className="text-indigo-600" />
-          Marketing Performance (Last 30 Days)
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <StatCard
-            title="Impressions"
-            value={analyticsData.impressions.toLocaleString()}
-            icon={Eye}
-            color="indigo"
-            subtitle="Total reach"
-            trend="+12%"
-            trendUp={true}
-          />
-          <StatCard
-            title="Clicks"
-            value={analyticsData.clicks.toLocaleString()}
-            icon={MousePointer}
-            color="blue"
-            subtitle={`CTR: ${analyticsData.ctr}%`}
-            trend="+8%"
-            trendUp={true}
-          />
-          <StatCard
-            title="Conversions"
-            value={analyticsData.conversions.toLocaleString()}
-            icon={Target}
-            color="emerald"
-            subtitle={`Rate: ${analyticsData.conversionRate}%`}
-            trend="+15%"
-            trendUp={true}
-          />
-          <StatCard
-            title="Spend"
-            value={`$${analyticsData.spend.toLocaleString()}`}
-            icon={DollarSign}
-            color="rose"
-            subtitle={`ROAS: ${analyticsData.roas}x`}
-            trend="-3%"
-            trendUp={false}
-          />
-        </div>
-      </section>
-
-      {/* DETAILED METRICS TABLE */}
-      <section className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="font-semibold text-gray-900">Platform Breakdown</h3>
-          <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-            View All →
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Platform</th>
-                <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">Spend</th>
-                <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">Impressions</th>
-                <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">Clicks</th>
-                <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">CTR</th>
-                <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">Conversions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              <PlatformRow 
-                platform="Google Ads"
-                icon="🔍"
-                spend="$18,420"
-                impressions="1,840,000"
-                clicks="33,120"
-                ctr="1.80%"
-                conversions="1,324"
-                status="active"
-              />
-              <PlatformRow 
-                platform="Meta Ads"
-                icon="👥"
-                spend="$8,250"
-                impressions="520,000"
-                clicks="10,920"
-                ctr="2.10%"
-                conversions="438"
-                status="active"
-              />
-              <PlatformRow 
-                platform="LinkedIn"
-                icon="💼"
-                spend="$1,830"
-                impressions="90,000"
-                clicks="1,160"
-                ctr="1.29%"
-                conversions="78"
-                status="warning"
-              />
-            </tbody>
-          </table>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Agent Details</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {['clover', 'mary', 'openclaw', 'nexus', 'writer', 'kimi'].map((agentName) => {
+            const health = agentHealth?.find(h => h.agent_name === agentName)
+            const agentTasks = tasks?.filter(t => t.to_agent === agentName)
+            const activeCount = agentTasks?.filter(t => t.status === 'claimed').length || 0
+            const emojiMap: Record<string, string> = {
+              clover: '🍀', mary: '📡', openclaw: '🛡️',
+              nexus: '🔗', writer: '✍️', kimi: '🧪'
+            }
+            
+            return (
+              <div key={agentName} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-2xl">{emojiMap[agentName]}</span>
+                  <div>
+                    <h3 className="font-semibold capitalize">{agentName}</h3>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${health?.consecutive_failures === 0 ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <span className="text-xs text-gray-500">
+                        {health?.consecutive_failures === 0 ? 'Online' : 'Issues'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-600">
+                  <p>Active tasks: {activeCount}</p>
+                  <p>Total tasks: {agentTasks?.length || 0}</p>
+                </div>
+              </div>
+            )
+          })}
         </div>
       </section>
 
       {/* QUICK LINKS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl p-6 text-white">
-          <h3 className="text-lg font-semibold mb-2">Mission Control</h3>
-          <p className="text-blue-100 mb-4">Manage your agent fleet and tasks</p>
+          <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+            <Rocket size={20} />
+            Mission Control
+          </h3>
+          <p className="text-blue-100 mb-4">Manage agent fleet and task queue</p>
           <a 
             href="/mission-control" 
             className="inline-flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors text-sm font-medium"
@@ -211,13 +169,31 @@ export default function Dashboard() {
         </div>
         
         <div className="bg-gradient-to-br from-emerald-600 to-teal-600 rounded-2xl p-6 text-white">
-          <h3 className="text-lg font-semibold mb-2">Analytics Deep Dive</h3>
-          <p className="text-emerald-100 mb-4">View detailed performance metrics</p>
+          <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+            <Database size={20} />
+            Data Analytics
+          </h3>
+          <p className="text-emerald-100 mb-4">Marketing performance metrics</p>
           <a 
-            href="/analytics" 
+            href="/data-analytics" 
             className="inline-flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors text-sm font-medium"
           >
-            View Analytics
+            View Data Analytics
+            <ArrowRight size={16} />
+          </a>
+        </div>
+
+        <div className="bg-gradient-to-br from-violet-600 to-purple-600 rounded-2xl p-6 text-white">
+          <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+            <BarChart3 size={20} />
+            Task Analytics
+          </h3>
+          <p className="text-violet-100 mb-4">Task performance and metrics</p>
+          <a 
+            href="/task-analytics" 
+            className="inline-flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+          >
+            View Task Analytics
             <ArrowRight size={16} />
           </a>
         </div>
