@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { 
-  Activity, Users, Zap, AlertCircle, TrendingUp, Clock, ArrowRight,
+  Activity, Users, Zap, Clock, ArrowRight,
   DollarSign, MousePointer, Eye, Target, BarChart3
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
