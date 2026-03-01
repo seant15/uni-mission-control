@@ -50,7 +50,7 @@ export default function MissionControl() {
       })
       .subscribe()
     return () => {
-      channel.then((ch: any) => ch.unsubscribe())
+      channel.unsubscribe()
     }
   }, [queryClient])
 
