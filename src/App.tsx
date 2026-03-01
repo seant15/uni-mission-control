@@ -1,9 +1,9 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
-import { LayoutDashboard, Rocket, BarChart3, Settings } from 'lucide-react'
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
+import { LayoutDashboard, Rocket, BarChart3, Settings as SettingsIcon } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import MissionControl from './pages/MissionControl'
 import Analytics from './pages/Analytics'
-import Settings from './pages/Settings'
+import SettingsPage from './pages/Settings'
 
 function App() {
   return (
@@ -20,7 +20,7 @@ function App() {
             <NavLink to="/" icon={LayoutDashboard} label="Overview" />
             <NavLink to="/mission-control" icon={Rocket} label="Mission Control" />
             <NavLink to="/analytics" icon={BarChart3} label="Analytics" />
-            <NavLink to="/settings" icon={Settings} label="Settings" />
+            <NavLink to="/settings" icon={SettingsIcon} label="Settings" />
           </nav>
           
           <div className="p-4 border-t border-slate-800">
@@ -42,7 +42,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/mission-control" element={<MissionControl />} />
             <Route path="/analytics" element={<Analytics />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>
       </div>
@@ -51,6 +51,7 @@ function App() {
 }
 
 function NavLink({ to, icon: Icon, label }: { to: string; icon: any; label: string }) {
+  const location = useLocation()
   const isActive = location.pathname === to
   return (
     <Link

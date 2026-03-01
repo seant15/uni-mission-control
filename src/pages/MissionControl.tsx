@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Activity, CheckCircle, AlertCircle, Clock, Plus, Filter, Loader2 } from 'lucide-react'
+import { CheckCircle, AlertCircle, Clock, Plus, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { AgentTask, AgentHealth } from '../types'
 
@@ -43,13 +43,15 @@ export default function MissionControl() {
 
   // Real-time subscriptions
   useEffect(() => {
-    const sub = supabase
+    const channel = supabase
       .channel('tasks')
-      .on('postgres_changes', { event: '*', table: 'agent_tasks' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_tasks' }, () => {
         queryClient.invalidateQueries({ queryKey: ['tasks'] })
       })
       .subscribe()
-    return () => sub.unsubscribe()
+    return () => {
+      channel.then((ch: any) => ch.unsubscribe())
+    }
   }, [queryClient])
 
   // Mutations
@@ -107,7 +109,7 @@ export default function MissionControl() {
       from_agent: 'user',
       to_agent: fd.get('to_agent') as string,
       task_type: fd.get('task_type') as string,
-      priority: fd.get('priority') as string,
+      priority: fd.get('priority') as 'low' | 'normal' | 'high' | 'urgent',
       payload: JSON.parse((fd.get('payload') as string) || '{}'),
       status: 'pending',
     })
