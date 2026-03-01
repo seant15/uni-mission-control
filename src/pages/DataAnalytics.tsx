@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { 
-  Database, Download, ChevronDown, TrendingUp, TrendingDown,
+  Database, Download, ChevronDown, ChevronRight, TrendingUp, TrendingDown,
   DollarSign, Target, MousePointer, Eye, ShoppingCart, CreditCard,
   AlertCircle, RefreshCw
 } from 'lucide-react'
