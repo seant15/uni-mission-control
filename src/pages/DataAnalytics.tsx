@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { 
   Database, ChevronDown, TrendingUp, DollarSign, Target, CreditCard,
-  AlertCircle, Calendar, RefreshCw, Bug, Bell, X, Paperclip, Mic, Send
+  AlertCircle, Calendar, Bell, X
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts'
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 
 interface DailyPerformance {
   id: string
@@ -69,8 +69,7 @@ export default function DataAnalytics() {
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [showDatePresets, setShowDatePresets] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [debugInfo, setDebugInfo] = useState<string>('')
-  const [notifications, setNotifications] = useState<string[]>(['New task assigned', 'Report ready'])
+  const [notifications, _setNotifications] = useState<string[]>(['New task assigned', 'Report ready'])
   const [showNotifications, setShowNotifications] = useState(false)
 
   // Fetch clients
