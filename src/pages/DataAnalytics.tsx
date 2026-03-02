@@ -84,9 +84,10 @@ export default function DataAnalytics() {
   })
 
   // Fetch performance data
-  const { data: allPerformance } = useQuery({
+  const { data: allPerformance, isLoading: performanceLoading, error: performanceError } = useQuery({
     queryKey: ['all_performance'],
     queryFn: async () => {
+      console.log('Fetching daily_performance...')
       const { data, error } = await supabase
         .from('daily_performance')
         .select('*')
@@ -94,9 +95,12 @@ export default function DataAnalytics() {
         .limit(5000)
       
       if (error) {
+        console.error('daily_performance error:', error)
         setError(`Failed to load data: ${error.message}`)
         return []
       }
+      console.log('daily_performance data:', data?.length || 0, 'records')
+      console.log('Platforms found:', data ? [...new Set(data.map(d => d.platform))] : [])
       return data as DailyPerformance[] || []
     },
   })
@@ -127,9 +131,10 @@ export default function DataAnalytics() {
     enabled: selectedPlatform === 'all' || selectedPlatform === 'google_ads',
   })
 
-  // Get unique platforms from data
-  const availablePlatforms = allPerformance ? 
-    Array.from(new Set(allPerformance.map(p => p.platform))).filter(Boolean) : []
+  // Get unique platforms from data (with fallback for testing)
+  const availablePlatforms = allPerformance && allPerformance.length > 0 ? 
+    Array.from(new Set(allPerformance.map(p => p.platform))).filter(Boolean) : 
+    ['google_ads', 'meta_ads', 'tiktok_ads'] // Fallback platforms for testing
 
   // Build client list
   const clients: Client[] = clientsFromTable && clientsFromTable.length > 0 
@@ -254,6 +259,20 @@ export default function DataAnalytics() {
           <button onClick={() => setError(null)} className="text-red-600 hover:text-red-800">✕</button>
         </div>
       )}
+
+      {/* Debug Info */}
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+        <details>
+          <summary className="text-sm font-medium text-gray-600 cursor-pointer">Debug Info (click to expand)</summary>
+          <div className="mt-2 text-xs text-gray-500 space-y-1 font-mono">
+            <p>Performance Loading: {performanceLoading ? 'YES' : 'NO'}</p>
+            <p>Performance Error: {performanceError ? performanceError.message : 'None'}</p>
+            <p>Records Loaded: {allPerformance?.length || 0}</p>
+            <p>Available Platforms: {availablePlatforms.join(', ') || 'None'}</p>
+            <p>Clients Loaded: {clients.length}</p>
+          </div>
+        </details>
+      </div>
 
       {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
