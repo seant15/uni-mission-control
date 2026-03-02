@@ -35,11 +35,11 @@ export default function DataAnalytics() {
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch clients from clients table
+  // Fetch clients from user_clients table
   const { data: clientsFromTable } = useQuery({
     queryKey: ['clients_table'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('clients').select('*').order('name')
+      const { data, error } = await supabase.from('user_clients').select('*').order('name')
       if (error) {
         console.log('Clients table error:', error.message)
         return []
