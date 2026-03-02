@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { 
   Database, ChevronDown, TrendingUp, DollarSign, Target, CreditCard,
-  AlertCircle, Calendar
+  AlertCircle, Calendar, RefreshCw
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
@@ -13,8 +13,6 @@ interface DailyPerformance {
   client_name?: string
   date: string
   platform: string
-  campaign_id?: string
-  campaign_name?: string
   impressions: number
   clicks: number
   conversions: number
@@ -24,6 +22,12 @@ interface DailyPerformance {
   revenue?: number
 }
 
+interface Client {
+  id: string
+  name: string
+  industry?: string
+}
+
 export default function DataAnalytics() {
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
@@ -31,7 +35,20 @@ export default function DataAnalytics() {
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch all performance data first to extract clients
+  // Fetch clients from clients table
+  const { data: clientsFromTable } = useQuery({
+    queryKey: ['clients_table'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('clients').select('*').order('name')
+      if (error) {
+        console.log('Clients table error:', error.message)
+        return []
+      }
+      return data as Client[] || []
+    },
+  })
+
+  // Fetch performance data
   const { data: allPerformance, isLoading: perfLoading } = useQuery({
     queryKey: ['all_performance'],
     queryFn: async () => {
@@ -40,7 +57,7 @@ export default function DataAnalytics() {
           .from('daily_performance')
           .select('*')
           .order('date', { ascending: false })
-          .limit(1000)
+          .limit(2000)
         
         if (error) {
           setError(`Failed to load data: ${error.message}`)
@@ -54,18 +71,25 @@ export default function DataAnalytics() {
     },
   })
 
-  // Extract unique clients from performance data
-  const clients = allPerformance?.reduce((acc: {id: string, name: string}[], perf) => {
-    if (perf.client_id && !acc.find(c => c.id === perf.client_id)) {
-      acc.push({
-        id: perf.client_id,
-        name: perf.client_name || `Client ${perf.client_id.slice(0, 8)}`
-      })
+  // Build client list from both sources
+  const clients: Client[] = (() => {
+    // First try clients table
+    if (clientsFromTable && clientsFromTable.length > 0) {
+      return clientsFromTable
     }
-    return acc
-  }, []) || []
+    
+    // Fall back to extracting from performance data
+    const uniqueClients = new Map<string, string>()
+    allPerformance?.forEach(perf => {
+      if (perf.client_id && !uniqueClients.has(perf.client_id)) {
+        uniqueClients.set(perf.client_id, perf.client_name || `Client ${perf.client_id.slice(0, 8)}`)
+      }
+    })
+    
+    return Array.from(uniqueClients.entries()).map(([id, name]) => ({ id, name }))
+  })()
 
-  // Filter performance data based on selection
+  // Filter performance data
   const performance = allPerformance?.filter(day => {
     if (selectedClient !== 'all' && day.client_id !== selectedClient) return false
     if (selectedPlatform !== 'all' && day.platform !== selectedPlatform) return false
@@ -75,31 +99,36 @@ export default function DataAnalytics() {
   }) || []
 
   // Calculate totals
-  const totals = performance?.reduce((acc, day) => ({
-    spend: acc.spend + (day.spend || day.cost || 0),
-    impressions: acc.impressions + (day.impressions || 0),
-    clicks: acc.clicks + (day.clicks || 0),
-    conversions: acc.conversions + (day.conversions || 0),
-    conversion_value: acc.conversion_value + (day.conversion_value || day.revenue || 0),
-  }), { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversion_value: 0 }) || { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversion_value: 0 }
+  const totals = performance?.reduce((acc, day) => {
+    const spend = day.spend || day.cost || 0
+    const revenue = day.conversion_value || day.revenue || 0
+    return {
+      spend: acc.spend + spend,
+      impressions: acc.impressions + (day.impressions || 0),
+      clicks: acc.clicks + (day.clicks || 0),
+      conversions: acc.conversions + (day.conversions || 0),
+      conversion_value: acc.conversion_value + revenue,
+    }
+  }, { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversion_value: 0 }) || { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversion_value: 0 }
 
   const roas = totals.spend > 0 ? (totals.conversion_value / totals.spend).toFixed(2) : '0.00'
 
   // Aggregate by date for charts
   const dailyData = performance?.reduce((acc: any[], day) => {
     const existing = acc.find(d => d.date === day.date)
+    const spend = day.spend || day.cost || 0
+    const revenue = day.conversion_value || day.revenue || 0
+    
     if (existing) {
-      existing.spend += (day.spend || day.cost || 0)
-      existing.conversion_value += (day.conversion_value || day.revenue || 0)
+      existing.spend += spend
+      existing.conversion_value += revenue
       existing.roas = existing.spend > 0 ? (existing.conversion_value / existing.spend).toFixed(2) : 0
     } else {
-      const spend = day.spend || day.cost || 0
-      const convValue = day.conversion_value || day.revenue || 0
       acc.push({
         date: day.date,
         spend: spend,
-        conversion_value: convValue,
-        roas: spend > 0 ? (convValue / spend).toFixed(2) : 0
+        conversion_value: revenue,
+        roas: spend > 0 ? (revenue / spend).toFixed(2) : 0
       })
     }
     return acc
@@ -116,6 +145,8 @@ export default function DataAnalytics() {
     }
   }, [error])
 
+  const isUsingFallbackClients = !clientsFromTable || clientsFromTable.length === 0
+
   return (
     <div className="space-y-6">
       {error && (
@@ -123,6 +154,19 @@ export default function DataAnalytics() {
           <AlertCircle className="text-red-600" size={20} />
           <p className="text-sm text-red-700">{error}</p>
           <button onClick={() => setError(null)} className="text-red-600 hover:text-red-800">✕</button>
+        </div>
+      )}
+
+      {/* Warning if clients table is empty */}
+      {isUsingFallbackClients && clients.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+          <AlertCircle className="text-amber-600" size={20} />
+          <div className="flex-1">
+            <p className="text-sm text-amber-800">
+              <strong>Clients table is empty.</strong> Showing {clients.length} clients found in performance data.
+              Client names may be missing. Please populate the clients table in Supabase.
+            </p>
+          </div>
         </div>
       )}
 
@@ -134,27 +178,39 @@ export default function DataAnalytics() {
           </h1>
           <p className="text-gray-500 mt-1">Performance metrics across all platforms</p>
         </div>
+        <button 
+          onClick={() => window.location.reload()}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          <RefreshCw size={18} />
+          Refresh
+        </button>
       </div>
 
       {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
         <div className="flex items-center gap-4 flex-wrap">
           <div className="relative">
-            <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">Client ({clients.length} found)</label>
+            <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">
+              Client ({clients.length} found)
+            </label>
             <button
               onClick={() => setShowClientDropdown(!showClientDropdown)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg min-w-[200px]"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg min-w-[250px]"
             >
-              <span className="flex-1 text-left">{perfLoading ? 'Loading...' : selectedClientName}</span>
+              <span className="flex-1 text-left truncate">{perfLoading ? 'Loading...' : selectedClientName}</span>
               <ChevronDown size={16} />
             </button>
             {showClientDropdown && (
               <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-60 overflow-y-auto">
                 <button onClick={() => { setSelectedClient('all'); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50">All Clients</button>
-                {clients.length === 0 && <div className="px-4 py-2 text-gray-500 text-sm">No clients found in data</div>}
+                {clients.length === 0 && (
+                  <div className="px-4 py-2 text-gray-500 text-sm">No clients found</div>
+                )}
                 {clients?.map(client => (
-                  <button key={client.id} onClick={() => { setSelectedClient(client.id); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50">
-                    {client.name}
+                  <button key={client.id} onClick={() => { setSelectedClient(client.id); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-0">
+                    <div className="font-medium">{client.name}</div>
+                    <div className="text-xs text-gray-400">ID: {client.id.slice(0, 8)}...</div>
                   </button>
                 ))}
               </div>
@@ -234,10 +290,11 @@ export default function DataAnalytics() {
                   const spend = day.spend || day.cost || 0
                   const revenue = day.conversion_value || day.revenue || 0
                   const roas = spend > 0 ? (revenue / spend).toFixed(2) : '0.00'
+                  const clientName = clients.find(c => c.id === day.client_id)?.name || day.client_name || `ID: ${day.client_id?.slice(0, 8)}`
                   return (
                     <tr key={day.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3">{day.date}</td>
-                      <td className="px-4 py-3">{day.client_name || day.client_id?.slice(0, 8)}</td>
+                      <td className="px-4 py-3 font-medium">{clientName}</td>
                       <td className="px-4 py-3"><span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">{day.platform}</span></td>
                       <td className="px-4 py-3 text-right">${spend.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                       <td className="px-4 py-3 text-right"><span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full text-sm">{day.conversions}</span></td>
