@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { Bell, Moon, Shield, Database } from 'lucide-react'
+import { Bell, Shield, Database, User } from 'lucide-react'
 
 export default function Settings() {
-  const [darkMode, setDarkMode] = useState(false)
   const [notifications, setNotifications] = useState(true)
 
   return (
@@ -10,23 +9,20 @@ export default function Settings() {
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Settings</h1>
 
       <div className="max-w-2xl space-y-6">
-        {/* Appearance */}
+        {/* Profile */}
         <section className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center gap-3 mb-4">
-            <Moon className="w-5 h-5 text-gray-500" />
-            <h2 className="text-lg font-semibold">Appearance</h2>
+            <User className="w-5 h-5 text-gray-500" />
+            <h2 className="text-lg font-semibold">Profile</h2>
           </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">Dark Mode</p>
-              <p className="text-sm text-gray-500">Toggle dark theme</p>
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
+              S
             </div>
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className={`w-12 h-6 rounded-full transition-colors ${darkMode ? 'bg-blue-600' : 'bg-gray-300'}`}
-            >
-              <div className={`w-5 h-5 bg-white rounded-full transition-transform ${darkMode ? 'translate-x-6' : 'translate-x-0.5'} mt-0.5`} />
-            </button>
+            <div>
+              <p className="font-medium text-lg">Sean</p>
+              <p className="text-sm text-gray-500">Administrator</p>
+            </div>
           </div>
         </section>
 

@@ -7,18 +7,10 @@ import {
 import { supabase } from '../lib/supabase'
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 
-// Types based on actual Supabase schema
-interface Client {
-  id: string
-  name: string
-  industry: string
-  website?: string
-  created_at: string
-}
-
 interface DailyPerformance {
   id: string
   client_id: string
+  client_name?: string
   date: string
   platform: string
   campaign_id?: string
@@ -28,6 +20,7 @@ interface DailyPerformance {
   conversions: number
   spend: number
   conversion_value: number
+  revenue?: number
 }
 
 export default function DataAnalytics() {
@@ -37,52 +30,56 @@ export default function DataAnalytics() {
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch clients
-  const { data: clients, isLoading: clientsLoading } = useQuery({
-    queryKey: ['clients'],
+  // Fetch all performance data first to extract clients
+  const { data: allPerformance, isLoading: perfLoading } = useQuery({
+    queryKey: ['all_performance'],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase.from('clients').select('*').order('name')
+        const { data, error } = await supabase
+          .from('daily_performance')
+          .select('*')
+          .order('date', { ascending: false })
+          .limit(1000)
+        
         if (error) {
-          setError(`Failed to load clients: ${error.message}`)
-          return []
-        }
-        return data as Client[] || []
-      } catch (err: any) {
-        setError(`Error loading clients: ${err.message}`)
-        return []
-      }
-    },
-  })
-
-  // Fetch performance data
-  const { data: performance, isLoading: perfLoading } = useQuery({
-    queryKey: ['daily_performance', selectedClient, selectedPlatform],
-    queryFn: async () => {
-      try {
-        let query = supabase.from('daily_performance').select('*').order('date', { ascending: false }).limit(100)
-        if (selectedClient !== 'all') query = query.eq('client_id', selectedClient)
-        if (selectedPlatform !== 'all') query = query.eq('platform', selectedPlatform)
-        const { data, error } = await query
-        if (error) {
-          setError(`Failed to load performance: ${error.message}`)
+          setError(`Failed to load data: ${error.message}`)
           return []
         }
         return data as DailyPerformance[] || []
       } catch (err: any) {
-        setError(`Error loading performance: ${err.message}`)
+        setError(`Error: ${err.message}`)
         return []
       }
     },
   })
 
+  // Extract unique clients from performance data
+  const clients = allPerformance?.reduce((acc: {id: string, name: string}[], perf) => {
+    if (perf.client_id && !acc.find(c => c.id === perf.client_id)) {
+      acc.push({
+        id: perf.client_id,
+        name: perf.client_name || `Client ${perf.client_id.slice(0, 8)}`
+      })
+    }
+    return acc
+  }, []) || []
+
+  // Filter performance data based on selection
+  const performance = allPerformance?.filter(day => {
+    if (selectedClient !== 'all' && day.client_id !== selectedClient) return false
+    if (selectedPlatform !== 'all' && day.platform !== selectedPlatform) return false
+    if (dateRange.start && day.date < dateRange.start) return false
+    if (dateRange.end && day.date > dateRange.end) return false
+    return true
+  }) || []
+
   // Calculate totals
   const totals = performance?.reduce((acc, day) => ({
-    spend: acc.spend + (day.spend || 0),
+    spend: acc.spend + (day.spend || day.cost || 0),
     impressions: acc.impressions + (day.impressions || 0),
     clicks: acc.clicks + (day.clicks || 0),
     conversions: acc.conversions + (day.conversions || 0),
-    conversion_value: acc.conversion_value + (day.conversion_value || 0),
+    conversion_value: acc.conversion_value + (day.conversion_value || day.revenue || 0),
   }), { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversion_value: 0 }) || { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversion_value: 0 }
 
   const roas = totals.spend > 0 ? (totals.conversion_value / totals.spend).toFixed(2) : '0.00'
@@ -91,21 +88,25 @@ export default function DataAnalytics() {
   const dailyData = performance?.reduce((acc: any[], day) => {
     const existing = acc.find(d => d.date === day.date)
     if (existing) {
-      existing.spend += day.spend || 0
-      existing.conversion_value += day.conversion_value || 0
+      existing.spend += (day.spend || day.cost || 0)
+      existing.conversion_value += (day.conversion_value || day.revenue || 0)
       existing.roas = existing.spend > 0 ? (existing.conversion_value / existing.spend).toFixed(2) : 0
     } else {
+      const spend = day.spend || day.cost || 0
+      const convValue = day.conversion_value || day.revenue || 0
       acc.push({
         date: day.date,
-        spend: day.spend || 0,
-        conversion_value: day.conversion_value || 0,
-        roas: day.spend > 0 ? ((day.conversion_value || 0) / day.spend).toFixed(2) : 0
+        spend: spend,
+        conversion_value: convValue,
+        roas: spend > 0 ? (convValue / spend).toFixed(2) : 0
       })
     }
     return acc
   }, []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) || []
 
-  const selectedClientName = selectedClient === 'all' ? 'All Clients' : clients?.find(c => c.id === selectedClient)?.name || 'Unknown'
+  const selectedClientName = selectedClient === 'all' 
+    ? 'All Clients' 
+    : clients?.find(c => c.id === selectedClient)?.name || 'Unknown'
 
   useEffect(() => {
     if (error) {
@@ -138,17 +139,18 @@ export default function DataAnalytics() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
         <div className="flex items-center gap-4 flex-wrap">
           <div className="relative">
-            <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">Client</label>
+            <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">Client ({clients.length} found)</label>
             <button
               onClick={() => setShowClientDropdown(!showClientDropdown)}
               className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg min-w-[200px]"
             >
-              <span className="flex-1 text-left">{clientsLoading ? 'Loading...' : selectedClientName}</span>
+              <span className="flex-1 text-left">{perfLoading ? 'Loading...' : selectedClientName}</span>
               <ChevronDown size={16} />
             </button>
             {showClientDropdown && (
               <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-60 overflow-y-auto">
                 <button onClick={() => { setSelectedClient('all'); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50">All Clients</button>
+                {clients.length === 0 && <div className="px-4 py-2 text-gray-500 text-sm">No clients found in data</div>}
                 {clients?.map(client => (
                   <button key={client.id} onClick={() => { setSelectedClient(client.id); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50">
                     {client.name}
@@ -180,7 +182,7 @@ export default function DataAnalytics() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <KPICard title="Total Spend" value={`$${totals.spend.toLocaleString()}`} icon={DollarSign} color="blue" />
+        <KPICard title="Total Spend" value={`$${totals.spend.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`} icon={DollarSign} color="blue" />
         <KPICard title="Conversions" value={totals.conversions.toLocaleString()} icon={Target} color="emerald" />
         <KPICard title="Cost/Conv" value={`$${totals.conversions > 0 ? (totals.spend / totals.conversions).toFixed(2) : '0.00'}`} icon={CreditCard} color="violet" />
         <KPICard title="ROAS" value={`${roas}x`} icon={TrendingUp} color="amber" />
@@ -190,7 +192,7 @@ export default function DataAnalytics() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">ROAS Trend (Daily)</h3>
         {dailyData.length === 0 ? (
-          <div className="text-center py-12 text-gray-500"><Calendar className="mx-auto mb-2" size={32} /><p>No data available</p></div>
+          <div className="text-center py-12 text-gray-500"><Calendar className="mx-auto mb-2" size={32} /><p>No data available for selected filters</p></div>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={dailyData}>
@@ -205,27 +207,44 @@ export default function DataAnalytics() {
         )}
       </div>
 
-      {/* Campaign Performance Table */}
+      {/* Data Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Campaign Performance</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Data ({performance.length} records)</h3>
         {perfLoading ? (
           <div className="text-center py-12">Loading...</div>
         ) : performance?.length === 0 ? (
-          <div className="text-center py-12 text-gray-500"><Database className="mx-auto mb-2" size={32} /><p>No campaign data available</p></div>
+          <div className="text-center py-12 text-gray-500"><Database className="mx-auto mb-2" size={32} /><p>No data available</p><p className="text-sm">Try adjusting your filters</p></div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50"><tr><th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Campaign</th><th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Platform</th><th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th><th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th><th className="text-right px-4 py-3 text-xs font-medium text-gray-500">ROAS</th></tr></thead>
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Date</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Client</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Platform</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Revenue</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">ROAS</th>
+                </tr>
+              </thead>
               <tbody className="divide-y divide-gray-200">
-                {performance?.slice(0, 20).map((day: any) => (
-                  <tr key={day.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium">{day.campaign_name || 'Unknown'}</td>
-                    <td className="px-4 py-3"><span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">{day.platform}</span></td>
-                    <td className="px-4 py-3 text-right">${day.spend?.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right"><span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full text-sm">{day.conversions}</span></td>
-                    <td className="px-4 py-3 text-right">{day.spend > 0 ? ((day.conversion_value || 0) / day.spend).toFixed(2) : '0.00'}x</td>
-                  </tr>
-                ))}
+                {performance?.slice(0, 50).map((day: any) => {
+                  const spend = day.spend || day.cost || 0
+                  const revenue = day.conversion_value || day.revenue || 0
+                  const roas = spend > 0 ? (revenue / spend).toFixed(2) : '0.00'
+                  return (
+                    <tr key={day.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">{day.date}</td>
+                      <td className="px-4 py-3">{day.client_name || day.client_id?.slice(0, 8)}</td>
+                      <td className="px-4 py-3"><span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">{day.platform}</span></td>
+                      <td className="px-4 py-3 text-right">${spend.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                      <td className="px-4 py-3 text-right"><span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full text-sm">{day.conversions}</span></td>
+                      <td className="px-4 py-3 text-right">${revenue.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                      <td className="px-4 py-3 text-right">{roas}x</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
