@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle, AlertCircle, Clock, Plus, Loader2, RotateCcw, MessageSquare, Eye, Trash2 } from 'lucide-react'
+import { 
+  CheckCircle, AlertCircle, Clock, Plus, Loader2, RotateCcw, 
+  MessageSquare, Eye, Trash2, Send, Paperclip, Mic, X
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { AgentTask, AgentHealth } from '../types'
 
@@ -16,12 +19,26 @@ const AGENTS = [
 const PRIORITIES = ['low', 'normal', 'high', 'urgent']
 const STATUSES = ['all', 'pending', 'claimed', 'completed', 'failed']
 
+interface ChatMessage {
+  id: string
+  agent: string
+  from: 'user' | 'agent'
+  message: string
+  type: 'text' | 'voice' | 'attachment'
+  timestamp: string
+  attachmentUrl?: string
+}
+
 export default function MissionControl() {
   const [filter, setFilter] = useState('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedTask, setSelectedTask] = useState<AgentTask | null>(null)
   const [showChatModal, setShowChatModal] = useState(false)
-  const [chatAgent, setChatAgent] = useState<string | null>(null)
+  const [chatAgent, setChatAgent] = useState<string>('')
+  const [chatMessage, setChatMessage] = useState('')
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [isRecording, setIsRecording] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
   // Fetch data
@@ -51,9 +68,7 @@ export default function MissionControl() {
         queryClient.invalidateQueries({ queryKey: ['tasks'] })
       })
       .subscribe()
-    return () => {
-      channel.unsubscribe()
-    }
+    return () => { channel.unsubscribe() }
   }, [queryClient])
 
   // Mutations
@@ -88,7 +103,6 @@ export default function MissionControl() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   })
 
-  // Reset task status
   const resetTask = useMutation({
     mutationFn: async (id: string) => {
       await supabase.from('agent_tasks').update({
@@ -101,7 +115,6 @@ export default function MissionControl() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   })
 
-  // Delete task
   const deleteTask = useMutation({
     mutationFn: async (id: string) => {
       await supabase.from('agent_tasks').delete().eq('id', id)
@@ -114,8 +127,7 @@ export default function MissionControl() {
     if (!health) return { status: 'offline', failures: 0, lastCheck: null }
     return {
       status: health.consecutive_failures > 2 ? 'error' :
-              health.consecutive_failures > 0 ? 'warning' :
-              'online',
+              health.consecutive_failures > 0 ? 'warning' : 'online',
       failures: health.consecutive_failures,
       lastCheck: health.checked_at,
     }
@@ -137,7 +149,75 @@ export default function MissionControl() {
 
   const openChat = (agentName: string) => {
     setChatAgent(agentName)
+    // Load mock chat history
+    setChatMessages([
+      { id: '1', agent: agentName, from: 'agent', message: `Hello! I'm ${agentName}. How can I help you today?`, type: 'text', timestamp: new Date().toISOString() }
+    ])
     setShowChatModal(true)
+  }
+
+  const sendChatMessage = () => {
+    if (!chatMessage.trim()) return
+    
+    const newMessage: ChatMessage = {
+      id: Date.now().toString(),
+      agent: chatAgent,
+      from: 'user',
+      message: chatMessage,
+      type: 'text',
+      timestamp: new Date().toISOString()
+    }
+    
+    setChatMessages([...chatMessages, newMessage])
+    setChatMessage('')
+    
+    // Simulate agent response
+    setTimeout(() => {
+      const agentResponse: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        agent: chatAgent,
+        from: 'agent',
+        message: `Received your message. I'll process this and get back to you shortly.`,
+        type: 'text',
+        timestamp: new Date().toISOString()
+      }
+      setChatMessages(prev => [...prev, agentResponse])
+    }, 1000)
+  }
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    
+    const newMessage: ChatMessage = {
+      id: Date.now().toString(),
+      agent: chatAgent,
+      from: 'user',
+      message: `📎 Attached: ${file.name}`,
+      type: 'attachment',
+      timestamp: new Date().toISOString()
+    }
+    
+    setChatMessages([...chatMessages, newMessage])
+  }
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      // Stop recording
+      setIsRecording(false)
+      const newMessage: ChatMessage = {
+        id: Date.now().toString(),
+        agent: chatAgent,
+        from: 'user',
+        message: '🎤 Voice message (0:15)',
+        type: 'voice',
+        timestamp: new Date().toISOString()
+      }
+      setChatMessages([...chatMessages, newMessage])
+    } else {
+      // Start recording
+      setIsRecording(true)
+    }
   }
 
   return (
@@ -174,7 +254,7 @@ export default function MissionControl() {
                 </div>
                 <button
                   onClick={() => openChat(agent.name)}
-                  className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors"
+                  className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100"
                 >
                   <MessageSquare size={16} />
                   Chat with {agent.name}
@@ -219,14 +299,10 @@ export default function MissionControl() {
               <tbody>
                 {tasks?.map(task => (
                   <tr key={task.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      <StatusBadge status={task.status} />
-                    </td>
+                    <td className="py-3 px-4"><StatusBadge status={task.status} /></td>
                     <td className="py-3 px-4 text-sm">{task.task_type}</td>
                     <td className="py-3 px-4 text-sm capitalize">{task.to_agent}</td>
-                    <td className="py-3 px-4">
-                      <span className={`text-sm capitalize ${getPriorityColor(task.priority)}`}>{task.priority}</span>
-                    </td>
+                    <td className="py-3 px-4"><span className={`text-sm capitalize ${getPriorityColor(task.priority)}`}>{task.priority}</span></td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         {task.status === 'pending' && (
@@ -332,17 +408,79 @@ export default function MissionControl() {
       {showChatModal && chatAgent && (
         <Modal onClose={() => setShowChatModal(false)} title={`Chat with ${chatAgent}`}>
           <div className="space-y-4">
-            <div className="bg-gray-50 rounded-lg p-4 h-64 overflow-y-auto">
-              <div className="text-center text-gray-400 text-sm py-8">
-                Start a conversation with {chatAgent}
+            {/* Chat Messages */}
+            <div className="bg-gray-50 rounded-lg p-4 h-80 overflow-y-auto space-y-3">
+              {chatMessages.length === 0 ? (
+                <div className="text-center text-gray-400 py-8">Start a conversation with {chatAgent}</div>
+              ) : (
+                chatMessages.map(msg => (
+                  <div key={msg.id} className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                      msg.from === 'user' 
+                        ? 'bg-blue-600 text-white' 
+                        : 'bg-white border border-gray-200'
+                    }`}>
+                      <p>{msg.message}</p>
+                      <span className={`text-xs ${msg.from === 'user' ? 'text-blue-100' : 'text-gray-400'}`}>
+                        {new Date(msg.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            {/* Input Area */}
+            <div className="flex items-center gap-2">
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileUpload} 
+                className="hidden" 
+                accept="*/*"
+              />
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+                title="Attach file"
+              >
+                <Paperclip size={20} />
+              </button>
+              
+              <button 
+                onClick={toggleRecording}
+                className={`p-2 rounded-lg ${isRecording ? 'bg-red-100 text-red-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}
+                title={isRecording ? 'Stop recording' : 'Record voice'}
+              >
+                <Mic size={20} />
+              </button>
+              
+              <input 
+                type="text" 
+                value={chatMessage}
+                onChange={(e) => setChatMessage(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
+                placeholder="Type your message..." 
+                className="flex-1 border rounded-lg px-4 py-2"
+              />
+              
+              <button 
+                onClick={sendChatMessage}
+                disabled={!chatMessage.trim()}
+                className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                <Send size={20} />
+              </button>
+            </div>
+            
+            {isRecording && (
+              <div className="text-center text-red-600 text-sm animate-pulse">
+                🔴 Recording... Click mic to stop
               </div>
-            </div>
-            <div className="flex gap-2">
-              <input type="text" placeholder="Type your message..." className="flex-1 border rounded-md px-3 py-2" />
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-md">Send</button>
-            </div>
-            <div className="flex gap-2 text-xs text-gray-500">
-              <span>Supports: Text, Voice, Attachments</span>
+            )}
+            
+            <div className="text-xs text-gray-500 text-center">
+              Supports: Text, Voice Messages, File Attachments
             </div>
           </div>
         </Modal>
@@ -389,7 +527,7 @@ function Modal({ children, onClose, title }: { children: React.ReactNode; onClos
       <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
         {children}
       </div>
