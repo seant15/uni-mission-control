@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { 
   Database, ChevronDown, TrendingUp, DollarSign, Target, CreditCard,
-  AlertCircle, Calendar, RefreshCw
+  AlertCircle, Calendar, RefreshCw, Bug
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
@@ -34,18 +34,48 @@ export default function DataAnalytics() {
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<string>('')
+
+  // Test function to debug Supabase connection
+  const testSupabaseConnection = async () => {
+    setDebugInfo('Testing Supabase connection...')
+    try {
+      // Test 1: Try clients table
+      const { data: clientsData, error: clientsError } = await supabase
+        .from('clients')
+        .select('*')
+        .limit(5)
+      
+      console.log('Test 1 - clients table:', { data: clientsData, error: clientsError })
+      
+      if (clientsError) {
+        setDebugInfo(`Error on 'clients' table: ${clientsError.message} (Code: ${clientsError.code})`)
+        return
+      }
+      
+      if (clientsData && clientsData.length > 0) {
+        setDebugInfo(`SUCCESS! Found ${clientsData.length} clients: ${clientsData.map((c: any) => c.name).join(', ')}`)
+      } else {
+        setDebugInfo('clients table exists but is empty (0 rows)')
+      }
+    } catch (err: any) {
+      setDebugInfo(`Exception: ${err.message}`)
+    }
+  }
 
   // Fetch clients from clients table
-  const { data: clientsFromTable } = useQuery({
+  const { data: clientsFromTable, isLoading: clientsLoading } = useQuery({
     queryKey: ['clients_table'],
     queryFn: async () => {
+      console.log('Fetching clients from Supabase...')
       const { data, error } = await supabase.from('clients').select('*').order('name')
+      
       if (error) {
-        console.error('Clients table error:', error.message, error)
-        setError(`Failed to load clients: ${error.message}`)
+        console.error('Clients table ERROR:', error)
+        setError(`Clients table error: ${error.message} (Code: ${error.code})`)
         return []
       }
-      console.log('Clients loaded:', data?.length || 0, data)
+      
       return data as Client[] || []
     },
   })
@@ -75,12 +105,10 @@ export default function DataAnalytics() {
 
   // Build client list from both sources
   const clients: Client[] = (() => {
-    // First try clients table
     if (clientsFromTable && clientsFromTable.length > 0) {
       return clientsFromTable
     }
     
-    // Fall back to extracting from performance data
     const uniqueClients = new Map<string, string>()
     allPerformance?.forEach(perf => {
       if (perf.client_id && !uniqueClients.has(perf.client_id)) {
@@ -159,14 +187,41 @@ export default function DataAnalytics() {
         </div>
       )}
 
+      {/* Debug Section */}
+      <div className="bg-gray-100 rounded-xl p-4 border border-gray-200">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+            <Bug size={16} />
+            Debug Tools
+          </h3>
+          <button 
+            onClick={testSupabaseConnection}
+            className="text-sm px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Test Supabase Connection
+          </button>
+        </div>
+        {debugInfo && (
+          <div className="text-sm font-mono bg-white p-3 rounded border">
+            {debugInfo}
+          </div>
+        )}
+        <div className="text-xs text-gray-500 mt-2">
+          Clients table status: {clientsLoading ? 'Loading...' : clientsFromTable ? `${clientsFromTable.length} rows` : 'No data'}
+        </div>
+      </div>
+
       {/* Warning if clients table is empty */}
-      {isUsingFallbackClients && clients.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
-          <AlertCircle className="text-amber-600" size={20} />
+      {!clientsLoading && isUsingFallbackClients && clients.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+          <AlertCircle className="text-amber-600 mt-0.5" size={20} />
           <div className="flex-1">
-            <p className="text-sm text-amber-800">
-              <strong>Clients table is empty.</strong> Showing {clients.length} clients found in performance data.
-              Client names may be missing. Please populate the clients table in Supabase.
+            <p className="text-sm text-amber-800 font-medium">
+              Clients table query returned empty
+            </p>
+            <p className="text-sm text-amber-700 mt-1">
+              Showing {clients.length} clients found in performance data instead. 
+              This may be due to Row Level Security (RLS) policies blocking anon access.
             </p>
           </div>
         </div>
@@ -200,7 +255,7 @@ export default function DataAnalytics() {
               onClick={() => setShowClientDropdown(!showClientDropdown)}
               className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg min-w-[250px]"
             >
-              <span className="flex-1 text-left truncate">{perfLoading ? 'Loading...' : selectedClientName}</span>
+              <span className="flex-1 text-left truncate">{clientsLoading ? 'Loading...' : selectedClientName}</span>
               <ChevronDown size={16} />
             </button>
             {showClientDropdown && (
