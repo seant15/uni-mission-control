@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle, AlertCircle, Clock, Plus, Loader2 } from 'lucide-react'
+import { CheckCircle, AlertCircle, Clock, Plus, Loader2, RotateCcw, MessageSquare, Eye, Trash2, Edit } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { AgentTask, AgentHealth } from '../types'
 
@@ -20,6 +20,8 @@ export default function MissionControl() {
   const [filter, setFilter] = useState('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedTask, setSelectedTask] = useState<AgentTask | null>(null)
+  const [showChatModal, setShowChatModal] = useState(false)
+  const [chatAgent, setChatAgent] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
   // Fetch data
@@ -57,7 +59,8 @@ export default function MissionControl() {
   // Mutations
   const createTask = useMutation({
     mutationFn: async (task: Partial<AgentTask>) => {
-      const { data } = await supabase.from('agent_tasks').insert(task).select().single()
+      const { data, error } = await supabase.from('agent_tasks').insert(task).select().single()
+      if (error) throw error
       return data
     },
     onSuccess: () => {
@@ -68,40 +71,57 @@ export default function MissionControl() {
 
   const claimTask = useMutation({
     mutationFn: async (id: string) => {
-      await supabase
-        .from('agent_tasks')
-        .update({ status: 'claimed', claimed_at: new Date().toISOString() })
-        .eq('id', id)
+      await supabase.from('agent_tasks').update({ status: 'claimed', claimed_at: new Date().toISOString() }).eq('id', id)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   })
 
   const completeTask = useMutation({
     mutationFn: async ({ id, result, error }: { id: string; result?: any; error?: string }) => {
-      await supabase
-        .from('agent_tasks')
-        .update({
-          status: error ? 'failed' : 'completed',
-          completed_at: new Date().toISOString(),
-          result,
-          error_message: error,
-        })
-        .eq('id', id)
+      await supabase.from('agent_tasks').update({
+        status: error ? 'failed' : 'completed',
+        completed_at: new Date().toISOString(),
+        result,
+        error_message: error,
+      }).eq('id', id)
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+  })
+
+  // Reset task status
+  const resetTask = useMutation({
+    mutationFn: async (id: string) => {
+      await supabase.from('agent_tasks').update({
+        status: 'pending',
+        claimed_at: null,
+        completed_at: null,
+        error_message: null,
+      }).eq('id', id)
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+  })
+
+  // Delete task
+  const deleteTask = useMutation({
+    mutationFn: async (id: string) => {
+      await supabase.from('agent_tasks').delete().eq('id', id)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   })
 
   const getAgentStatus = (name: string) => {
     const health = healthData?.find(h => h.agent_name === name)
-    if (!health) return { status: 'offline', failures: 0 }
+    if (!health) return { status: 'offline', failures: 0, lastCheck: null }
     return {
       status: health.consecutive_failures > 2 ? 'error' :
-              health.consecutive_failures > 0 ? 'warning' : 'online',
+              health.consecutive_failures > 0 ? 'warning' :
+              'online',
       failures: health.consecutive_failures,
+      lastCheck: health.checked_at,
     }
   }
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const form = e.target as HTMLFormElement
     const fd = new FormData(form)
@@ -113,6 +133,11 @@ export default function MissionControl() {
       payload: JSON.parse((fd.get('payload') as string) || '{}'),
       status: 'pending',
     })
+  }
+
+  const openChat = (agentName: string) => {
+    setChatAgent(agentName)
+    setShowChatModal(true)
   }
 
   return (
@@ -129,7 +154,7 @@ export default function MissionControl() {
             
             return (
               <div key={agent.name} className="bg-white rounded-lg shadow p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">{agent.emoji}</span>
                     <div>
@@ -137,13 +162,23 @@ export default function MissionControl() {
                       <p className="text-xs text-gray-500">{agent.role}</p>
                     </div>
                   </div>
-                  <StatusDot status={status.status} />
+                  <div className={`w-3 h-3 rounded-full ${status.status === 'online' ? 'bg-green-500' : status.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'}`} />
                 </div>
-                <div className="mt-3 text-sm">
-                  <p className="capitalize text-gray-600">{status.status}</p>
-                  {activeCount > 0 && <p className="text-blue-600">{activeCount} active tasks</p>}
-                  {status.failures > 0 && <p className="text-red-600">{status.failures} failures</p>}
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="capitalize text-gray-700">{status.status}</span>
+                  </div>
+                  {activeCount > 0 && (
+                    <div className="text-sm text-blue-600">{activeCount} active task{activeCount > 1 ? 's' : ''}</div>
+                  )}
                 </div>
+                <button
+                  onClick={() => openChat(agent.name)}
+                  className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors"
+                >
+                  <MessageSquare size={16} />
+                  Chat with {agent.name}
+                </button>
               </div>
             )
           })}
@@ -155,17 +190,10 @@ export default function MissionControl() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">Task Queue</h2>
           <div className="flex items-center gap-3">
-            <select
-              value={filter}
-              onChange={e => setFilter(e.target.value)}
-              className="border rounded-md px-3 py-1.5"
-            >
-              {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            <select value={filter} onChange={e => setFilter(e.target.value)} className="border rounded-md px-3 py-1.5">
+              {STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
             </select>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
+            <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
               <Plus size={16} />
               New Task
             </button>
@@ -173,7 +201,7 @@ export default function MissionControl() {
         </div>
 
         {tasksLoading ? (
-          <div className="flex justify-center py-12">
+          <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
           </div>
         ) : (
@@ -181,57 +209,48 @@ export default function MissionControl() {
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">Status</th>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">Type</th>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">To</th>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">Priority</th>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">Actions</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Status</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Type</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">To</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Priority</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {tasks?.map(task => (
-                  <tr key={task.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
+                  <tr key={task.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4">
                       <StatusBadge status={task.status} />
                     </td>
-                    <td className="px-4 py-3 text-sm">{task.task_type}</td>
-                    <td className="px-4 py-3 text-sm capitalize">{task.to_agent}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-sm capitalize ${getPriorityColor(task.priority)}`}>
-                        {task.priority}
-                      </span>
+                    <td className="py-3 px-4 text-sm">{task.task_type}</td>
+                    <td className="py-3 px-4 text-sm capitalize">{task.to_agent}</td>
+                    <td className="py-3 px-4">
+                      <span className={`text-sm capitalize ${getPriorityColor(task.priority)}`}>{task.priority}</span>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
                         {task.status === 'pending' && (
-                          <button
-                            onClick={() => claimTask.mutate(task.id)}
-                            className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded"
-                          >
-                            Claim
-                          </button>
+                          <button onClick={() => claimTask.mutate(task.id)} className="text-xs px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md">Claim</button>
                         )}
                         {task.status === 'claimed' && (
                           <>
-                            <button
-                              onClick={() => completeTask.mutate({ id: task.id, result: {} })}
-                              className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded"
-                            >
-                              Complete
-                            </button>
-                            <button
-                              onClick={() => completeTask.mutate({ id: task.id, error: 'Failed' })}
-                              className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded"
-                            >
-                              Fail
-                            </button>
+                            <button onClick={() => completeTask.mutate({ id: task.id, result: {} })} className="text-xs px-3 py-1.5 bg-green-100 text-green-700 rounded-md">Complete</button>
+                            <button onClick={() => completeTask.mutate({ id: task.id, error: 'Failed' })} className="text-xs px-3 py-1.5 bg-red-100 text-red-700 rounded-md">Fail</button>
                           </>
                         )}
-                        <button
-                          onClick={() => setSelectedTask(task)}
-                          className="text-xs px-2 py-1 border rounded"
-                        >
+                        {(task.status === 'failed' || task.status === 'completed') && (
+                          <button onClick={() => resetTask.mutate(task.id)} className="text-xs px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md flex items-center gap-1">
+                            <RotateCcw size={12} />
+                            Reset
+                          </button>
+                        )}
+                        <button onClick={() => setSelectedTask(task)} className="text-xs px-3 py-1.5 border rounded-md flex items-center gap-1">
+                          <Eye size={12} />
                           View
+                        </button>
+                        <button onClick={() => deleteTask.mutate(task.id)} className="text-xs px-3 py-1.5 bg-red-50 text-red-700 rounded-md flex items-center gap-1">
+                          <Trash2 size={12} />
+                          Delete
                         </button>
                       </div>
                     </td>
@@ -250,13 +269,13 @@ export default function MissionControl() {
             <div>
               <label className="block text-sm font-medium mb-1">Assign To</label>
               <select name="to_agent" required className="w-full border rounded-md px-3 py-2">
-                <option value="">Select...</option>
-                {AGENTS.map(a => <option key={a.name} value={a.name}>{a.name}</option>)}
+                <option value="">Select agent...</option>
+                {AGENTS.map(agent => <option key={agent.name} value={agent.name}>{agent.name}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Task Type</label>
-              <input name="task_type" required className="w-full border rounded-md px-3 py-2" />
+              <input name="task_type" placeholder="e.g., google_ads_report" required className="w-full border rounded-md px-3 py-2" />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Priority</label>
@@ -266,15 +285,11 @@ export default function MissionControl() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Payload (JSON)</label>
-              <textarea name="payload" rows={3} className="w-full border rounded-md px-3 py-2 font-mono text-sm" />
+              <textarea name="payload" placeholder='{"key": "value"}' rows={4} className="w-full border rounded-md px-3 py-2 font-mono text-sm" />
             </div>
-            <div className="flex justify-end gap-3">
-              <button type="button" onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-gray-600">
-                Cancel
-              </button>
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md">
-                Create
-              </button>
+            <div className="flex justify-end gap-3 pt-4">
+              <button type="button" onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-gray-600">Cancel</button>
+              <button type="submit" disabled={createTask.isPending} className="px-4 py-2 bg-blue-600 text-white rounded-md">{createTask.isPending ? 'Creating...' : 'Create Task'}</button>
             </div>
           </form>
         </Modal>
@@ -284,41 +299,56 @@ export default function MissionControl() {
       {selectedTask && (
         <Modal onClose={() => setSelectedTask(null)} title="Task Details">
           <div className="space-y-3 text-sm">
-            <p><span className="text-gray-500">ID:</span> {selectedTask.id}</p>
-            <p><span className="text-gray-500">Status:</span> <StatusBadge status={selectedTask.status} /></p>
-            <p><span className="text-gray-500">From:</span> {selectedTask.from_agent}</p>
-            <p><span className="text-gray-500">To:</span> {selectedTask.to_agent}</p>
-            <p><span className="text-gray-500">Type:</span> {selectedTask.task_type}</p>
-            <div>
-              <span className="text-gray-500">Payload:</span>
-              <pre className="mt-1 bg-gray-100 p-2 rounded text-xs overflow-x-auto">
-                {JSON.stringify(selectedTask.payload, null, 2)}
-              </pre>
+            <div className="flex justify-between"><span className="text-gray-500">ID:</span><span className="font-mono">{selectedTask.id}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Status:</span><StatusBadge status={selectedTask.status} /></div>
+            <div className="flex justify-between"><span className="text-gray-500">From:</span><span>{selectedTask.from_agent}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">To:</span><span className="capitalize">{selectedTask.to_agent}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Type:</span><span>{selectedTask.task_type}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Priority:</span><span className={`capitalize ${getPriorityColor(selectedTask.priority)}`}>{selectedTask.priority}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Created:</span><span>{new Date(selectedTask.created_at).toLocaleString()}</span></div>
+            {selectedTask.claimed_at && <div className="flex justify-between"><span className="text-gray-500">Claimed:</span><span>{new Date(selectedTask.claimed_at).toLocaleString()}</span></div>}
+            {selectedTask.completed_at && <div className="flex justify-between"><span className="text-gray-500">Completed:</span><span>{new Date(selectedTask.completed_at).toLocaleString()}</span></div>}
+            <div className="pt-4 border-t">
+              <span className="text-gray-500 block mb-2">Payload:</span>
+              <pre className="bg-gray-100 p-3 rounded-md overflow-x-auto text-xs">{JSON.stringify(selectedTask.payload, null, 2)}</pre>
             </div>
             {selectedTask.result && (
-              <div>
-                <span className="text-gray-500">Result:</span>
-                <pre className="mt-1 bg-green-50 p-2 rounded text-xs overflow-x-auto">
-                  {JSON.stringify(selectedTask.result, null, 2)}
-                </pre>
+              <div className="pt-4 border-t">
+                <span className="text-gray-500 block mb-2">Result:</span>
+                <pre className="bg-green-50 p-3 rounded-md overflow-x-auto text-xs">{JSON.stringify(selectedTask.result, null, 2)}</pre>
+              </div>
+            )}
+            {selectedTask.error_message && (
+              <div className="pt-4 border-t">
+                <span className="text-gray-500 block mb-2">Error:</span>
+                <pre className="bg-red-50 p-3 rounded-md overflow-x-auto text-xs text-red-600">{selectedTask.error_message}</pre>
               </div>
             )}
           </div>
         </Modal>
       )}
+
+      {/* Chat Modal */}
+      {showChatModal && chatAgent && (
+        <Modal onClose={() => setShowChatModal(false)} title={`Chat with ${chatAgent}`}>
+          <div className="space-y-4">
+            <div className="bg-gray-50 rounded-lg p-4 h-64 overflow-y-auto">
+              <div className="text-center text-gray-400 text-sm py-8">
+                Start a conversation with {chatAgent}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <input type="text" placeholder="Type your message..." className="flex-1 border rounded-md px-3 py-2" />
+              <button className="px-4 py-2 bg-blue-600 text-white rounded-md">Send</button>
+            </div>
+            <div className="flex gap-2 text-xs text-gray-500">
+              <span>Supports: Text, Voice, Attachments</span>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
-}
-
-// Helper components
-function StatusDot({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    online: 'bg-green-500',
-    warning: 'bg-yellow-500',
-    error: 'bg-red-500',
-    offline: 'bg-gray-400',
-  }
-  return <div className={`w-3 h-3 rounded-full ${colors[status] || colors.offline}`} />
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -356,7 +386,7 @@ function getPriorityColor(priority: string) {
 function Modal({ children, onClose, title }: { children: React.ReactNode; onClose: () => void; title: string }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6 max-h-[80vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold">{title}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
