@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { 
   Database, ChevronDown, TrendingUp, DollarSign, Target, CreditCard,
-  AlertCircle, Calendar, Bell, X
+  AlertCircle, Calendar
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
@@ -69,8 +69,6 @@ export default function DataAnalytics() {
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [showDatePresets, setShowDatePresets] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [notifications, _setNotifications] = useState<string[]>(['New task assigned', 'Report ready'])
-  const [showNotifications, setShowNotifications] = useState(false)
 
   // Fetch clients
   const { data: clientsFromTable } = useQuery({
@@ -247,38 +245,6 @@ export default function DataAnalytics() {
           <p className="text-gray-500 mt-1">Performance metrics across all platforms</p>
         </div>
         
-        {/* Notification Bell */}
-        <div className="relative">
-          <button 
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-          >
-            <Bell size={24} />
-            {notifications.length > 0 && (
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-            )}
-          </button>
-          
-          {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-              <div className="p-3 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="font-semibold">Notifications</h3>
-                <button onClick={() => setShowNotifications(false)}><X size={16} /></button>
-              </div>
-              <div className="max-h-64 overflow-y-auto">
-                {notifications.length === 0 ? (
-                  <div className="p-4 text-gray-500 text-center">No notifications</div>
-                ) : (
-                  notifications.map((notif, i) => (
-                    <div key={i} className="p-3 border-b border-gray-100 hover:bg-gray-50">
-                      {notif}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-        </div>
       </div>
 
       {error && (
