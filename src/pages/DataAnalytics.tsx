@@ -36,7 +36,7 @@ export default function DataAnalytics() {
   const [error, setError] = useState<string | null>(null)
 
   // Fetch clients from clients table
-  const { data: clientsFromTable, error: clientsError } = useQuery({
+  const { data: clientsFromTable } = useQuery({
     queryKey: ['clients_table'],
     queryFn: async () => {
       const { data, error } = await supabase.from('clients').select('*').order('name')
