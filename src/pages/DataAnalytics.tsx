@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { 
-  Database, Download, ChevronDown, ChevronRight, TrendingUp, TrendingDown,
-  DollarSign, Target, MousePointer, Eye, ShoppingCart, CreditCard,
-  AlertCircle, RefreshCw, Calendar
+  Database, ChevronDown, TrendingUp, DollarSign, Target, CreditCard,
+  AlertCircle, Calendar
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, AreaChart, Area } from 'recharts'
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 
 // Types based on actual Supabase schema
 interface Client {
