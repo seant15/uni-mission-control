@@ -18,8 +18,9 @@ interface DailyPerformance {
   impressions: number
   clicks: number
   conversions: number
-  spend: number
-  conversion_value: number
+  spend?: number
+  cost?: number
+  conversion_value?: number
   revenue?: number
 }
 
