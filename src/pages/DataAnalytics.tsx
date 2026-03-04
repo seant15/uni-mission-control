@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { 
+import {
   Database, ChevronDown, TrendingUp, DollarSign, Target, CreditCard,
   AlertCircle, Calendar
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { db } from '../lib/api'
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 
 interface DailyPerformance {
@@ -28,31 +28,6 @@ interface Client {
   industry?: string
 }
 
-interface MetaCreative {
-  id: string
-  client_id: string
-  ad_name: string
-  campaign_name: string
-  creative_type: string
-  spend: number
-  impressions: number
-  clicks: number
-  conversions: number
-}
-
-interface GoogleKeyword {
-  id: string
-  client_id: string
-  keyword: string
-  campaign_name: string
-  ad_group_name: string
-  match_type: string
-  spend: number
-  impressions: number
-  clicks: number
-  conversions: number
-}
-
 const DATE_PRESETS = [
   { label: 'Last 7 Days', days: 7 },
   { label: 'Last 14 Days', days: 14 },
@@ -60,6 +35,13 @@ const DATE_PRESETS = [
   { label: 'Last 90 Days', days: 90 },
   { label: 'This Month', type: 'month' },
   { label: 'Last Month', type: 'last_month' },
+]
+
+const SUPPORTED_PLATFORMS = [
+  { id: 'google_ads', label: 'Google Ads' },
+  { id: 'meta_ads', label: 'Meta Ads' },
+  { id: 'tiktok_ads', label: 'TikTok Ads' },
+  { id: 'shopify', label: 'Shopify' },
 ]
 
 export default function DataAnalytics() {
@@ -73,96 +55,57 @@ export default function DataAnalytics() {
   // Fetch clients
   const { data: clientsFromTable } = useQuery({
     queryKey: ['clients_table'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('clients').select('*').order('name')
-      if (error) {
-        console.error('Clients error:', error)
-        return []
-      }
-      return data as Client[] || []
-    },
+    queryFn: db.getClients,
   })
 
-  // Fetch performance data
-  const { data: allPerformance, isLoading: performanceLoading, error: performanceError } = useQuery({
-    queryKey: ['all_performance'],
-    queryFn: async () => {
-      console.log('Fetching daily_performance...')
-      const { data, error } = await supabase
-        .from('daily_performance')
-        .select('*')
-        .order('date', { ascending: false })
-        .limit(5000)
-      
-      if (error) {
-        console.error('daily_performance error:', error)
-        setError(`Failed to load data: ${error.message}`)
-        return []
-      }
-      console.log('daily_performance data:', data?.length || 0, 'records')
-      console.log('Platforms found:', data ? [...new Set(data.map(d => d.platform))] : [])
-      return data as DailyPerformance[] || []
-    },
+  const { data: performance, isLoading: performanceLoading, error: performanceError } = useQuery({
+    queryKey: ['performance', selectedClient, selectedPlatform, dateRange],
+    queryFn: () => db.getDailyPerformance({
+      clientId: selectedClient,
+      platform: selectedPlatform,
+      startDate: dateRange.start,
+      endDate: dateRange.end,
+    }),
   })
+
+  // Calculations using performance data
+  const performanceData: DailyPerformance[] = (performance as DailyPerformance[]) || []
 
   // Fetch Meta creatives (only when Meta selected)
   const { data: metaCreatives } = useQuery({
     queryKey: ['meta_creatives', selectedClient],
-    queryFn: async () => {
-      if (selectedPlatform !== 'all' && selectedPlatform !== 'meta_ads') return []
-      let query = supabase.from('meta_creatives').select('*').limit(50)
-      if (selectedClient !== 'all') query = query.eq('client_id', selectedClient)
-      const { data } = await query
-      return data as MetaCreative[] || []
-    },
+    queryFn: () => db.getMetaCreatives(selectedClient),
     enabled: selectedPlatform === 'all' || selectedPlatform === 'meta_ads',
   })
 
   // Fetch Google keywords (only when Google selected)
   const { data: googleKeywords } = useQuery({
     queryKey: ['google_keywords', selectedClient],
-    queryFn: async () => {
-      if (selectedPlatform !== 'all' && selectedPlatform !== 'google_ads') return []
-      let query = supabase.from('google_keywords').select('*').limit(50)
-      if (selectedClient !== 'all') query = query.eq('client_id', selectedClient)
-      const { data } = await query
-      return data as GoogleKeyword[] || []
-    },
+    queryFn: () => db.getGoogleKeywords(selectedClient),
     enabled: selectedPlatform === 'all' || selectedPlatform === 'google_ads',
   })
 
-  // Get unique platforms from data (with fallback for testing)
-  const availablePlatforms = allPerformance && allPerformance.length > 0 ? 
-    Array.from(new Set(allPerformance.map(p => p.platform))).filter(Boolean) : 
-    ['google_ads', 'meta_ads', 'tiktok_ads'] // Fallback platforms for testing
+  // Platform list from constants (always available)
+  const availablePlatforms = SUPPORTED_PLATFORMS
 
   // Build client list
-  const clients: Client[] = clientsFromTable && clientsFromTable.length > 0 
-    ? clientsFromTable 
+  const clients: Client[] = clientsFromTable && clientsFromTable.length > 0
+    ? clientsFromTable
     : (() => {
-        const uniqueClients = new Map<string, string>()
-        allPerformance?.forEach(perf => {
-          if (perf.client_id && !uniqueClients.has(perf.client_id)) {
-            uniqueClients.set(perf.client_id, perf.client_name || `Client ${perf.client_id.slice(0, 8)}`)
-          }
-        })
-        return Array.from(uniqueClients.entries()).map(([id, name]) => ({ id, name }))
-      })()
-
-  // Filter performance
-  const performance = allPerformance?.filter(day => {
-    if (selectedClient !== 'all' && day.client_id !== selectedClient) return false
-    if (selectedPlatform !== 'all' && day.platform !== selectedPlatform) return false
-    if (dateRange.start && day.date < dateRange.start) return false
-    if (dateRange.end && day.date > dateRange.end) return false
-    return true
-  }) || []
+      const uniqueClients = new Map<string, string>()
+      performanceData.forEach(perf => {
+        if (perf.client_id && !uniqueClients.has(perf.client_id)) {
+          uniqueClients.set(perf.client_id, perf.client_name || `Client ${perf.client_id.slice(0, 8)}`)
+        }
+      })
+      return Array.from(uniqueClients.entries()).map(([id, name]) => ({ id, name }))
+    })()
 
   // Apply date preset
   const applyDatePreset = (preset: any) => {
     const end = new Date()
     const start = new Date()
-    
+
     if (preset.type === 'month') {
       start.setDate(1)
     } else if (preset.type === 'last_month') {
@@ -172,7 +115,7 @@ export default function DataAnalytics() {
     } else {
       start.setDate(end.getDate() - preset.days)
     }
-    
+
     setDateRange({
       start: start.toISOString().split('T')[0],
       end: end.toISOString().split('T')[0]
@@ -181,7 +124,7 @@ export default function DataAnalytics() {
   }
 
   // Calculate totals
-  const totals = performance?.reduce((acc, day) => {
+  const totals = performanceData.reduce((acc, day) => {
     const spend = day.spend || day.cost || 0
     const revenue = day.conversion_value || day.revenue || 0
     return {
@@ -191,16 +134,16 @@ export default function DataAnalytics() {
       conversions: acc.conversions + (day.conversions || 0),
       conversion_value: acc.conversion_value + revenue,
     }
-  }, { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversion_value: 0 }) || { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversion_value: 0 }
+  }, { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversion_value: 0 })
 
   const roas = totals.spend > 0 ? (totals.conversion_value / totals.spend).toFixed(2) : '0.00'
 
   // Daily data for charts
-  const dailyData = performance?.reduce((acc: any[], day) => {
+  const dailyData = performanceData.reduce((acc: any[], day) => {
     const existing = acc.find(d => d.date === day.date)
     const spend = day.spend || day.cost || 0
     const revenue = day.conversion_value || day.revenue || 0
-    
+
     if (existing) {
       existing.spend += spend
       existing.conversion_value += revenue
@@ -214,10 +157,10 @@ export default function DataAnalytics() {
       })
     }
     return acc
-  }, []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) || []
+  }, []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-  const selectedClientName = selectedClient === 'all' 
-    ? 'All Clients' 
+  const selectedClientName = selectedClient === 'all'
+    ? 'All Clients'
     : clients?.find(c => c.id === selectedClient)?.name || 'Unknown'
 
   useEffect(() => {
@@ -249,7 +192,7 @@ export default function DataAnalytics() {
           </h1>
           <p className="text-gray-500 mt-1">Performance metrics across all platforms</p>
         </div>
-        
+
       </div>
 
       {error && (
@@ -266,8 +209,8 @@ export default function DataAnalytics() {
           <summary className="text-sm font-medium text-gray-600 cursor-pointer">Debug Info (click to expand)</summary>
           <div className="mt-2 text-xs text-gray-500 space-y-1 font-mono">
             <p>Performance Loading: {performanceLoading ? 'YES' : 'NO'}</p>
-            <p>Performance Error: {performanceError ? performanceError.message : 'None'}</p>
-            <p>Records Loaded: {allPerformance?.length || 0}</p>
+            <p>Performance Error: {performanceError ? (performanceError as any).message : 'None'}</p>
+            <p>Records Loaded (Filtered): {performanceData.length}</p>
             <p>Available Platforms: {availablePlatforms.join(', ') || 'None'}</p>
             <p>Clients Loaded: {clients.length}</p>
           </div>
@@ -306,14 +249,14 @@ export default function DataAnalytics() {
             <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">
               Platform ({availablePlatforms.length} found)
             </label>
-            <select 
-              value={selectedPlatform} 
-              onChange={(e) => setSelectedPlatform(e.target.value)} 
+            <select
+              value={selectedPlatform}
+              onChange={(e) => setSelectedPlatform(e.target.value)}
               className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg min-w-[200px]"
             >
               <option value="all">All Platforms</option>
               {availablePlatforms.map(platform => (
-                <option key={platform} value={platform}>{platform}</option>
+                <option key={platform.id} value={platform.id}>{platform.label}</option>
               ))}
             </select>
           </div>
@@ -322,17 +265,17 @@ export default function DataAnalytics() {
           <div className="relative">
             <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">Date Range</label>
             <div className="flex items-center gap-2">
-              <input type="date" value={dateRange.start} onChange={(e) => setDateRange({...dateRange, start: e.target.value})} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg" />
+              <input type="date" value={dateRange.start} onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg" />
               <span className="text-gray-400">to</span>
-              <input type="date" value={dateRange.end} onChange={(e) => setDateRange({...dateRange, end: e.target.value})} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg" />
-              <button 
+              <input type="date" value={dateRange.end} onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg" />
+              <button
                 onClick={() => setShowDatePresets(!showDatePresets)}
                 className="px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
               >
                 Presets
               </button>
             </div>
-            
+
             {showDatePresets && (
               <div className="absolute top-full right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                 {DATE_PRESETS.map(preset => (
@@ -361,7 +304,7 @@ export default function DataAnalytics() {
       {/* ROAS Chart */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">ROAS Trend (Daily)</h3>
-        {dailyData.length === 0 ? (
+        {performanceData.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <Calendar className="mx-auto mb-2" size={32} />
             <p>No data available for selected filters</p>
@@ -372,8 +315,8 @@ export default function DataAnalytics() {
             <AreaChart data={dailyData}>
               <defs>
                 <linearGradient id="colorRoas" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -388,8 +331,8 @@ export default function DataAnalytics() {
 
       {/* Performance Data Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Data ({performance.length} records)</h3>
-        {performance?.length === 0 ? (
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Data ({performanceData.length} records)</h3>
+        {performanceData.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <Database className="mx-auto mb-2" size={32} />
             <p>No data available</p>
@@ -408,7 +351,7 @@ export default function DataAnalytics() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {performance?.slice(0, 50).map((day: any) => {
+                {performanceData.slice(0, 50).map((day: any) => {
                   const spend = day.spend || day.cost || 0
                   const revenue = day.conversion_value || day.revenue || 0
                   const roas = spend > 0 ? (revenue / spend).toFixed(2) : '0.00'

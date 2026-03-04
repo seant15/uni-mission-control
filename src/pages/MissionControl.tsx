@@ -5,6 +5,7 @@ import {
   MessageSquare, Eye, Trash2, Send, Paperclip, Mic, X
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { db } from '../lib/api'
 import { spawnSession, sendMessage, getSessionStatus, listSessions } from '../lib/openclaw'
 import type { AgentTask, AgentHealth } from '../types'
 
@@ -45,12 +46,7 @@ export default function MissionControl() {
   // Fetch data
   const { data: tasks, isLoading: tasksLoading } = useQuery({
     queryKey: ['tasks', filter],
-    queryFn: async () => {
-      let query = supabase.from('agent_tasks').select('*')
-      if (filter !== 'all') query = query.eq('status', filter)
-      const { data } = await query.order('created_at', { ascending: false })
-      return data as AgentTask[]
-    },
+    queryFn: () => db.getTasks(filter),
   })
 
   const { data: healthData } = useQuery({

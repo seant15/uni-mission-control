@@ -4,49 +4,23 @@ import {
   Activity, Users, Zap, Clock, ArrowRight,
   BarChart3, AlertCircle, Rocket, Database
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { db } from '../lib/api'
 
 export default function Dashboard() {
   const [error, setError] = useState<string | null>(null)
 
-  // Agent data with error handling
-  const { data: agentHealth } = useQuery({
-    queryKey: ['agentHealth'],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase.from('agent_health').select('*')
-        if (error) {
-          setError(`Agent health error: ${error.message}`)
-          return []
-        }
-        return data || []
-      } catch (err: any) {
-        setError(`Agent health exception: ${err.message}`)
-        return []
-      }
-    },
+  // Dashboard stats with centralized fetching
+  const { data: stats } = useQuery({
+    queryKey: ['dashboardStats'],
+    queryFn: db.getDashboardStats,
   })
 
-  const { data: tasks } = useQuery({
-    queryKey: ['tasks'],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase.from('agent_tasks').select('*')
-        if (error) {
-          setError(`Tasks error: ${error.message}`)
-          return []
-        }
-        return data || []
-      } catch (err: any) {
-        setError(`Tasks exception: ${err.message}`)
-        return []
-      }
-    },
-  })
+  const agentHealth = stats?.agents
+  const tasks = stats?.tasks
 
-  const onlineAgents = agentHealth?.filter(a => a.consecutive_failures === 0).length || 0
-  const pendingTasks = tasks?.filter(t => t.status === 'pending').length || 0
-  const activeTasks = tasks?.filter(t => t.status === 'claimed').length || 0
+  const onlineAgents = agentHealth?.filter((a: any) => a.consecutive_failures === 0).length || 0
+  const pendingTasks = tasks?.filter((t: any) => t.status === 'pending').length || 0
+  const activeTasks = tasks?.filter((t: any) => t.status === 'claimed').length || 0
 
   return (
     <div className="space-y-10 pb-12">
