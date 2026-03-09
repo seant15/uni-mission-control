@@ -3,8 +3,19 @@
  * Used as fallback when the real gateway is unavailable
  */
 
-import { getMockAgentResponse, delay, mockActiveSessions } from './mock-data'
 import type { SpawnSessionResponse } from './openclaw'
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+const getMockAgentResponse = (agentId: string) => {
+  const responses = [
+    `Hello! I'm ${agentId}. How can I help you?`,
+    `Task received. I'll start working on it right away.`,
+    `I've completed the analysis. Here are my findings...`,
+    `Let me check on that for you.`
+  ]
+  return responses[Math.floor(Math.random() * responses.length)]
+}
 
 // Track active mock sessions in memory
 const activeMockSessions = new Map<string, {
@@ -17,7 +28,7 @@ const activeMockSessions = new Map<string, {
 /**
  * Mock version of spawnSession
  */
-export async function spawnSessionMock(agentId: string, task: string): Promise<SpawnSessionResponse> {
+export async function spawnSessionMock(agentId: string, _task: string): Promise<SpawnSessionResponse> {
   await delay(500) // Simulate network delay
 
   const sessionKey = `mock-session-${agentId}-${Date.now()}`
@@ -39,7 +50,7 @@ export async function spawnSessionMock(agentId: string, task: string): Promise<S
 /**
  * Mock version of sendMessage
  */
-export async function sendMessageMock(sessionKey: string, message: string): Promise<void> {
+export async function sendMessageMock(sessionKey: string, _message: string): Promise<void> {
   await delay(300)
 
   const session = activeMockSessions.get(sessionKey)
