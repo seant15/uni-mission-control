@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { db } from '../lib/api'
-import { spawnSession, sendMessage, getSessionStatus, listSessions, uploadFile, subscribeToSession } from '../lib/openclaw'
+import { spawnSession, sendMessage, getSessionStatus, listSessions, uploadFile } from '../lib/openclaw'
 import { spawnSessionMock, sendMessageMock, getSessionStatusMock, listSessionsMock, uploadFileMock } from '../lib/openclaw-mock'
 import { mockAgentHealth } from '../lib/mock-data'
 import type { AgentTask, AgentHealth } from '../types'
