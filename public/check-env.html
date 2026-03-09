@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Environment Check</title>
+</head>
+<body>
+  <h1>Environment Variables Check</h1>
+  <p>This page will check if environment variables are correctly loaded in Vercel</p>
+  <pre id="output">Loading...</pre>
+
+  <script type="module">
+    const output = document.getElementById('output');
+    const env = {
+      VITE_USE_MOCK_DATA: import.meta.env.VITE_USE_MOCK_DATA,
+      VITE_OPENCLAW_GATEWAY_URL: import.meta.env.VITE_OPENCLAW_GATEWAY_URL,
+      VITE_OPENCLAW_GATEWAY_TOKEN: import.meta.env.VITE_OPENCLAW_GATEWAY_TOKEN,
+      VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL ? 'SET' : 'NOT SET'
+    };
+
+    output.textContent = JSON.stringify(env, null, 2);
+
+    // Also log to console
+    console.log('Environment Variables:', env);
+    console.log('USE_MOCK_DATA === "true"?', import.meta.env.VITE_USE_MOCK_DATA === 'true');
+    console.log('USE_MOCK_DATA === "false"?', import.meta.env.VITE_USE_MOCK_DATA === 'false');
+  </script>
+</body>
+</html>
