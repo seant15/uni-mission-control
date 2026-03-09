@@ -16,10 +16,8 @@ interface DailyPerformance {
   impressions: number
   clicks: number
   conversions: number
-  spend?: number
-  cost?: number
-  conversion_value?: number
-  revenue?: number
+  cost: number
+  revenue: number
 }
 
 interface Client {
@@ -37,12 +35,7 @@ const DATE_PRESETS = [
   { label: 'Last Month', type: 'last_month' },
 ]
 
-const SUPPORTED_PLATFORMS = [
-  { id: 'google_ads', label: 'Google Ads' },
-  { id: 'meta_ads', label: 'Meta Ads' },
-  { id: 'tiktok_ads', label: 'TikTok Ads' },
-  { id: 'shopify', label: 'Shopify' },
-]
+// Removed static platform list - now fetched from database
 
 export default function DataAnalytics() {
   const [selectedClient, setSelectedClient] = useState<string>('all')
@@ -56,6 +49,16 @@ export default function DataAnalytics() {
   const { data: clientsFromTable } = useQuery({
     queryKey: ['clients_table'],
     queryFn: db.getClients,
+    staleTime: 10 * 60 * 1000, // Clients rarely change, cache for 10 minutes
+    gcTime: 60 * 60 * 1000, // Keep for 1 hour
+  })
+
+  // Fetch available platforms dynamically
+  const { data: platformsFromDB } = useQuery({
+    queryKey: ['available_platforms'],
+    queryFn: db.getAvailablePlatforms,
+    staleTime: 10 * 60 * 1000, // Platforms rarely change
+    gcTime: 60 * 60 * 1000,
   })
 
   const { data: performance, isLoading: performanceLoading, error: performanceError } = useQuery({
@@ -66,6 +69,9 @@ export default function DataAnalytics() {
       startDate: dateRange.start,
       endDate: dateRange.end,
     }),
+    staleTime: 5 * 60 * 1000, // Data is fresh for 5 minutes
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
   })
 
   // Calculations using performance data
@@ -76,6 +82,8 @@ export default function DataAnalytics() {
     queryKey: ['meta_creatives', selectedClient],
     queryFn: () => db.getMetaCreatives(selectedClient),
     enabled: selectedPlatform === 'all' || selectedPlatform === 'meta_ads',
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   })
 
   // Fetch Google keywords (only when Google selected)
@@ -83,23 +91,16 @@ export default function DataAnalytics() {
     queryKey: ['google_keywords', selectedClient],
     queryFn: () => db.getGoogleKeywords(selectedClient),
     enabled: selectedPlatform === 'all' || selectedPlatform === 'google_ads',
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   })
 
-  // Platform list from constants (always available)
-  const availablePlatforms = SUPPORTED_PLATFORMS
+  // Platform list from database
+  const availablePlatforms = platformsFromDB || []
 
   // Build client list
-  const clients: Client[] = clientsFromTable && clientsFromTable.length > 0
-    ? clientsFromTable
-    : (() => {
-      const uniqueClients = new Map<string, string>()
-      performanceData.forEach(perf => {
-        if (perf.client_id && !uniqueClients.has(perf.client_id)) {
-          uniqueClients.set(perf.client_id, perf.client_name || `Client ${perf.client_id.slice(0, 8)}`)
-        }
-      })
-      return Array.from(uniqueClients.entries()).map(([id, name]) => ({ id, name }))
-    })()
+  const clients: Client[] = clientsFromTable || []
+
 
   // Apply date preset
   const applyDatePreset = (preset: any) => {
@@ -125,35 +126,35 @@ export default function DataAnalytics() {
 
   // Calculate totals
   const totals = performanceData.reduce((acc, day) => {
-    const spend = day.spend || day.cost || 0
-    const revenue = day.conversion_value || day.revenue || 0
+    const cost = day.cost || 0
+    const revenue = day.revenue || 0
     return {
-      spend: acc.spend + spend,
+      cost: acc.cost + cost,
       impressions: acc.impressions + (day.impressions || 0),
       clicks: acc.clicks + (day.clicks || 0),
       conversions: acc.conversions + (day.conversions || 0),
-      conversion_value: acc.conversion_value + revenue,
+      revenue: acc.revenue + revenue,
     }
-  }, { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversion_value: 0 })
+  }, { cost: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0 })
 
-  const roas = totals.spend > 0 ? (totals.conversion_value / totals.spend).toFixed(2) : '0.00'
+  const roas = totals.cost > 0 ? (totals.revenue / totals.cost).toFixed(2) : '0.00'
 
   // Daily data for charts
   const dailyData = performanceData.reduce((acc: any[], day) => {
     const existing = acc.find(d => d.date === day.date)
-    const spend = day.spend || day.cost || 0
-    const revenue = day.conversion_value || day.revenue || 0
+    const cost = day.cost || 0
+    const revenue = day.revenue || 0
 
     if (existing) {
-      existing.spend += spend
-      existing.conversion_value += revenue
-      existing.roas = existing.spend > 0 ? (existing.conversion_value / existing.spend).toFixed(2) : 0
+      existing.cost += cost
+      existing.revenue += revenue
+      existing.roas = existing.cost > 0 ? (existing.revenue / existing.cost).toFixed(2) : 0
     } else {
       acc.push({
         date: day.date,
-        spend: spend,
-        conversion_value: revenue,
-        roas: spend > 0 ? (revenue / spend).toFixed(2) : 0
+        cost: cost,
+        revenue: revenue,
+        roas: cost > 0 ? (revenue / cost).toFixed(2) : 0
       })
     }
     return acc
@@ -295,9 +296,9 @@ export default function DataAnalytics() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <KPICard title="Total Spend" value={`$${totals.spend.toLocaleString()}`} icon={DollarSign} color="blue" />
+        <KPICard title="Total Spend" value={`$${totals.cost.toLocaleString()}`} icon={DollarSign} color="blue" />
         <KPICard title="Conversions" value={totals.conversions.toLocaleString()} icon={Target} color="emerald" />
-        <KPICard title="Cost/Conv" value={`$${totals.conversions > 0 ? (totals.spend / totals.conversions).toFixed(2) : '0.00'}`} icon={CreditCard} color="violet" />
+        <KPICard title="Cost/Conv" value={`$${totals.conversions > 0 ? (totals.cost / totals.conversions).toFixed(2) : '0.00'}`} icon={CreditCard} color="violet" />
         <KPICard title="ROAS" value={`${roas}x`} icon={TrendingUp} color="amber" />
       </div>
 
@@ -352,9 +353,9 @@ export default function DataAnalytics() {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {performanceData.slice(0, 50).map((day: any) => {
-                  const spend = day.spend || day.cost || 0
-                  const revenue = day.conversion_value || day.revenue || 0
-                  const roas = spend > 0 ? (revenue / spend).toFixed(2) : '0.00'
+                  const cost = day.cost || 0
+                  const revenue = day.revenue || 0
+                  const roas = cost > 0 ? (revenue / cost).toFixed(2) : '0.00'
                   const clientName = clients.find(c => c.id === day.client_id)?.name || day.client_name
                   return (
                     <tr key={day.id} className="hover:bg-gray-50">
@@ -363,7 +364,7 @@ export default function DataAnalytics() {
                       <td className="px-4 py-3">
                         <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">{day.platform}</span>
                       </td>
-                      <td className="px-4 py-3 text-right">${spend.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right">${cost.toLocaleString()}</td>
                       <td className="px-4 py-3 text-right">
                         <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full text-sm">{day.conversions}</span>
                       </td>
@@ -401,9 +402,9 @@ export default function DataAnalytics() {
                     <td className="px-4 py-3 font-medium">{creative.ad_name}</td>
                     <td className="px-4 py-3 text-sm">{creative.campaign_name}</td>
                     <td className="px-4 py-3">
-                      <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700">{creative.creative_type}</span>
+                      <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700">Ad</span>
                     </td>
-                    <td className="px-4 py-3 text-right">${creative.spend?.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right">${(creative.spend || 0).toLocaleString()}</td>
                     <td className="px-4 py-3 text-right">{creative.conversions}</td>
                   </tr>
                 ))}
@@ -440,7 +441,7 @@ export default function DataAnalytics() {
                     <td className="px-4 py-3">
                       <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">{keyword.match_type}</span>
                     </td>
-                    <td className="px-4 py-3 text-right">${keyword.spend?.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right">${(keyword.spend || 0).toLocaleString()}</td>
                     <td className="px-4 py-3 text-right">{keyword.clicks}</td>
                     <td className="px-4 py-3 text-right">{keyword.conversions}</td>
                   </tr>

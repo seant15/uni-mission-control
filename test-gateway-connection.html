@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test OpenClaw Gateway Connection</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+        }
+        button {
+            background: #00ff00;
+            color: #1a1a1a;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            margin: 5px;
+            border-radius: 3px;
+        }
+        button:hover {
+            background: #00cc00;
+        }
+        pre {
+            background: #000;
+            padding: 10px;
+            overflow-x: auto;
+            border-radius: 3px;
+        }
+        .error { color: #ff0000; }
+        .success { color: #00ff00; }
+        .info { color: #ffff00; }
+    </style>
+</head>
+<body>
+    <h1>🔧 OpenClaw Gateway 连接测试</h1>
+
+    <div class="test-section">
+        <h2>配置</h2>
+        <p><strong>Gateway URL:</strong> <span id="gateway-url">http://open.unippc24.com:9090</span></p>
+        <p><strong>Token:</strong> <input type="text" id="token" value="uni-random-token" style="width: 300px; background: #000; color: #00ff00; border: 1px solid #00ff00; padding: 5px;"></p>
+        <button onclick="updateConfig()">更新配置</button>
+    </div>
+
+    <div class="test-section">
+        <h2>测试 1: 基础连接 (无认证)</h2>
+        <button onclick="testBasicConnection()">测试连接</button>
+        <pre id="basic-result">等待测试...</pre>
+    </div>
+
+    <div class="test-section">
+        <h2>测试 2: Sessions List API</h2>
+        <button onclick="testSessionsList()">测试 /api/sessions/list</button>
+        <pre id="sessions-result">等待测试...</pre>
+    </div>
+
+    <div class="test-section">
+        <h2>测试 3: Agents API (假设存在)</h2>
+        <button onclick="testAgentsAPI()">测试 /api/agents/list</button>
+        <pre id="agents-result">等待测试...</pre>
+    </div>
+
+    <div class="test-section">
+        <h2>测试 4: Tasks API (假设存在)</h2>
+        <button onclick="testTasksAPI()">测试 /api/tasks/list</button>
+        <pre id="tasks-result">等待测试...</pre>
+    </div>
+
+    <div class="test-section">
+        <h2>测试 5: CORS 检查</h2>
+        <button onclick="testCORS()">测试跨域请求</button>
+        <pre id="cors-result">等待测试...</pre>
+    </div>
+
+    <script>
+        let GATEWAY_URL = 'http://open.unippc24.com:9090';
+        let TOKEN = 'uni-random-token';
+
+        function updateConfig() {
+            TOKEN = document.getElementById('token').value;
+            console.log('配置已更新:', { GATEWAY_URL, TOKEN });
+            alert('配置已更新!');
+        }
+
+        async function testBasicConnection() {
+            const result = document.getElementById('basic-result');
+            result.innerHTML = '⏳ 测试中...';
+
+            try {
+                const response = await fetch(GATEWAY_URL, {
+                    method: 'GET',
+                });
+
+                const text = await response.text();
+                const preview = text.substring(0, 200);
+
+                result.innerHTML = `<span class="success">✅ 连接成功!</span>
+Status: ${response.status}
+Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)}
+Preview: ${preview}...`;
+            } catch (error) {
+                result.innerHTML = `<span class="error">❌ 连接失败!</span>
+Error: ${error.message}
+Stack: ${error.stack}`;
+            }
+        }
+
+        async function testSessionsList() {
+            const result = document.getElementById('sessions-result');
+            result.innerHTML = '⏳ 测试中...';
+
+            try {
+                const response = await fetch(`${GATEWAY_URL}/api/sessions/list`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'Accept': 'application/json'
+                    }
+                });
+
+                const contentType = response.headers.get('content-type');
+                const text = await response.text();
+
+                result.innerHTML = `<span class="${response.ok ? 'success' : 'error'}">${response.ok ? '✅' : '❌'} 响应收到</span>
+Status: ${response.status}
+Content-Type: ${contentType}
+Response: ${text.substring(0, 500)}`;
+            } catch (error) {
+                result.innerHTML = `<span class="error">❌ 请求失败!</span>
+Error: ${error.message}
+可能原因: CORS 阻止、网络问题、或端点不存在`;
+            }
+        }
+
+        async function testAgentsAPI() {
+            const result = document.getElementById('agents-result');
+            result.innerHTML = '⏳ 测试中...';
+
+            const endpoints = [
+                '/api/agents/list',
+                '/api/agents',
+                '/agents/list',
+                '/agents'
+            ];
+
+            let results = [];
+
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await fetch(`${GATEWAY_URL}${endpoint}`, {
+                        headers: {
+                            'Authorization': `Bearer ${TOKEN}`,
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    results.push(`${endpoint}: ${response.status} ${response.statusText}`);
+                } catch (error) {
+                    results.push(`${endpoint}: ❌ ${error.message}`);
+                }
+            }
+
+            result.innerHTML = results.join('\n');
+        }
+
+        async function testTasksAPI() {
+            const result = document.getElementById('tasks-result');
+            result.innerHTML = '⏳ 测试中...';
+
+            const endpoints = [
+                '/api/tasks/list',
+                '/api/tasks',
+                '/tasks/list',
+                '/tasks'
+            ];
+
+            let results = [];
+
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await fetch(`${GATEWAY_URL}${endpoint}`, {
+                        headers: {
+                            'Authorization': `Bearer ${TOKEN}`,
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    results.push(`${endpoint}: ${response.status} ${response.statusText}`);
+                } catch (error) {
+                    results.push(`${endpoint}: ❌ ${error.message}`);
+                }
+            }
+
+            result.innerHTML = results.join('\n');
+        }
+
+        async function testCORS() {
+            const result = document.getElementById('cors-result');
+            result.innerHTML = '⏳ 测试 CORS...';
+
+            try {
+                const response = await fetch(`${GATEWAY_URL}/api/sessions/list`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'Origin': window.location.origin
+                    }
+                });
+
+                const corsHeaders = {
+                    'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
+                    'Access-Control-Allow-Credentials': response.headers.get('Access-Control-Allow-Credentials'),
+                    'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
+                };
+
+                result.innerHTML = `<span class="success">✅ CORS 配置:</span>
+${JSON.stringify(corsHeaders, null, 2)}
+
+<span class="info">说明:</span>
+- Access-Control-Allow-Origin: ${corsHeaders['Access-Control-Allow-Origin'] || '❌ 未设置 (可能会阻止跨域请求)'}
+- 如果显示 null, 说明 OpenClaw Gateway 没有配置 CORS
+- 需要在 Gateway 后端添加 CORS 中间件`;
+            } catch (error) {
+                result.innerHTML = `<span class="error">❌ CORS 测试失败!</span>
+Error: ${error.message}
+
+<span class="info">这通常意味着:</span>
+1. OpenClaw Gateway 没有配置允许跨域请求
+2. 需要在 Gateway 添加 CORS 配置
+3. 或者需要将 Mission Control 部署到相同的域名`;
+            }
+        }
+
+        // 页面加载时自动运行基础测试
+        window.onload = function() {
+            console.log('页面加载完成, 可以开始测试');
+        };
+    </script>
+</body>
+</html>

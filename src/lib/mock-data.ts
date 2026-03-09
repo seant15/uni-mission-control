@@ -13,3 +13,5 @@ export const mockAgentTasks: AgentTask[] = [
   { id: '1', from_agent: 'clover', to_agent: 'mary', task_type: 'analyze', priority: 'high', payload: {}, status: 'pending', created_at: new Date().toISOString() },
   { id: '2', from_agent: 'mary', to_agent: 'writer', task_type: 'write', priority: 'normal', payload: {}, status: 'claimed', created_at: new Date().toISOString(), claimed_at: new Date().toISOString() }
 ]
+
+export const mockTasks = mockAgentTasks

@@ -47,3 +47,76 @@ export interface SyncProgress {
   started_at: string
   updated_at: string
 }
+
+// Analytics types
+export interface DailyPerformance {
+  id: string
+  client_id: string
+  client_name?: string
+  date: string
+  platform: string
+  impressions: number
+  clicks: number
+  conversions: number
+  cost: number
+  revenue: number
+}
+
+export interface Client {
+  id: string
+  name: string
+  industry?: string
+}
+
+export interface Platform {
+  id: string
+  label: string
+}
+
+export interface PerformanceMetrics {
+  cost: number
+  impressions: number
+  clicks: number
+  conversions: number
+  revenue: number
+  roas: string
+  cpa: string
+  ctr: string
+  cpc: string
+}
+
+export interface ChartDataPoint {
+  date: string
+  cost: number
+  revenue: number
+  roas: number
+}
+
+// OpenClaw types
+export interface ChatMessage {
+  id: string
+  agent: string
+  from: 'user' | 'agent'
+  message: string
+  type: 'text' | 'voice' | 'attachment'
+  timestamp: string
+  attachmentUrl?: string
+}
+
+export interface AgentSessionStatus {
+  sessionKey: string
+  status: 'running' | 'completed' | 'failed'
+  lastMessage?: string
+  error?: string
+}
+
+export interface AgentInfo {
+  name: string
+  emoji: string
+  role: string
+  status: 'online' | 'offline' | 'warning' | 'error'
+  activeTasksCount: number
+  hasLiveSession: boolean
+  failures: number
+  lastCheck: string | null
+}
