@@ -11,11 +11,8 @@ import { spawnSessionMock, sendMessageMock, getSessionStatusMock, listSessionsMo
 import { mockAgentHealth } from '../lib/mock-data'
 import type { AgentTask, AgentHealth } from '../types'
 
-// Force use real OpenClaw API (not mock)
-const USE_MOCK_DATA = false
-// const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
-console.log('Mission Control - USE_MOCK_DATA:', USE_MOCK_DATA)
-console.log('Mission Control - ENV VITE_USE_MOCK_DATA:', (import.meta as any).env.VITE_USE_MOCK_DATA)
+// Use real OpenClaw API when VITE_USE_MOCK_DATA is not 'true'
+const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
 
 const AGENTS = [
   { name: 'clover', emoji: '🍀', role: 'Management' },
@@ -418,26 +415,14 @@ export default function MissionControl() {
                     <div className="text-sm text-blue-600">{activeCount} active task{activeCount > 1 ? 's' : ''}</div>
                   )}
                 </div>
-                {/* Use mock chat in development, link to OpenClaw Control in production */}
-                {USE_MOCK_DATA ? (
-                  <button
-                    onClick={() => openChat(agent.name)}
-                    className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100"
-                  >
-                    <MessageSquare size={16} />
-                    Chat (Mock)
-                  </button>
-                ) : (
-                  <a
-                    href={(import.meta as any).env.VITE_OPENCLAW_GATEWAY_URL || 'http://open.unippc24.com:9090'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  >
-                    <MessageSquare size={16} />
-                    Open in OpenClaw Control →
-                  </a>
-                )}
+                {/* Chat button - uses real OpenClaw API or mock based on USE_MOCK_DATA */}
+                <button
+                  onClick={() => openChat(agent.name)}
+                  className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  <MessageSquare size={16} />
+                  Chat with {agent.name}
+                </button>
               </div>
             )
           })}
