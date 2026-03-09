@@ -6,8 +6,12 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { db } from '../lib/api'
-import { spawnSession, sendMessage, getSessionStatus, listSessions } from '../lib/openclaw'
+import { spawnSession, sendMessage, getSessionStatus, listSessions, uploadFile, subscribeToSession } from '../lib/openclaw'
+import { spawnSessionMock, sendMessageMock, getSessionStatusMock, listSessionsMock, uploadFileMock } from '../lib/openclaw-mock'
+import { mockAgentHealth } from '../lib/mock-data'
 import type { AgentTask, AgentHealth } from '../types'
+
+const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
 
 const AGENTS = [
   { name: 'clover', emoji: '🍀', role: 'Management' },
@@ -52,6 +56,11 @@ export default function MissionControl() {
   const { data: healthData } = useQuery({
     queryKey: ['health'],
     queryFn: async () => {
+      if (USE_MOCK_DATA) {
+        // Return mock data when flag is enabled
+        await new Promise(resolve => setTimeout(resolve, 200))
+        return mockAgentHealth
+      }
       const { data } = await supabase.from('agent_health').select('*')
       return data as AgentHealth[]
     },
@@ -59,19 +68,30 @@ export default function MissionControl() {
 
   const { data: activeSessions } = useQuery({
     queryKey: ['activeSessions'],
-    queryFn: listSessions,
+    queryFn: USE_MOCK_DATA ? listSessionsMock : listSessions,
     refetchInterval: 10000,
   })
 
   // Real-time subscriptions
   useEffect(() => {
-    const channel = supabase
+    const tasksChannel = supabase
       .channel('tasks')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_tasks' }, () => {
         queryClient.invalidateQueries({ queryKey: ['tasks'] })
       })
       .subscribe()
-    return () => { channel.unsubscribe() }
+
+    const healthChannel = supabase
+      .channel('agent_health')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_health' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['health'] })
+      })
+      .subscribe()
+
+    return () => {
+      tasksChannel.unsubscribe()
+      healthChannel.unsubscribe()
+    }
   }, [queryClient])
 
   // Mutations
@@ -152,10 +172,8 @@ export default function MissionControl() {
 
   const openChat = (agentName: string) => {
     setChatAgent(agentName)
-    // Load mock chat history
-    setChatMessages([
-      { id: '1', agent: agentName, from: 'agent', message: `Hello! I'm ${agentName}. How can I help you today?`, type: 'text', timestamp: new Date().toISOString() }
-    ])
+    // Start with empty messages - agent will respond after first user message
+    setChatMessages([])
     setShowChatModal(true)
   }
 
@@ -179,13 +197,19 @@ export default function MissionControl() {
 
     try {
       if (!activeSession) {
-        // Spawn a new session
-        const session = await spawnSession(chatAgent, chatMessage)
+        // Spawn a new session (use mock if flag is enabled)
+        const session = USE_MOCK_DATA
+          ? await spawnSessionMock(chatAgent, chatMessage)
+          : await spawnSession(chatAgent, chatMessage)
         setActiveSession(session.sessionKey)
         startPolling(session.sessionKey)
       } else {
-        // Send message to existing session
-        await sendMessage(activeSession, chatMessage)
+        // Send message to existing session (use mock if flag is enabled)
+        if (USE_MOCK_DATA) {
+          await sendMessageMock(activeSession, chatMessage)
+        } else {
+          await sendMessage(activeSession, chatMessage)
+        }
       }
     } catch (error) {
       console.error('Failed to communicate with agent:', error)
@@ -204,9 +228,16 @@ export default function MissionControl() {
   const startPolling = (sessionKey: string) => {
     if (pollingRef.current) clearInterval(pollingRef.current)
 
+    let consecutiveErrors = 0
+    const maxErrors = 3
+
     pollingRef.current = setInterval(async () => {
       try {
-        const status = await getSessionStatus(sessionKey)
+        const status = USE_MOCK_DATA
+          ? await getSessionStatusMock(sessionKey)
+          : await getSessionStatus(sessionKey)
+        consecutiveErrors = 0 // Reset error count on success
+
         if (status.lastMessage) {
           const agentResponse: ChatMessage = {
             id: Date.now().toString(),
@@ -223,13 +254,30 @@ export default function MissionControl() {
             return [...prev, agentResponse]
           })
 
+          // Clean up session state when completed or failed
           if (status.status === 'completed' || status.status === 'failed') {
+            setActiveSession(null)
             stopPolling()
           }
         }
       } catch (error) {
         console.error('Polling error:', error)
-        stopPolling()
+        consecutiveErrors++
+
+        // Stop polling after consecutive errors
+        if (consecutiveErrors >= maxErrors) {
+          const errorMsg: ChatMessage = {
+            id: Date.now().toString(),
+            agent: chatAgent,
+            from: 'agent',
+            message: '⚠️ Connection lost. Please try again.',
+            type: 'text',
+            timestamp: new Date().toISOString()
+          }
+          setChatMessages(prev => [...prev, errorMsg])
+          setActiveSession(null)
+          stopPolling()
+        }
       }
     }, 2000)
   }
@@ -245,26 +293,47 @@ export default function MissionControl() {
     return () => stopPolling()
   }, [])
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (!file || !activeSession) return
 
-    const newMessage: ChatMessage = {
-      id: Date.now().toString(),
-      agent: chatAgent,
-      from: 'user',
-      message: `📎 Attached: ${file.name}`,
-      type: 'attachment',
-      timestamp: new Date().toISOString()
+    try {
+      const fileUrl = USE_MOCK_DATA
+        ? await uploadFileMock(activeSession, file)
+        : await uploadFile(activeSession, file)
+
+      const newMessage: ChatMessage = {
+        id: Date.now().toString(),
+        agent: chatAgent,
+        from: 'user',
+        message: `📎 Attached: ${file.name}`,
+        type: 'attachment',
+        timestamp: new Date().toISOString(),
+        attachmentUrl: fileUrl
+      }
+
+      setChatMessages(prev => [...prev, newMessage])
+    } catch (error) {
+      console.error('File upload failed:', error)
+      const errorMsg: ChatMessage = {
+        id: Date.now().toString(),
+        agent: chatAgent,
+        from: 'agent',
+        message: '❌ Failed to upload file. Please try again.',
+        type: 'text',
+        timestamp: new Date().toISOString()
+      }
+      setChatMessages(prev => [...prev, errorMsg])
     }
-
-    setChatMessages([...chatMessages, newMessage])
   }
 
-  const toggleRecording = () => {
+  const toggleRecording = async () => {
     if (isRecording) {
       // Stop recording
       setIsRecording(false)
+
+      // TODO: Implement actual voice recording
+      // For now, show a placeholder message
       const newMessage: ChatMessage = {
         id: Date.now().toString(),
         agent: chatAgent,
@@ -273,10 +342,38 @@ export default function MissionControl() {
         type: 'voice',
         timestamp: new Date().toISOString()
       }
-      setChatMessages([...chatMessages, newMessage])
+      setChatMessages(prev => [...prev, newMessage])
+
+      // In production, you would:
+      // 1. Stop the MediaRecorder
+      // 2. Get the audio blob
+      // 3. Upload it via uploadFile()
+      // 4. Send the audio URL to the agent
     } else {
       // Start recording
-      setIsRecording(true)
+      try {
+        // Check if browser supports media recording
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Voice recording not supported in this browser')
+        }
+
+        // Request microphone permission
+        await navigator.mediaDevices.getUserMedia({ audio: true })
+        setIsRecording(true)
+
+        // TODO: Initialize MediaRecorder here
+      } catch (error) {
+        console.error('Failed to start recording:', error)
+        const errorMsg: ChatMessage = {
+          id: Date.now().toString(),
+          agent: chatAgent,
+          from: 'agent',
+          message: '❌ Microphone access denied or not available.',
+          type: 'text',
+          timestamp: new Date().toISOString()
+        }
+        setChatMessages(prev => [...prev, errorMsg])
+      }
     }
   }
 
@@ -317,13 +414,26 @@ export default function MissionControl() {
                     <div className="text-sm text-blue-600">{activeCount} active task{activeCount > 1 ? 's' : ''}</div>
                   )}
                 </div>
-                <button
-                  onClick={() => openChat(agent.name)}
-                  className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100"
-                >
-                  <MessageSquare size={16} />
-                  Chat with {agent.name}
-                </button>
+                {/* Use mock chat in development, link to OpenClaw Control in production */}
+                {USE_MOCK_DATA ? (
+                  <button
+                    onClick={() => openChat(agent.name)}
+                    className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100"
+                  >
+                    <MessageSquare size={16} />
+                    Chat (Mock)
+                  </button>
+                ) : (
+                  <a
+                    href={(import.meta as any).env.VITE_OPENCLAW_GATEWAY_URL || 'http://open.unippc24.com:9090'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  >
+                    <MessageSquare size={16} />
+                    Open in OpenClaw Control →
+                  </a>
+                )}
               </div>
             )
           })}
@@ -523,7 +633,7 @@ export default function MissionControl() {
                 type="text"
                 value={chatMessage}
                 onChange={(e) => setChatMessage(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
+                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendChatMessage()}
                 placeholder="Type your message..."
                 className="flex-1 border rounded-lg px-4 py-2"
               />
