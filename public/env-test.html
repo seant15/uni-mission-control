@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Env Test - Mission Control</title>
+  <style>
+    body { font-family: monospace; padding: 20px; }
+    pre { background: #f5f5f5; padding: 15px; border-radius: 5px; }
+    .error { color: red; }
+    .success { color: green; }
+  </style>
+</head>
+<body>
+  <h1>Environment Variables Test</h1>
+  <p>This page tests if environment variables are loaded correctly in the Vercel deployment.</p>
+
+  <h2>Expected Values:</h2>
+  <pre>
+VITE_USE_MOCK_DATA: "false"
+VITE_OPENCLAW_GATEWAY_URL: "http://open.unippc24.com:9090"
+VITE_OPENCLAW_GATEWAY_TOKEN: "uni-random-token"
+VITE_SUPABASE_URL: "https://jcghdthijgjttmpthagj.supabase.co"
+  </pre>
+
+  <h2>Actual Values in Browser:</h2>
+  <pre id="output">Loading...</pre>
+
+  <h2>Git Commit Info:</h2>
+  <pre id="commit">Checking...</pre>
+
+  <script>
+    // This won't work because import.meta is only available in ES modules
+    // But we can check if the values were injected during build
+    const output = document.getElementById('output');
+    const commitInfo = document.getElementById('commit');
+
+    // Try to access the meta tag if Vite injects it
+    const metaTags = document.querySelectorAll('meta');
+    let found = false;
+
+    metaTags.forEach(meta => {
+      if (meta.getAttribute('name')?.startsWith('VITE_')) {
+        found = true;
+        output.textContent += meta.getAttribute('name') + ': ' + meta.getAttribute('content') + '\n';
+      }
+    });
+
+    if (!found) {
+      output.innerHTML = '<span class="error">❌ Environment variables are NOT accessible from static HTML</span>\n\n';
+      output.innerHTML += 'This is expected. Environment variables are only available in:\n';
+      output.innerHTML += '1. Vite/React components (import.meta.env.VITE_*)\n';
+      output.innerHTML += '2. Build-time (replaced during build)\n\n';
+      output.innerHTML += '<span class="success">To check if they are set correctly:</span>\n';
+      output.innerHTML += '1. Check Vercel Dashboard → Settings → Environment Variables\n';
+      output.innerHTML += '2. Check the Mission Control page console logs\n';
+      output.innerHTML += '3. Look at the button text in Mission Control page\n\n';
+      output.innerHTML += 'Current page URL: ' + window.location.href;
+    }
+
+    // Show current Git commit (from meta tag if available)
+    const gitMeta = document.querySelector('meta[name="git-commit"]');
+    if (gitMeta) {
+      commitInfo.textContent = gitMeta.getAttribute('content');
+    } else {
+      commitInfo.textContent = 'Git commit info not available (this is normal)';
+    }
+
+    // Add deployment info
+    commitInfo.textContent += '\n\nLast modified: ' + document.lastModified;
+    commitInfo.textContent += '\nPage loaded at: ' + new Date().toISOString();
+  </script>
+</body>
+</html>
