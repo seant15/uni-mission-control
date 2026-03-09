@@ -1,5 +1,8 @@
 import { supabase } from './supabase'
 import type { AgentTask, AgentHealth } from '../types'
+import { mockTasks } from './mock-data'
+
+const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
 
 /**
  * Interface for daily performance filters
@@ -23,7 +26,7 @@ export const db = {
     async getDailyPerformance(filters: PerformanceFilters) {
         let query = supabase
             .from('daily_performance')
-            .select('id, client_id, client_name, date, platform, impressions, clicks, conversions, spend, cost, conversion_value, revenue')
+            .select('id, client_id, client_name, date, platform, impressions, clicks, conversions, cost, revenue')
 
         if (filters.clientId && filters.clientId !== 'all') {
             query = query.eq('client_id', filters.clientId)
@@ -41,8 +44,13 @@ export const db = {
             query = query.lte('date', filters.endDate)
         }
 
-        query = query.order('date', { ascending: false })
-            .limit(filters.limit || 1000)
+        query = query
+            .order('date', { ascending: false })
+            .limit(filters.limit || 5000)
+
+        if (filters.offset) {
+            query = query.range(filters.offset, filters.offset + (filters.limit || 1000) - 1)
+        }
 
         const { data, error } = await query
         if (error) throw error
@@ -84,6 +92,14 @@ export const db = {
      * Fetch tasks for Mission Control with filtering
      */
     async getTasks(status?: string) {
+        // Use mock data if flag is enabled
+        if (USE_MOCK_DATA) {
+            await new Promise(resolve => setTimeout(resolve, 300)) // Simulate delay
+            return mockTasks.filter(task =>
+                !status || status === 'all' || task.status === status
+            )
+        }
+
         let query = supabase
             .from('agent_tasks')
             .select('*') // For now select * as it's a small table but could be optimized
@@ -98,13 +114,19 @@ export const db = {
     },
 
     /**
-     * Fetch Meta creatives with client filtering
+     * Fetch Meta ad creatives with client filtering
      */
     async getMetaCreatives(clientId?: string) {
-        let query = supabase.from('meta_creatives').select('*').limit(50)
+        let query = supabase
+            .from('meta_ads_ads')
+            .select('id, client_id, date, campaign_id, campaign_name, ad_set_id, ad_set_name, ad_id, ad_name, spend, impressions, clicks, conversions, revenue')
+            .order('spend', { ascending: false })
+            .limit(50)
+
         if (clientId && clientId !== 'all') {
             query = query.eq('client_id', clientId)
         }
+
         const { data, error } = await query
         if (error) throw error
         return data
@@ -114,12 +136,45 @@ export const db = {
      * Fetch Google keywords with client filtering
      */
     async getGoogleKeywords(clientId?: string) {
-        let query = supabase.from('google_keywords').select('*').limit(50)
+        let query = supabase
+            .from('google_ads_keywords')
+            .select('id, client_id, customer_id, date, campaign_id, campaign_name, ad_group_id, ad_group_name, keyword_id, keyword, match_type, status, impressions, clicks, cost_micros, conversions, ctr, cpc')
+            .order('cost_micros', { ascending: false })
+            .limit(50)
+
         if (clientId && clientId !== 'all') {
             query = query.eq('client_id', clientId)
         }
+
         const { data, error } = await query
         if (error) throw error
-        return data
+
+        // Convert cost_micros to dollars
+        return data?.map(item => ({
+            ...item,
+            spend: item.cost_micros ? item.cost_micros / 1000000 : 0
+        }))
+    },
+
+    /**
+     * Fetch available platforms from database
+     */
+    async getAvailablePlatforms() {
+        const { data, error } = await supabase
+            .from('daily_performance')
+            .select('platform')
+
+        if (error) throw error
+
+        // Get unique platforms
+        const platforms = [...new Set(data?.map(item => item.platform).filter(Boolean))]
+
+        return platforms.map(platform => ({
+            id: platform,
+            label: platform === 'meta_ads' ? 'Meta Ads' :
+                   platform === 'google_ads' ? 'Google Ads' :
+                   platform === 'tiktok_ads' ? 'TikTok Ads' :
+                   platform === 'shopify' ? 'Shopify' : platform
+        }))
     }
 }
