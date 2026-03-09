@@ -1,5 +1,19 @@
-const GATEWAY_URL = (import.meta as any).env.VITE_OPENCLAW_GATEWAY_URL || 'https://open.unippc24.com';
-const GATEWAY_TOKEN = (import.meta as any).env.VITE_OPENCLAW_GATEWAY_TOKEN || 'uni-random-token';
+// Use Vercel API proxy to avoid HTTPS/HTTP mixed content issues
+// In production (Vercel), use /api/openclaw proxy
+// In development, can use direct connection if needed
+const USE_PROXY = (import.meta as any).env.VITE_USE_PROXY !== 'false'
+const PROXY_URL = '/api/openclaw'
+const DIRECT_GATEWAY_URL = (import.meta as any).env.VITE_OPENCLAW_GATEWAY_URL || 'http://open.unippc24.com:9090'
+const GATEWAY_TOKEN = (import.meta as any).env.VITE_OPENCLAW_GATEWAY_TOKEN || 'uni-random-token'
+
+// Helper function to build API URL
+function buildApiUrl(path: string): string {
+  if (USE_PROXY) {
+    // Use Vercel proxy - path will be passed as query param
+    return `${PROXY_URL}?path=${encodeURIComponent(path)}`
+  }
+  return `${DIRECT_GATEWAY_URL}${path}`
+}
 
 export interface SpawnSessionRequest {
   agentId: string;
@@ -13,7 +27,7 @@ export interface SpawnSessionResponse {
 }
 
 export async function spawnSession(agentId: string, task: string): Promise<SpawnSessionResponse> {
-  const response = await fetch(`${GATEWAY_URL}/api/sessions/spawn`, {
+  const response = await fetch(buildApiUrl('/api/sessions/spawn'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -34,7 +48,7 @@ export async function spawnSession(agentId: string, task: string): Promise<Spawn
 }
 
 export async function sendMessage(sessionKey: string, message: string): Promise<void> {
-  const response = await fetch(`${GATEWAY_URL}/api/sessions/send`, {
+  const response = await fetch(buildApiUrl('/api/sessions/send'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -52,7 +66,7 @@ export async function sendMessage(sessionKey: string, message: string): Promise<
 }
 
 export async function getSessionStatus(sessionKey: string): Promise<any> {
-  const response = await fetch(`${GATEWAY_URL}/api/sessions/status?sessionKey=${sessionKey}`, {
+  const response = await fetch(buildApiUrl(`/api/sessions/status?sessionKey=${sessionKey}`), {
     headers: {
       'Authorization': `Bearer ${GATEWAY_TOKEN}`,
     },
@@ -66,7 +80,7 @@ export async function getSessionStatus(sessionKey: string): Promise<any> {
 }
 
 export async function listSessions(): Promise<any[]> {
-  const response = await fetch(`${GATEWAY_URL}/api/sessions/list`, {
+  const response = await fetch(buildApiUrl('/api/sessions/list'), {
     headers: {
       'Authorization': `Bearer ${GATEWAY_TOKEN}`,
     },
@@ -87,7 +101,7 @@ export async function uploadFile(sessionKey: string, file: File): Promise<string
   formData.append('file', file)
   formData.append('sessionKey', sessionKey)
 
-  const response = await fetch(`${GATEWAY_URL}/api/sessions/upload`, {
+  const response = await fetch(buildApiUrl('/api/sessions/upload'), {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${GATEWAY_TOKEN}`,
@@ -106,6 +120,7 @@ export async function uploadFile(sessionKey: string, file: File): Promise<string
 /**
  * Subscribe to session updates via WebSocket (if available)
  * Falls back to polling if WebSocket not supported
+ * Note: WebSocket connections cannot use the HTTP proxy, must connect directly
  */
 export function subscribeToSession(
   sessionKey: string,
@@ -119,7 +134,9 @@ export function subscribeToSession(
   }
 
   try {
-    const ws = new WebSocket(`${GATEWAY_URL.replace('https', 'wss').replace('http', 'ws')}/api/sessions/${sessionKey}`)
+    // WebSocket connections cannot use the proxy, must use direct connection
+    const wsUrl = DIRECT_GATEWAY_URL.replace('https', 'wss').replace('http', 'ws')
+    const ws = new WebSocket(`${wsUrl}/api/sessions/${sessionKey}`)
 
     ws.onmessage = (event) => {
       try {
