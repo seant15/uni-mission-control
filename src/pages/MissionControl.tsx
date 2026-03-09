@@ -11,7 +11,11 @@ import { spawnSessionMock, sendMessageMock, getSessionStatusMock, listSessionsMo
 import { mockAgentHealth } from '../lib/mock-data'
 import type { AgentTask, AgentHealth } from '../types'
 
-const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
+// Force use real OpenClaw API (not mock)
+const USE_MOCK_DATA = false
+// const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
+console.log('Mission Control - USE_MOCK_DATA:', USE_MOCK_DATA)
+console.log('Mission Control - ENV VITE_USE_MOCK_DATA:', (import.meta as any).env.VITE_USE_MOCK_DATA)
 
 const AGENTS = [
   { name: 'clover', emoji: '🍀', role: 'Management' },
