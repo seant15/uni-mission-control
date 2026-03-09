@@ -27,18 +27,44 @@ export default async function handler(req, res) {
   console.log(`[Proxy] ${req.method} ${targetPath} -> ${targetUrl}`);
 
   try {
-    // Forward the request to OpenClaw Gateway
-    const response = await fetch(targetUrl, {
+    // Prepare request options
+    const requestOptions = {
       method: req.method,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${OPENCLAW_GATEWAY_TOKEN}`,
       },
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined,
+    };
+
+    // Add body for non-GET requests
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
+      requestOptions.body = JSON.stringify(req.body);
+    }
+
+    console.log(`[Proxy] Request:`, {
+      url: targetUrl,
+      method: req.method,
+      hasBody: !!requestOptions.body,
     });
 
-    // Get response data
-    const data = await response.json();
+    // Forward the request to OpenClaw Gateway
+    const response = await fetch(targetUrl, requestOptions);
+
+    console.log(`[Proxy] Response:`, {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+    });
+
+    // Try to get response data
+    let data;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      data = { message: text };
+    }
 
     // Return the response
     res.status(response.status).json(data);
@@ -47,7 +73,12 @@ export default async function handler(req, res) {
     res.status(500).json({
       error: 'Proxy request failed',
       message: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      stack: error.stack,
+      targetUrl: targetUrl,
+      env: {
+        hasGatewayUrl: !!process.env.OPENCLAW_GATEWAY_URL,
+        hasToken: !!process.env.OPENCLAW_GATEWAY_TOKEN,
+      }
     });
   }
 }
