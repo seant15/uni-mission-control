@@ -6,8 +6,8 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { db } from '../lib/api'
-import { spawnSession, sendMessage, getSessionStatus, listSessions, uploadFile } from '../lib/openclaw'
-import { spawnSessionMock, sendMessageMock, getSessionStatusMock, listSessionsMock, uploadFileMock } from '../lib/openclaw-mock'
+import { spawnSession, sendMessage, getSessionStatus, uploadFile } from '../lib/openclaw'
+import { spawnSessionMock, sendMessageMock, getSessionStatusMock, uploadFileMock } from '../lib/openclaw-mock'
 import { mockAgentHealth } from '../lib/mock-data'
 import type { AgentTask, AgentHealth } from '../types'
 
@@ -68,11 +68,12 @@ export default function MissionControl() {
     },
   })
 
-  const { data: activeSessions } = useQuery({
-    queryKey: ['activeSessions'],
-    queryFn: USE_MOCK_DATA ? listSessionsMock : listSessions,
-    refetchInterval: 10000,
-  })
+  // Active sessions disabled - we open OpenClaw UI in new tab instead
+  // const { data: activeSessions } = useQuery({
+  //   queryKey: ['activeSessions'],
+  //   queryFn: async () => [],
+  //   enabled: false,
+  // })
 
   // Real-time subscriptions
   useEffect(() => {
@@ -405,11 +406,7 @@ export default function MissionControl() {
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center gap-2 text-sm">
                     <span className="capitalize text-gray-700">{status.status}</span>
-                    {activeSessions?.some(s => s.agentId === agent.name) && (
-                      <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded-full font-bold uppercase animate-pulse">
-                        Live Session
-                      </span>
-                    )}
+                    {/* Live Session indicator removed - sessions managed in OpenClaw UI */}
                   </div>
                   {activeCount > 0 && (
                     <div className="text-sm text-blue-600">{activeCount} active task{activeCount > 1 ? 's' : ''}</div>
