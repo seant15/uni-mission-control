@@ -41,7 +41,8 @@ export default function MissionControl() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedTask, setSelectedTask] = useState<AgentTask | null>(null)
   const [showChatModal, setShowChatModal] = useState(false)
-  const [chatAgent, setChatAgent] = useState<string>('')
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [chatAgent, _setChatAgent] = useState<string>('')
   const [chatMessage, setChatMessage] = useState('')
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [isRecording, setIsRecording] = useState(false)
@@ -171,11 +172,10 @@ export default function MissionControl() {
     })
   }
 
-  const openChat = (agentName: string) => {
-    setChatAgent(agentName)
-    // Start with empty messages - agent will respond after first user message
-    setChatMessages([])
-    setShowChatModal(true)
+  const openChat = (_agentName: string) => {
+    // Open OpenClaw Control UI in new tab
+    const OPENCLAW_UI_URL = (import.meta as any).env.VITE_OPENCLAW_GATEWAY_URL || 'http://open.unippc24.com:9090'
+    window.open(OPENCLAW_UI_URL, '_blank')
   }
 
   const [activeSession, setActiveSession] = useState<string | null>(null)

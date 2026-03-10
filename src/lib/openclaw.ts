@@ -2,13 +2,32 @@
 // OpenClaw primarily uses WebSocket for communication, not REST API
 const DIRECT_GATEWAY_URL = (import.meta as any).env.VITE_OPENCLAW_GATEWAY_URL || 'http://open.unippc24.com:9090'
 const GATEWAY_TOKEN = (import.meta as any).env.VITE_OPENCLAW_GATEWAY_TOKEN || 'uni-random-token'
+const USE_PROXY = (import.meta as any).env.VITE_USE_PROXY === 'true'
 
-// WebSocket connection for real-time communication
+// Check if we're in HTTPS context (can't use WS, only WSS)
+const isHttpsContext = typeof window !== 'undefined' && window.location.protocol === 'https:'
+
+// Helper to build API URL (for HTTP fallback)
+function buildApiUrl(path: string): string {
+  if (USE_PROXY || isHttpsContext) {
+    // Use Vercel serverless function proxy
+    return `/api/openclaw?path=${encodeURIComponent(path)}`
+  }
+  return `${DIRECT_GATEWAY_URL}${path}`
+}
+
+// WebSocket connection for real-time communication (only in HTTP context)
 let ws: WebSocket | null = null
 const messageHandlers = new Map<string, (data: any) => void>()
 
-// Initialize WebSocket connection
-function getWebSocket(): WebSocket {
+// Initialize WebSocket connection (only works in HTTP context)
+function getWebSocket(): WebSocket | null {
+  // Cannot use WebSocket in HTTPS context with HTTP backend
+  if (isHttpsContext) {
+    console.warn('[OpenClaw] WebSocket disabled in HTTPS context, using HTTP fallback')
+    return null
+  }
+
   if (ws && ws.readyState === WebSocket.OPEN) {
     return ws
   }
@@ -44,11 +63,34 @@ function getWebSocket(): WebSocket {
   return ws
 }
 
-// Send message via WebSocket
-function sendWebSocketMessage(message: any): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const socket = getWebSocket()
+// Send message via WebSocket or HTTP fallback
+async function sendWebSocketMessage(message: any): Promise<any> {
+  const socket = getWebSocket()
 
+  // HTTP fallback for HTTPS contexts
+  if (!socket) {
+    console.log('[OpenClaw] Using HTTP fallback for:', message.type)
+
+    // Map WebSocket message types to HTTP endpoints
+    const endpoint = getHttpEndpoint(message)
+    const response = await fetch(buildApiUrl(endpoint.path), {
+      method: endpoint.method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GATEWAY_TOKEN}`,
+      },
+      body: endpoint.method !== 'GET' ? JSON.stringify(endpoint.body) : undefined,
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP request failed: ${response.statusText}`)
+    }
+
+    return response.json()
+  }
+
+  // WebSocket path (for HTTP contexts)
+  return new Promise((resolve, reject) => {
     if (socket.readyState !== WebSocket.OPEN) {
       reject(new Error('WebSocket not connected'))
       return
@@ -77,6 +119,54 @@ function sendWebSocketMessage(message: any): Promise<any> {
       }
     }, 30000)
   })
+}
+
+// Map WebSocket message types to HTTP endpoints
+function getHttpEndpoint(message: any): { path: string; method: string; body?: any } {
+  switch (message.type) {
+    case 'spawn_session':
+      return {
+        path: '/api/sessions/spawn',
+        method: 'POST',
+        body: {
+          agentId: message.agentId,
+          task: message.task,
+          mode: message.mode,
+        },
+      }
+    case 'send_message':
+      return {
+        path: '/api/sessions/send',
+        method: 'POST',
+        body: {
+          sessionKey: message.sessionKey,
+          message: message.message,
+        },
+      }
+    case 'get_session_status':
+      return {
+        path: `/api/sessions/status?sessionKey=${message.sessionKey}`,
+        method: 'GET',
+      }
+    case 'list_sessions':
+      return {
+        path: '/api/sessions/list',
+        method: 'GET',
+      }
+    case 'upload_file':
+      return {
+        path: '/api/sessions/upload',
+        method: 'POST',
+        body: {
+          sessionKey: message.sessionKey,
+          fileName: message.fileName,
+          fileType: message.fileType,
+          fileData: message.fileData,
+        },
+      }
+    default:
+      throw new Error(`Unknown message type: ${message.type}`)
+  }
 }
 
 export interface SpawnSessionRequest {
