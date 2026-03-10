@@ -10,6 +10,7 @@ const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
 export interface PerformanceFilters {
     clientId?: string
     platform?: string
+    adAccountId?: string
     startDate?: string
     endDate?: string
     limit?: number
@@ -26,7 +27,7 @@ export const db = {
     async getDailyPerformance(filters: PerformanceFilters) {
         let query = supabase
             .from('daily_performance')
-            .select('id, client_id, client_name, date, platform, impressions, clicks, conversions, cost, revenue')
+            .select('id, client_id, client_name, date, platform, ad_account_id, impressions, clicks, conversions, cost, revenue')
 
         if (filters.clientId && filters.clientId !== 'all') {
             query = query.eq('client_id', filters.clientId)
@@ -34,6 +35,10 @@ export const db = {
 
         if (filters.platform && filters.platform !== 'all') {
             query = query.eq('platform', filters.platform)
+        }
+
+        if (filters.adAccountId) {
+            query = query.eq('ad_account_id', filters.adAccountId)
         }
 
         if (filters.startDate) {
@@ -63,7 +68,7 @@ export const db = {
     async getClients() {
         const { data, error } = await supabase
             .from('clients')
-            .select('id, name')
+            .select('id, name, business_type')
             .order('name')
         if (error) throw error
         return data
@@ -176,6 +181,88 @@ export const db = {
                    platform === 'tiktok_ads' ? 'TikTok Ads' :
                    platform === 'shopify' ? 'Shopify' : platform
         }))
+    },
+
+    /**
+     * Fetch available ad accounts for a specific platform
+     */
+    async getAdAccountsForPlatform(platform: string) {
+        const { data, error } = await supabase
+            .from('daily_performance')
+            .select('ad_account_id, platform')
+            .eq('platform', platform)
+
+        if (error) throw error
+
+        // Get unique ad_account_ids
+        const accounts = [...new Set(data?.map(item => item.ad_account_id).filter(Boolean))]
+
+        return accounts.map(account => ({
+            id: account,
+            label: `${account} | ${platform}`
+        }))
+    },
+
+    /**
+     * Fetch Meta adsets with filtering
+     */
+    async getMetaAdsets(filters: { clientId?: string; adAccountId?: string; startDate?: string; endDate?: string }) {
+        let query = supabase
+            .from('meta_ads_adsets')
+            .select('id, client_id, date, ad_account_id, campaign_name, ad_set_name, spend, conversions, revenue')
+            .order('date', { ascending: false })
+            .limit(500)
+
+        if (filters.clientId && filters.clientId !== 'all') {
+            query = query.eq('client_id', filters.clientId)
+        }
+
+        if (filters.adAccountId) {
+            query = query.eq('ad_account_id', filters.adAccountId)
+        }
+
+        if (filters.startDate) {
+            query = query.gte('date', filters.startDate)
+        }
+
+        if (filters.endDate) {
+            query = query.lte('date', filters.endDate)
+        }
+
+        const { data, error } = await query
+        if (error) throw error
+        return data
+    },
+
+    /**
+     * Fetch Meta ads with filtering
+     */
+    async getMetaAds(filters: { clientId?: string; adAccountId?: string; startDate?: string; endDate?: string }) {
+        let query = supabase
+            .from('meta_ads_ads')
+            .select('id, client_id, date, ad_account_id, campaign_name, ad_set_name, ad_name, spend, conversions, revenue')
+            .order('date', { ascending: false })
+            .limit(500)
+
+        if (filters.clientId && filters.clientId !== 'all') {
+            query = query.eq('client_id', filters.clientId)
+        }
+
+        if (filters.adAccountId) {
+            query = query.eq('ad_account_id', filters.adAccountId)
+        }
+
+        if (filters.startDate) {
+            query = query.gte('date', filters.startDate)
+        }
+
+        if (filters.endDate) {
+            query = query.lte('date', filters.endDate)
+        }
+
+        const { data, error } = await query
+        if (error) throw error
+        return data
     },
 
     /**
