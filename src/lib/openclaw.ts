@@ -1,18 +1,82 @@
-// Use Vercel API proxy to avoid HTTPS/HTTP mixed content issues
-// In production (Vercel), use /api/openclaw proxy
-// In development, can use direct connection if needed
-const USE_PROXY = (import.meta as any).env.VITE_USE_PROXY !== 'false'
-const PROXY_URL = '/api/openclaw'
+// OpenClaw Gateway configuration
+// OpenClaw primarily uses WebSocket for communication, not REST API
 const DIRECT_GATEWAY_URL = (import.meta as any).env.VITE_OPENCLAW_GATEWAY_URL || 'http://open.unippc24.com:9090'
 const GATEWAY_TOKEN = (import.meta as any).env.VITE_OPENCLAW_GATEWAY_TOKEN || 'uni-random-token'
 
-// Helper function to build API URL
-function buildApiUrl(path: string): string {
-  if (USE_PROXY) {
-    // Use Vercel proxy - path will be passed as query param
-    return `${PROXY_URL}?path=${encodeURIComponent(path)}`
+// WebSocket connection for real-time communication
+let ws: WebSocket | null = null
+const messageHandlers = new Map<string, (data: any) => void>()
+
+// Initialize WebSocket connection
+function getWebSocket(): WebSocket {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    return ws
   }
-  return `${DIRECT_GATEWAY_URL}${path}`
+
+  const wsUrl = DIRECT_GATEWAY_URL.replace('https', 'wss').replace('http', 'ws')
+  ws = new WebSocket(`${wsUrl}/?token=${GATEWAY_TOKEN}`)
+
+  ws.onopen = () => {
+    console.log('[OpenClaw] WebSocket connected')
+  }
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      console.log('[OpenClaw] Received:', data)
+
+      // Call registered handlers
+      messageHandlers.forEach(handler => handler(data))
+    } catch (error) {
+      console.error('[OpenClaw] Failed to parse message:', error)
+    }
+  }
+
+  ws.onerror = (error) => {
+    console.error('[OpenClaw] WebSocket error:', error)
+  }
+
+  ws.onclose = () => {
+    console.log('[OpenClaw] WebSocket closed')
+    ws = null
+  }
+
+  return ws
+}
+
+// Send message via WebSocket
+function sendWebSocketMessage(message: any): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const socket = getWebSocket()
+
+    if (socket.readyState !== WebSocket.OPEN) {
+      reject(new Error('WebSocket not connected'))
+      return
+    }
+
+    const messageId = crypto.randomUUID()
+    const messageWithId = { ...message, id: messageId }
+
+    // Register handler for response
+    const handler = (data: any) => {
+      if (data.id === messageId) {
+        messageHandlers.delete(messageId)
+        resolve(data)
+      }
+    }
+    messageHandlers.set(messageId, handler)
+
+    // Send message
+    socket.send(JSON.stringify(messageWithId))
+
+    // Timeout after 30 seconds
+    setTimeout(() => {
+      if (messageHandlers.has(messageId)) {
+        messageHandlers.delete(messageId)
+        reject(new Error('Request timeout'))
+      }
+    }, 30000)
+  })
 }
 
 export interface SpawnSessionRequest {
@@ -27,94 +91,86 @@ export interface SpawnSessionResponse {
 }
 
 export async function spawnSession(agentId: string, task: string): Promise<SpawnSessionResponse> {
-  const response = await fetch(buildApiUrl('/api/sessions/spawn'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${GATEWAY_TOKEN}`,
-    },
-    body: JSON.stringify({
-      agentId,
-      task,
-      mode: 'run',
-    }),
-  });
+  const response = await sendWebSocketMessage({
+    type: 'spawn_session',
+    agentId,
+    task,
+    mode: 'run',
+  })
 
-  if (!response.ok) {
-    throw new Error(`Failed to spawn session: ${response.statusText}`);
+  if (response.error) {
+    throw new Error(`Failed to spawn session: ${response.error}`)
   }
 
-  return response.json();
+  return {
+    sessionKey: response.sessionKey,
+    status: response.status,
+  }
 }
 
 export async function sendMessage(sessionKey: string, message: string): Promise<void> {
-  const response = await fetch(buildApiUrl('/api/sessions/send'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${GATEWAY_TOKEN}`,
-    },
-    body: JSON.stringify({
-      sessionKey,
-      message,
-    }),
-  });
+  const response = await sendWebSocketMessage({
+    type: 'send_message',
+    sessionKey,
+    message,
+  })
 
-  if (!response.ok) {
-    throw new Error(`Failed to send message: ${response.statusText}`);
+  if (response.error) {
+    throw new Error(`Failed to send message: ${response.error}`)
   }
 }
 
 export async function getSessionStatus(sessionKey: string): Promise<any> {
-  const response = await fetch(buildApiUrl(`/api/sessions/status?sessionKey=${sessionKey}`), {
-    headers: {
-      'Authorization': `Bearer ${GATEWAY_TOKEN}`,
-    },
-  });
+  const response = await sendWebSocketMessage({
+    type: 'get_session_status',
+    sessionKey,
+  })
 
-  if (!response.ok) {
-    throw new Error(`Failed to get session status: ${response.statusText}`);
+  if (response.error) {
+    throw new Error(`Failed to get session status: ${response.error}`)
   }
 
-  return response.json();
+  return response
 }
 
 export async function listSessions(): Promise<any[]> {
-  const response = await fetch(buildApiUrl('/api/sessions/list'), {
-    headers: {
-      'Authorization': `Bearer ${GATEWAY_TOKEN}`,
-    },
-  });
+  const response = await sendWebSocketMessage({
+    type: 'list_sessions',
+  })
 
-  if (!response.ok) {
-    throw new Error(`Failed to list sessions: ${response.statusText}`);
+  if (response.error) {
+    throw new Error(`Failed to list sessions: ${response.error}`)
   }
 
-  return response.json();
+  return response.sessions || []
 }
 
 /**
  * Upload file to agent session
+ * Note: File uploads may need to be handled differently via WebSocket
  */
 export async function uploadFile(sessionKey: string, file: File): Promise<string> {
-  const formData = new FormData()
-  formData.append('file', file)
-  formData.append('sessionKey', sessionKey)
-
-  const response = await fetch(buildApiUrl('/api/sessions/upload'), {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${GATEWAY_TOKEN}`,
-    },
-    body: formData
+  // Convert file to base64 for WebSocket transmission
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
   })
 
-  if (!response.ok) {
-    throw new Error(`Upload failed: ${response.statusText}`)
+  const response = await sendWebSocketMessage({
+    type: 'upload_file',
+    sessionKey,
+    fileName: file.name,
+    fileType: file.type,
+    fileData: base64,
+  })
+
+  if (response.error) {
+    throw new Error(`Upload failed: ${response.error}`)
   }
 
-  const data = await response.json()
-  return data.fileUrl
+  return response.fileUrl
 }
 
 /**
