@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   Database, ChevronDown, TrendingUp, DollarSign, CreditCard,
-  AlertCircle, Calendar, Settings, MousePointer2, ShoppingCart, Users
+  AlertCircle, Calendar, Settings, MousePointer2, ShoppingCart, Users,
+  ArrowUpRight, ArrowDownRight
 } from 'lucide-react'
 import { db } from '../lib/api'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
@@ -15,6 +16,7 @@ interface DailyPerformance {
   client_name?: string
   date: string
   platform: string
+  ad_account_id?: string
   impressions: number
   clicks: number
   conversions: number
@@ -36,6 +38,8 @@ const DATE_PRESETS = [
   { label: 'Last 90 Days', days: 90 },
   { label: 'This Month', type: 'month' },
   { label: 'Last Month', type: 'last_month' },
+  { label: 'This Year', type: 'this_year' },
+  { label: 'Last Year', type: 'last_year' },
 ]
 
 type MetricKey = 'spend' | 'ctr' | 'conversions' | 'costperconv' | 'roas'
@@ -46,6 +50,7 @@ export default function DataAnalytics() {
   // Core states
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
+  const [selectedAdAccount, setSelectedAdAccount] = useState<string>('')
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [showDatePresets, setShowDatePresets] = useState(false)
@@ -84,12 +89,22 @@ export default function DataAnalytics() {
     gcTime: 60 * 60 * 1000,
   })
 
+  // Fetch ad accounts for selected platform
+  const { data: adAccountsFromDB } = useQuery({
+    queryKey: ['ad_accounts', selectedPlatform],
+    queryFn: () => db.getAdAccountsForPlatform(selectedPlatform),
+    enabled: selectedPlatform !== 'all',
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+  })
+
   // Fetch performance data
-  const { data: performance, isLoading: performanceLoading, error: performanceError } = useQuery({
-    queryKey: ['performance', selectedClient, selectedPlatform, dateRange],
+  const { data: performance } = useQuery({
+    queryKey: ['performance', selectedClient, selectedPlatform, selectedAdAccount, dateRange],
     queryFn: () => db.getDailyPerformance({
       clientId: selectedClient,
       platform: selectedPlatform,
+      adAccountId: selectedAdAccount || undefined,
       startDate: dateRange.start,
       endDate: dateRange.end,
     }),
@@ -100,7 +115,68 @@ export default function DataAnalytics() {
 
   const performanceData: DailyPerformance[] = (performance as DailyPerformance[]) || []
 
-  // Fetch creatives/keywords conditionally
+  // Fetch previous period data for comparison
+  const previousPeriodRange = (() => {
+    if (!dateRange.start || !dateRange.end) return { start: '', end: '' }
+    const startDate = new Date(dateRange.start)
+    const endDate = new Date(dateRange.end)
+    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+
+    const prevEnd = new Date(startDate)
+    prevEnd.setDate(prevEnd.getDate() - 1)
+    const prevStart = new Date(prevEnd)
+    prevStart.setDate(prevStart.getDate() - daysDiff)
+
+    return {
+      start: prevStart.toISOString().split('T')[0],
+      end: prevEnd.toISOString().split('T')[0]
+    }
+  })()
+
+  const { data: previousPerformance } = useQuery({
+    queryKey: ['previous_performance', selectedClient, selectedPlatform, selectedAdAccount, previousPeriodRange],
+    queryFn: () => db.getDailyPerformance({
+      clientId: selectedClient,
+      platform: selectedPlatform,
+      adAccountId: selectedAdAccount || undefined,
+      startDate: previousPeriodRange.start,
+      endDate: previousPeriodRange.end,
+    }),
+    enabled: !!previousPeriodRange.start && !!previousPeriodRange.end,
+    staleTime: settings.cacheTimeout * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  })
+
+  const previousPerformanceData: DailyPerformance[] = (previousPerformance as DailyPerformance[]) || []
+
+  // Fetch Meta data conditionally
+  const { data: metaAdsets } = useQuery({
+    queryKey: ['meta_adsets', selectedClient, selectedAdAccount, dateRange],
+    queryFn: () => db.getMetaAdsets({
+      clientId: selectedClient,
+      adAccountId: selectedAdAccount || undefined,
+      startDate: dateRange.start,
+      endDate: dateRange.end,
+    }),
+    enabled: selectedPlatform === 'all' || selectedPlatform === 'meta_ads',
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  })
+
+  const { data: metaAds } = useQuery({
+    queryKey: ['meta_ads', selectedClient, selectedAdAccount, dateRange],
+    queryFn: () => db.getMetaAds({
+      clientId: selectedClient,
+      adAccountId: selectedAdAccount || undefined,
+      startDate: dateRange.start,
+      endDate: dateRange.end,
+    }),
+    enabled: selectedPlatform === 'all' || selectedPlatform === 'meta_ads',
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  })
+
   const { data: metaCreatives } = useQuery({
     queryKey: ['meta_creatives', selectedClient],
     queryFn: () => db.getMetaCreatives(selectedClient),
@@ -131,6 +207,16 @@ export default function DataAnalytics() {
       start.setMonth(start.getMonth() - 1)
       start.setDate(1)
       end.setDate(0)
+    } else if (preset.type === 'this_year') {
+      start.setMonth(0)  // January
+      start.setDate(1)
+    } else if (preset.type === 'last_year') {
+      start.setFullYear(start.getFullYear() - 1)
+      start.setMonth(0)  // January
+      start.setDate(1)
+      end.setFullYear(end.getFullYear() - 1)
+      end.setMonth(11)  // December
+      end.setDate(31)
     } else {
       start.setDate(end.getDate() - preset.days)
     }
@@ -142,7 +228,7 @@ export default function DataAnalytics() {
     setShowDatePresets(false)
   }
 
-  // Calculate totals
+  // Calculate totals for current period
   const totals = performanceData.reduce((acc, day) => {
     const cost = day.cost || 0
     const revenue = day.revenue || 0
@@ -155,9 +241,39 @@ export default function DataAnalytics() {
     }
   }, { cost: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0 })
 
-  const roas = totals.cost > 0 ? (totals.revenue / totals.cost).toFixed(2) : '0.00'
-  const ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions * 100).toFixed(2) : '0.00'
-  const costPerConv = totals.conversions > 0 ? (totals.cost / totals.conversions).toFixed(2) : '0.00'
+  // Calculate totals for previous period
+  const previousTotals = previousPerformanceData.reduce((acc, day) => {
+    const cost = day.cost || 0
+    const revenue = day.revenue || 0
+    return {
+      cost: acc.cost + cost,
+      impressions: acc.impressions + (day.impressions || 0),
+      clicks: acc.clicks + (day.clicks || 0),
+      conversions: acc.conversions + (day.conversions || 0),
+      revenue: acc.revenue + revenue,
+    }
+  }, { cost: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0 })
+
+  // Calculate metrics
+  const roas = totals.cost > 0 ? (totals.revenue / totals.cost) : 0
+  const ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions * 100) : 0
+  const costPerConv = totals.conversions > 0 ? (totals.cost / totals.conversions) : 0
+
+  const prevRoas = previousTotals.cost > 0 ? (previousTotals.revenue / previousTotals.cost) : 0
+  const prevCtr = previousTotals.impressions > 0 ? (previousTotals.clicks / previousTotals.impressions * 100) : 0
+  const prevCostPerConv = previousTotals.conversions > 0 ? (previousTotals.cost / previousTotals.conversions) : 0
+
+  // Calculate percentage changes
+  const calculateChange = (current: number, previous: number): number => {
+    if (previous === 0) return current > 0 ? 100 : 0
+    return ((current - previous) / previous) * 100
+  }
+
+  const spendChange = calculateChange(totals.cost, previousTotals.cost)
+  const ctrChange = calculateChange(ctr, prevCtr)
+  const conversionsChange = calculateChange(totals.conversions, previousTotals.conversions)
+  const costPerConvChange = calculateChange(costPerConv, prevCostPerConv)
+  const roasChange = calculateChange(roas, prevRoas)
 
   // Daily data with all metrics
   const dailyDataWithMetrics = performanceData.reduce((acc: any[], day) => {
@@ -240,18 +356,20 @@ export default function DataAnalytics() {
 
   const currentMetricConfig = metricConfig[selectedMetric]
 
-  // KPI definitions
+  // KPI definitions with period comparison
   const leadGenKPIs = [
     {
       title: "Total Spend",
-      value: `$${totals.cost.toLocaleString()}`,
+      value: `$${totals.cost.toLocaleString(undefined, {maximumFractionDigits: 2})}`,
+      change: spendChange,
       icon: DollarSign,
       color: "blue",
       key: "spend" as MetricKey
     },
     {
       title: "CTR",
-      value: `${ctr}%`,
+      value: `${ctr.toFixed(2)}%`,
+      change: ctrChange,
       icon: MousePointer2,
       color: "violet",
       key: "ctr" as MetricKey
@@ -259,13 +377,15 @@ export default function DataAnalytics() {
     {
       title: "Leads",
       value: totals.conversions.toLocaleString(),
+      change: conversionsChange,
       icon: Users,
       color: "emerald",
       key: "conversions" as MetricKey
     },
     {
       title: "Cost Per Lead (CPL)",
-      value: `$${costPerConv}`,
+      value: `$${costPerConv.toFixed(2)}`,
+      change: costPerConvChange,
       icon: CreditCard,
       color: "amber",
       key: "costperconv" as MetricKey
@@ -275,14 +395,16 @@ export default function DataAnalytics() {
   const ecommerceKPIs = [
     {
       title: "Total Spend",
-      value: `$${totals.cost.toLocaleString()}`,
+      value: `$${totals.cost.toLocaleString(undefined, {maximumFractionDigits: 2})}`,
+      change: spendChange,
       icon: DollarSign,
       color: "blue",
       key: "spend" as MetricKey
     },
     {
       title: "CTR",
-      value: `${ctr}%`,
+      value: `${ctr.toFixed(2)}%`,
+      change: ctrChange,
       icon: MousePointer2,
       color: "violet",
       key: "ctr" as MetricKey
@@ -290,13 +412,15 @@ export default function DataAnalytics() {
     {
       title: "Purchases",
       value: totals.conversions.toLocaleString(),
+      change: conversionsChange,
       icon: ShoppingCart,
       color: "emerald",
       key: "conversions" as MetricKey
     },
     {
       title: "ROAS",
-      value: `${roas}x`,
+      value: `${roas.toFixed(2)}x`,
+      change: roasChange,
       icon: TrendingUp,
       color: "amber",
       key: "roas" as MetricKey
@@ -356,22 +480,20 @@ export default function DataAnalytics() {
             <div className="flex rounded-lg border border-gray-200 p-1">
               <button
                 onClick={() => setBusinessType('leadgen')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${
-                  businessType === 'leadgen'
+                className={`px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${businessType === 'leadgen'
                     ? 'bg-blue-600 text-white'
                     : 'text-gray-600 hover:bg-gray-100'
-                }`}
+                  }`}
               >
                 <Users size={16} />
                 Lead Gen
               </button>
               <button
                 onClick={() => setBusinessType('ecommerce')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${
-                  businessType === 'ecommerce'
+                className={`px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${businessType === 'ecommerce'
                     ? 'bg-blue-600 text-white'
                     : 'text-gray-600 hover:bg-gray-100'
-                }`}
+                  }`}
               >
                 <ShoppingCart size={16} />
                 eCommerce
@@ -426,7 +548,10 @@ export default function DataAnalytics() {
             </label>
             <select
               value={selectedPlatform}
-              onChange={(e) => setSelectedPlatform(e.target.value)}
+              onChange={(e) => {
+                setSelectedPlatform(e.target.value)
+                setSelectedAdAccount('') // Reset ad account when platform changes
+              }}
               className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg min-w-[200px]"
             >
               <option value="all">All Platforms</option>
@@ -435,6 +560,25 @@ export default function DataAnalytics() {
               ))}
             </select>
           </div>
+
+          {/* Ad Account Dropdown - Only show when specific platform selected */}
+          {selectedPlatform !== 'all' && adAccountsFromDB && adAccountsFromDB.length > 0 && (
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">
+                Ad Account ({adAccountsFromDB.length} found)
+              </label>
+              <select
+                value={selectedAdAccount}
+                onChange={(e) => setSelectedAdAccount(e.target.value)}
+                className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg min-w-[250px]"
+              >
+                <option value="">All Accounts</option>
+                {adAccountsFromDB.map((account: any) => (
+                  <option key={account.id} value={account.id}>{account.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Date Range with Presets */}
           <div className="relative">
@@ -470,32 +614,46 @@ export default function DataAnalytics() {
 
       {/* KPI Cards - Clickable */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {currentKPIs.map(kpi => (
-          <div
-            key={kpi.key}
-            onClick={() => setSelectedMetric(kpi.key)}
-            className={`bg-white rounded-xl shadow-sm border-2 cursor-pointer transition-all ${
-              selectedMetric === kpi.key
-                ? 'border-blue-500 shadow-lg scale-105'
-                : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
-            } p-6`}
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-gray-500">{kpi.title}</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{kpi.value}</p>
+        {currentKPIs.map(kpi => {
+          const isPositive = kpi.change >= 0
+          const changeColor = isPositive ? 'text-green-600' : 'text-red-600'
+          const ArrowIcon = isPositive ? ArrowUpRight : ArrowDownRight
+
+          return (
+            <div
+              key={kpi.key}
+              onClick={() => setSelectedMetric(kpi.key)}
+              className={`bg-white rounded-xl shadow-sm border-2 cursor-pointer transition-all ${selectedMetric === kpi.key
+                  ? 'border-blue-500 shadow-lg scale-105'
+                  : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
+                } p-6`}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <p className="text-sm text-gray-500">{kpi.title}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{kpi.value}</p>
+                </div>
+                <div className={`p-3 rounded-lg bg-${kpi.color}-50 text-${kpi.color}-600`}>
+                  <kpi.icon size={24} />
+                </div>
               </div>
-              <div className={`p-3 rounded-lg bg-${kpi.color}-50 text-${kpi.color}-600`}>
-                <kpi.icon size={24} />
+
+              <div className="flex items-center justify-between mt-2">
+                {kpi.change !== undefined && (
+                  <div className={`flex items-center gap-1 text-sm font-medium ${changeColor}`}>
+                    <ArrowIcon size={14} />
+                    <span>{Math.abs(kpi.change).toFixed(1)}%</span>
+                  </div>
+                )}
+                {selectedMetric === kpi.key && (
+                  <div className="text-xs text-blue-600 font-medium">
+                    ↓ Chart below
+                  </div>
+                )}
               </div>
             </div>
-            {selectedMetric === kpi.key && (
-              <div className="mt-2 text-xs text-blue-600 font-medium">
-                ↓ Showing in chart below
-              </div>
-            )}
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Dynamic Chart */}
@@ -538,56 +696,187 @@ export default function DataAnalytics() {
         )}
       </div>
 
-      {/* Performance Data Table */}
+      {/* Daily Performance Data Table - Collapsible */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Data ({performanceData.length} records)</h3>
-        {performanceData.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <Database className="mx-auto mb-2" size={32} />
-            <p>No data available</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Date</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Client</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Platform</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">ROAS</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {performanceData.slice(0, settings.rowsPerPage).map((day: any) => {
-                  const cost = day.cost || 0
-                  const revenue = day.revenue || 0
-                  const roas = cost > 0 ? (revenue / cost).toFixed(2) : '0.00'
-                  const clientName = clients.find(c => c.id === day.client_id)?.name || day.client_name
-                  return (
-                    <tr key={day.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">{day.date}</td>
-                      <td className="px-4 py-3 font-medium">{clientName}</td>
-                      <td className="px-4 py-3">
-                        {settings.showPlatformBadge && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">{day.platform}</span>
-                        )}
-                        {!settings.showPlatformBadge && <span className="text-sm">{day.platform}</span>}
-                      </td>
-                      <td className="px-4 py-3 text-right">${cost.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full text-sm">{day.conversions}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right">{roas}x</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <details open>
+          <summary className="text-lg font-semibold text-gray-900 mb-4 cursor-pointer">
+            Daily Performance Data ({performanceData.length} records)
+          </summary>
+          {performanceData.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <Database className="mx-auto mb-2" size={32} />
+              <p>No data available</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Date</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Client</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Account</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">
+                      {businessType === 'leadgen' ? 'CPA' : 'ROAS'}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {performanceData.slice(0, settings.rowsPerPage).map((day: any) => {
+                    const cost = day.cost || 0
+                    const revenue = day.revenue || 0
+                    const conversions = day.conversions || 0
+                    const roas = cost > 0 ? (revenue / cost) : 0
+                    const cpa = conversions > 0 ? (cost / conversions) : 0
+                    const clientName = clients.find(c => c.id === day.client_id)?.name || day.client_name
+                    const hasConversions = conversions > 0
+                    const rowClass = hasConversions ? 'hover:bg-green-50' : 'bg-gray-50 text-gray-500'
+
+                    return (
+                      <tr key={day.id} className={rowClass}>
+                        <td className="px-4 py-3">{day.date}</td>
+                        <td className="px-4 py-3 font-medium">{clientName}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col">
+                            <span className="font-mono text-xs">{day.ad_account_id || 'N/A'}</span>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 w-fit mt-1">
+                              {day.platform}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right">${cost.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`px-2 py-1 rounded-full text-sm ${
+                            hasConversions ? 'bg-green-100 text-green-700 font-semibold' : 'bg-gray-200 text-gray-500'
+                          }`}>
+                            {conversions}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {businessType === 'leadgen' ? `$${cpa.toFixed(2)}` : `${roas.toFixed(2)}x`}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </details>
       </div>
+
+      {/* Meta Adset Performance */}
+      {(selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && metaAdsets && metaAdsets.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <details>
+            <summary className="text-lg font-semibold text-gray-900 mb-4 cursor-pointer flex items-center gap-2">
+              <span className="text-blue-600">📊</span>
+              Meta Adset Performance ({metaAdsets.length} records)
+            </summary>
+            <div className="overflow-x-auto mt-4">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Date</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Client</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Account</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Campaign</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Adset</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">
+                      {businessType === 'leadgen' ? 'CPA' : 'ROAS'}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {metaAdsets.map((adset: any) => {
+                    const spend = adset.spend || 0
+                    const conversions = adset.conversions || 0
+                    const revenue = adset.revenue || 0
+                    const roas = spend > 0 ? (revenue / spend) : 0
+                    const cpa = conversions > 0 ? (spend / conversions) : 0
+                    const clientName = clients.find(c => c.id === adset.client_id)?.name || 'Unknown'
+
+                    return (
+                      <tr key={adset.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm">{adset.date}</td>
+                        <td className="px-4 py-3 text-sm font-medium">{clientName}</td>
+                        <td className="px-4 py-3 text-xs font-mono">{adset.ad_account_id}</td>
+                        <td className="px-4 py-3 text-sm">{adset.campaign_name}</td>
+                        <td className="px-4 py-3 text-sm font-medium">{adset.ad_set_name}</td>
+                        <td className="px-4 py-3 text-right">${spend.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">{conversions}</td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          {businessType === 'leadgen' ? `$${cpa.toFixed(2)}` : `${roas.toFixed(2)}x`}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      )}
+
+      {/* Meta Ad Performance */}
+      {(selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && metaAds && metaAds.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <details>
+            <summary className="text-lg font-semibold text-gray-900 mb-4 cursor-pointer flex items-center gap-2">
+              <span className="text-blue-600">🎯</span>
+              Meta Ad Performance ({metaAds.length} records)
+            </summary>
+            <div className="overflow-x-auto mt-4">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Date</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Client</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Account</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Campaign</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Adset</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Name</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">
+                      {businessType === 'leadgen' ? 'CPA' : 'ROAS'}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {metaAds.map((ad: any) => {
+                    const spend = ad.spend || 0
+                    const conversions = ad.conversions || 0
+                    const revenue = ad.revenue || 0
+                    const roas = spend > 0 ? (revenue / spend) : 0
+                    const cpa = conversions > 0 ? (spend / conversions) : 0
+                    const clientName = clients.find(c => c.id === ad.client_id)?.name || 'Unknown'
+
+                    return (
+                      <tr key={ad.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm">{ad.date}</td>
+                        <td className="px-4 py-3 text-sm font-medium">{clientName}</td>
+                        <td className="px-4 py-3 text-xs font-mono">{ad.ad_account_id}</td>
+                        <td className="px-4 py-3 text-sm">{ad.campaign_name}</td>
+                        <td className="px-4 py-3 text-sm">{ad.ad_set_name}</td>
+                        <td className="px-4 py-3 text-sm font-medium">{ad.ad_name}</td>
+                        <td className="px-4 py-3 text-right">${spend.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">{conversions}</td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          {businessType === 'leadgen' ? `$${cpa.toFixed(2)}` : `${roas.toFixed(2)}x`}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      )}
 
       {/* Meta Ad Creative Report */}
       {(selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && metaCreatives && metaCreatives.length > 0 && (
