@@ -473,7 +473,6 @@ export default function ClientsOverview() {
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-600 uppercase">CTR</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-600 uppercase">CPC</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-600 uppercase">Conversions</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-600 uppercase">Campaigns</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Status</th>
               </tr>
             </thead>
@@ -492,9 +491,6 @@ export default function ClientsOverview() {
                   <td className="px-4 py-3 text-sm text-right text-gray-600">{account.ctr.toFixed(2)}%</td>
                   <td className="px-4 py-3 text-sm text-right text-gray-600">{formatCurrency(account.cpc)}</td>
                   <td className="px-4 py-3 text-sm text-right text-gray-600">{formatNumber(account.conversions)}</td>
-                  <td className="px-4 py-3 text-sm text-right text-gray-600">
-                    {account.active_campaigns} / {account.total_campaigns}
-                  </td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(account.status)}`}>
                       {account.status}

@@ -21,7 +21,7 @@ export default function Alerts() {
       let query = supabase
         .from('alerts')
         .select('*')
-        .order('detected_at', { ascending: false })
+        .order('created_at', { ascending: false })
 
       if (selectedSeverity.length > 0) {
         query = query.in('severity', selectedSeverity)
@@ -284,7 +284,7 @@ export default function Alerts() {
                     {alert.alert_type.replace('_', ' ')}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
-                    {new Date(alert.detected_at).toLocaleString()}
+                    {new Date(alert.created_at).toLocaleString()}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(alert.status)}`}>
