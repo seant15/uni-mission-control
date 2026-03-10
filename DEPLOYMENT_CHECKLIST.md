@@ -3,9 +3,13 @@
 ## ✅ 已完成
 
 ### 1. 代码推送到 GitHub
-- ✅ Git commit 已创建: `873a8d0`
+- ✅ Git commit 已创建: `7175940` (最新)
 - ✅ 已推送到 `origin/master`
 - ✅ GitHub 仓库: `seant15/uni-mission-control`
+- ✅ 修复提交历史:
+  - `873a8d0` - 初始重构代码
+  - `fba6891` - 修复 DataAnalytics TypeScript 错误
+  - `7175940` - 添加缺失的 API 函数
 
 ### 2. 代码重构完成
 - ✅ 删除所有 OpenClaw agent 相关内容
@@ -16,6 +20,11 @@
 - ✅ 修复 DataAnalytics.tsx TypeScript 编译错误
   - metaAdsets 和 metaAds 变量已正确声明且使用
   - Vercel 构建错误已解决
+- ✅ 添加缺失的 API 函数 (src/lib/api.ts)
+  - getAdAccountsForPlatform() - 获取平台广告账户
+  - getMetaAdsets() - 获取 Meta 广告组数据
+  - getMetaAds() - 获取 Meta 广告数据
+  - 支持 adAccountId 过滤
 
 ### 3. 数据源映射正确
 - ✅ MarketingOverview → `daily_performance` (实时聚合)
