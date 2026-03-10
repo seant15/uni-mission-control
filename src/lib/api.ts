@@ -184,20 +184,33 @@ export const db = {
     },
 
     /**
-     * Fetch available ad accounts for a specific platform
+     * Fetch available ad accounts filtered by client and/or platform
      */
-    async getAdAccountsForPlatform(platform: string) {
-        const { data, error } = await supabase
+    async getAdAccounts(filters: { clientId?: string; platform?: string }) {
+        let query = supabase
             .from('daily_performance')
             .select('ad_account_id, platform')
-            .eq('platform', platform)
 
+        if (filters.clientId && filters.clientId !== 'all') {
+            query = query.eq('client_id', filters.clientId)
+        }
+
+        if (filters.platform && filters.platform !== 'all') {
+            query = query.eq('platform', filters.platform)
+        }
+
+        const { data, error } = await query
         if (error) throw error
 
-        // Get unique ad_account_ids
-        const accounts = [...new Set(data?.map(item => item.ad_account_id).filter(Boolean))]
+        // Get unique ad_account_ids with their platform
+        const accountMap = new Map<string, string>()
+        data?.forEach(item => {
+            if (item.ad_account_id) {
+                accountMap.set(item.ad_account_id, item.platform)
+            }
+        })
 
-        return accounts.map(account => ({
+        return Array.from(accountMap.entries()).map(([account, platform]) => ({
             id: account,
             label: `${account} | ${platform}`
         }))

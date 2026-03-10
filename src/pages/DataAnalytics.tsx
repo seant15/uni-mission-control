@@ -89,11 +89,10 @@ export default function DataAnalytics() {
     gcTime: 60 * 60 * 1000,
   })
 
-  // Fetch ad accounts for selected platform
+  // Fetch ad accounts filtered by selected client and platform
   const { data: adAccountsFromDB } = useQuery({
-    queryKey: ['ad_accounts', selectedPlatform],
-    queryFn: () => db.getAdAccountsForPlatform(selectedPlatform),
-    enabled: selectedPlatform !== 'all',
+    queryKey: ['ad_accounts', selectedClient, selectedPlatform],
+    queryFn: () => db.getAdAccounts({ clientId: selectedClient, platform: selectedPlatform }),
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   })
@@ -528,9 +527,9 @@ export default function DataAnalytics() {
             </button>
             {showClientDropdown && (
               <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-60 overflow-y-auto">
-                <button onClick={() => { setSelectedClient('all'); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50">All Clients</button>
+                <button onClick={() => { setSelectedClient('all'); setSelectedAdAccount(''); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50">All Clients</button>
                 {clients?.map(client => (
-                  <button key={client.id} onClick={() => { setSelectedClient(client.id); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50">
+                  <button key={client.id} onClick={() => { setSelectedClient(client.id); setSelectedAdAccount(''); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50">
                     <div className="font-medium">{client.name}</div>
                     {client.business_type && (
                       <div className="text-xs text-gray-500">{client.business_type === 'leadgen' ? 'Lead Gen' : 'eCommerce'}</div>
@@ -561,8 +560,8 @@ export default function DataAnalytics() {
             </select>
           </div>
 
-          {/* Ad Account Dropdown - Only show when specific platform selected */}
-          {selectedPlatform !== 'all' && adAccountsFromDB && adAccountsFromDB.length > 0 && (
+          {/* Ad Account Dropdown - Always visible, filtered by client and platform */}
+          {adAccountsFromDB && adAccountsFromDB.length > 0 && (
             <div>
               <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">
                 Ad Account ({adAccountsFromDB.length} found)
