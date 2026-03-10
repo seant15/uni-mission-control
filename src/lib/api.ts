@@ -176,5 +176,35 @@ export const db = {
                    platform === 'tiktok_ads' ? 'TikTok Ads' :
                    platform === 'shopify' ? 'Shopify' : platform
         }))
+    },
+
+    /**
+     * Get dashboard settings for a user
+     */
+    async getSettings(userId: string) {
+        const { data, error } = await supabase
+            .from('dashboard_settings')
+            .select('*')
+            .eq('user_id', userId)
+            .single()
+
+        if (error && error.code !== 'PGRST116') throw error // PGRST116 = not found
+        return data
+    },
+
+    /**
+     * Save dashboard settings for a user
+     */
+    async saveSettings(userId: string, settings: any) {
+        const { error } = await supabase
+            .from('dashboard_settings')
+            .upsert({
+                user_id: userId,
+                ...settings,
+                updated_at: new Date().toISOString()
+            })
+
+        if (error) throw error
+        return true
     }
 }

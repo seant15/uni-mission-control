@@ -1,10 +1,11 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Rocket, BarChart3, Settings as SettingsIcon, Bell, Search, Database } from 'lucide-react'
-import Dashboard from './pages/Dashboard'
-import MissionControl from './pages/MissionControl'
+import { LayoutDashboard, AlertTriangle, Users, Settings as SettingsIcon, Bell, Search, Database } from 'lucide-react'
+import MarketingOverview from './pages/MarketingOverview'
+import Alerts from './pages/Alerts'
+import ClientsOverview from './pages/ClientsOverview'
 import DataAnalytics from './pages/DataAnalytics'
-import TaskAnalytics from './pages/TaskAnalytics'
 import SettingsPage from './pages/Settings'
+import DashboardSettings from './pages/DashboardSettings'
 
 function App() {
   return (
@@ -20,7 +21,7 @@ function App() {
               </div>
               <div>
                 <h1 className="font-bold text-lg tracking-tight">UNI Mission Control</h1>
-                <p className="text-xs text-slate-400">Agent Fleet Management</p>
+                <p className="text-xs text-slate-400">Marketing Performance Hub</p>
               </div>
             </div>
           </div>
@@ -30,11 +31,11 @@ function App() {
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 px-4">
               Main
             </div>
-            <NavLink to="/" icon={LayoutDashboard} label="Overview" />
-            <NavLink to="/mission-control" icon={Rocket} label="Mission Control" />
+            <NavLink to="/" icon={LayoutDashboard} label="Marketing Overview" />
+            <NavLink to="/alerts" icon={AlertTriangle} label="Alerts" />
+            <NavLink to="/clients-overview" icon={Users} label="Clients Overview" />
             <NavLink to="/data-analytics" icon={Database} label="Data Analytics" />
-            <NavLink to="/task-analytics" icon={BarChart3} label="Task Analytics" />
-            
+
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-6 px-4">
               System
             </div>
@@ -65,7 +66,7 @@ function App() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
-                  placeholder="Search agents, tasks, or analytics..."
+                  placeholder="Search alerts, clients, or metrics..."
                   className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -82,10 +83,11 @@ function App() {
           {/* Page Content */}
           <main className="p-8 max-w-7xl mx-auto">
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/mission-control" element={<MissionControl />} />
+              <Route path="/" element={<MarketingOverview />} />
+              <Route path="/alerts" element={<Alerts />} />
+              <Route path="/clients-overview" element={<ClientsOverview />} />
               <Route path="/data-analytics" element={<DataAnalytics />} />
-              <Route path="/task-analytics" element={<TaskAnalytics />} />
+              <Route path="/dashboard/settings" element={<DashboardSettings />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </main>

@@ -120,3 +120,8 @@ export interface AgentInfo {
   failures: number
   lastCheck: string | null
 }
+
+// Re-export new types
+export * from './alerts'
+export * from './clients'
+export * from './marketing'

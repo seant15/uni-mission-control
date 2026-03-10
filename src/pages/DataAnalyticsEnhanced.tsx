@@ -389,6 +389,22 @@ export default function DataAnalytics() {
         </div>
       </div>
 
+      {/* Debug Info */}
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+        <details>
+          <summary className="text-sm font-medium text-gray-600 cursor-pointer">Debug Info (click to expand)</summary>
+          <div className="mt-2 text-xs text-gray-500 space-y-1 font-mono">
+            <p>Performance Loading: {performanceLoading ? 'YES' : 'NO'}</p>
+            <p>Performance Error: {performanceError ? (performanceError as any).message : 'None'}</p>
+            <p>Records Loaded: {performanceData.length}</p>
+            <p>Available Platforms: {availablePlatforms.join(', ') || 'None'}</p>
+            <p>Clients Loaded: {clients.length}</p>
+            <p>Business Type: {businessType}</p>
+            <p>Selected Metric: {selectedMetric}</p>
+          </div>
+        </details>
+      </div>
+
       {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
         <div className="flex items-center gap-4 flex-wrap">
