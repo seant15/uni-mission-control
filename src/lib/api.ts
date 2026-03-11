@@ -4,6 +4,8 @@ import { mockTasks } from './mock-data'
 
 const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
 
+export type HourWindow = 1 | 2 | 6 | 12 | 24 | 48 | 72
+
 /**
  * Interface for daily performance filters
  */
@@ -75,10 +77,9 @@ export const db = {
     },
 
     /**
-   * Fetch lightweight stats for the dashboard
-   */
+     * Fetch lightweight stats for the dashboard
+     */
     async getDashboardStats() {
-        // We can run these in parallel
         const [agentsRes, tasksRes] = await Promise.all([
             supabase.from('agent_health').select('agent_name, consecutive_failures'),
             supabase.from('agent_tasks').select('status, to_agent')
@@ -97,9 +98,8 @@ export const db = {
      * Fetch tasks for Mission Control with filtering
      */
     async getTasks(status?: string) {
-        // Use mock data if flag is enabled
         if (USE_MOCK_DATA) {
-            await new Promise(resolve => setTimeout(resolve, 300)) // Simulate delay
+            await new Promise(resolve => setTimeout(resolve, 300))
             return mockTasks.filter(task =>
                 !status || status === 'all' || task.status === status
             )
@@ -107,7 +107,7 @@ export const db = {
 
         let query = supabase
             .from('agent_tasks')
-            .select('*') // For now select * as it's a small table but could be optimized
+            .select('*')
 
         if (status && status !== 'all') {
             query = query.eq('status', status)
@@ -119,9 +119,9 @@ export const db = {
     },
 
     /**
-     * Fetch Meta ad creatives with client filtering
+     * Fetch Meta ad creatives with client and date filtering
      */
-    async getMetaCreatives(clientId?: string) {
+    async getMetaCreatives(clientId?: string, startDate?: string, endDate?: string) {
         let query = supabase
             .from('meta_ads_ads')
             .select('id, client_id, date, campaign_id, campaign_name, ad_set_id, ad_set_name, ad_id, ad_name, spend, impressions, clicks, conversions, revenue')
@@ -131,6 +131,8 @@ export const db = {
         if (clientId && clientId !== 'all') {
             query = query.eq('client_id', clientId)
         }
+        if (startDate) query = query.gte('date', startDate)
+        if (endDate) query = query.lte('date', endDate)
 
         const { data, error } = await query
         if (error) throw error
@@ -138,9 +140,9 @@ export const db = {
     },
 
     /**
-     * Fetch Google keywords with client filtering
+     * Fetch Google keywords with client and date filtering
      */
-    async getGoogleKeywords(clientId?: string) {
+    async getGoogleKeywords(clientId?: string, startDate?: string, endDate?: string) {
         let query = supabase
             .from('google_ads_keywords')
             .select('id, client_id, customer_id, date, campaign_id, campaign_name, ad_group_id, ad_group_name, keyword_id, keyword, match_type, status, impressions, clicks, cost_micros, conversions, ctr, cpc')
@@ -150,11 +152,37 @@ export const db = {
         if (clientId && clientId !== 'all') {
             query = query.eq('client_id', clientId)
         }
+        if (startDate) query = query.gte('date', startDate)
+        if (endDate) query = query.lte('date', endDate)
 
         const { data, error } = await query
         if (error) throw error
 
-        // Convert cost_micros to dollars
+        return data?.map(item => ({
+            ...item,
+            spend: item.cost_micros ? item.cost_micros / 1000000 : 0
+        }))
+    },
+
+    /**
+     * Fetch Google search terms with client and date filtering
+     */
+    async getGoogleSearchTerms(clientId?: string, startDate?: string, endDate?: string) {
+        let query = supabase
+            .from('google_ads_search_terms')
+            .select('id, client_id, customer_id, date, campaign_id, campaign_name, ad_group_id, ad_group_name, search_term, match_type, impressions, clicks, cost_micros, conversions')
+            .order('cost_micros', { ascending: false })
+            .limit(100)
+
+        if (clientId && clientId !== 'all') {
+            query = query.eq('client_id', clientId)
+        }
+        if (startDate) query = query.gte('date', startDate)
+        if (endDate) query = query.lte('date', endDate)
+
+        const { data, error } = await query
+        if (error) throw error
+
         return data?.map(item => ({
             ...item,
             spend: item.cost_micros ? item.cost_micros / 1000000 : 0
@@ -171,7 +199,6 @@ export const db = {
 
         if (error) throw error
 
-        // Get unique platforms
         const platforms = [...new Set(data?.map(item => item.platform).filter(Boolean))]
 
         return platforms.map(platform => ({
@@ -185,11 +212,12 @@ export const db = {
 
     /**
      * Fetch available ad accounts filtered by client and/or platform
+     * Returns client_id so callers can look up business_type
      */
     async getAdAccounts(filters: { clientId?: string; platform?: string }) {
         let query = supabase
             .from('daily_performance')
-            .select('ad_account_id, platform')
+            .select('ad_account_id, platform, client_id')
 
         if (filters.clientId && filters.clientId !== 'all') {
             query = query.eq('client_id', filters.clientId)
@@ -202,17 +230,20 @@ export const db = {
         const { data, error } = await query
         if (error) throw error
 
-        // Get unique ad_account_ids with their platform
-        const accountMap = new Map<string, string>()
+        const accountMap = new Map<string, { platform: string; client_id: string }>()
         data?.forEach(item => {
-            if (item.ad_account_id) {
-                accountMap.set(item.ad_account_id, item.platform)
+            if (item.ad_account_id && !accountMap.has(item.ad_account_id)) {
+                accountMap.set(item.ad_account_id, {
+                    platform: item.platform,
+                    client_id: item.client_id,
+                })
             }
         })
 
-        return Array.from(accountMap.entries()).map(([account, platform]) => ({
+        return Array.from(accountMap.entries()).map(([account, info]) => ({
             id: account,
-            label: `${account} | ${platform}`
+            label: `${account} | ${info.platform}`,
+            client_id: info.client_id,
         }))
     },
 
@@ -279,6 +310,105 @@ export const db = {
     },
 
     /**
+     * Alert summary for UNI Overview page
+     */
+    async getAlertSummary() {
+        const { data, error } = await supabase
+            .from('alerts')
+            .select('id, severity, status, account_name, message, alert_type, created_at')
+            .order('created_at', { ascending: false })
+            .limit(100)
+
+        if (error) throw error
+        return data
+    },
+
+    /**
+     * Client spend grouped by client for UNI Overview
+     */
+    async getClientSpendSummary(filters: { startDate?: string; endDate?: string }) {
+        let query = supabase
+            .from('daily_performance')
+            .select('client_id, client_name, cost')
+
+        if (filters.startDate) query = query.gte('date', filters.startDate)
+        if (filters.endDate) query = query.lte('date', filters.endDate)
+
+        const { data, error } = await query
+        if (error) throw error
+
+        const map = new Map<string, { client_id: string; client_name: string; spend: number }>()
+        data?.forEach(row => {
+            const existing = map.get(row.client_id)
+            if (existing) {
+                existing.spend += Number(row.cost) || 0
+            } else {
+                map.set(row.client_id, {
+                    client_id: row.client_id,
+                    client_name: row.client_name || row.client_id,
+                    spend: Number(row.cost) || 0,
+                })
+            }
+        })
+        return Array.from(map.values()).sort((a, b) => b.spend - a.spend)
+    },
+
+    /**
+     * Hourly performance for Real-time Performance page
+     * Returns current window rows and previous window rows for comparison
+     */
+    async getHourlyPerformance(filters: { windowHours: HourWindow; clientId?: string }) {
+        const now = new Date()
+        const windowStart = new Date(now.getTime() - filters.windowHours * 60 * 60 * 1000)
+        const prevWindowStart = new Date(windowStart.getTime() - filters.windowHours * 60 * 60 * 1000)
+
+        const cols = 'id, client_id, client_name, ad_account_id, platform, hour_timestamp, impressions, clicks, conversions, cost, revenue'
+
+        let curQ = supabase.from('hourly_performance').select(cols)
+            .gte('hour_timestamp', windowStart.toISOString())
+            .lte('hour_timestamp', now.toISOString())
+            .order('hour_timestamp', { ascending: false })
+
+        let prevQ = supabase.from('hourly_performance').select(cols)
+            .gte('hour_timestamp', prevWindowStart.toISOString())
+            .lt('hour_timestamp', windowStart.toISOString())
+            .order('hour_timestamp', { ascending: false })
+
+        if (filters.clientId && filters.clientId !== 'all') {
+            curQ = curQ.eq('client_id', filters.clientId)
+            prevQ = prevQ.eq('client_id', filters.clientId)
+        }
+
+        const [curRes, prevRes] = await Promise.all([curQ, prevQ])
+        if (curRes.error) throw curRes.error
+        if (prevRes.error) throw prevRes.error
+
+        return {
+            current: curRes.data || [],
+            previous: prevRes.data || [],
+            windowStart: windowStart.toISOString(),
+            windowEnd: now.toISOString(),
+            prevWindowStart: prevWindowStart.toISOString(),
+            prevWindowEnd: windowStart.toISOString(),
+        }
+    },
+
+    /**
+     * Recent alerts within last N hours for Real-time page
+     */
+    async getRecentAlerts(hoursBack: number) {
+        const cutoff = new Date(Date.now() - hoursBack * 60 * 60 * 1000).toISOString()
+        const { data, error } = await supabase
+            .from('alerts')
+            .select('id, severity, status, account_name, message, alert_type, created_at')
+            .gte('created_at', cutoff)
+            .order('created_at', { ascending: false })
+
+        if (error) throw error
+        return data
+    },
+
+    /**
      * Get dashboard settings for a user
      */
     async getSettings(userId: string) {
@@ -288,7 +418,7 @@ export const db = {
             .eq('user_id', userId)
             .single()
 
-        if (error && error.code !== 'PGRST116') throw error // PGRST116 = not found
+        if (error && error.code !== 'PGRST116') throw error
         return data
     },
 

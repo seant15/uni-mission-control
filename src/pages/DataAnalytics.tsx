@@ -58,6 +58,7 @@ export default function DataAnalytics() {
 
   // NEW: Business Type and Selected Metric
   const [businessType, setBusinessType] = useState<'leadgen' | 'ecommerce'>('ecommerce')
+  const [businessTypeManual, setBusinessTypeManual] = useState(false) // true when user manually overrides
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>('roas')
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
 
@@ -96,6 +97,26 @@ export default function DataAnalytics() {
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   })
+
+  // Auto-detect business type from selected client or ad account's client
+  useEffect(() => {
+    if (businessTypeManual) return // user override takes precedence
+    const clients_data: Client[] = clientsFromTable || []
+
+    let clientId = selectedClient
+    if (clientId === 'all' && selectedAdAccount && adAccountsFromDB) {
+      const match = adAccountsFromDB.find((a: any) => a.id === selectedAdAccount)
+      if (match?.client_id) clientId = match.client_id
+    }
+
+    if (clientId && clientId !== 'all') {
+      const client = clients_data.find(c => c.id === clientId)
+      if (client?.business_type) {
+        setBusinessType(client.business_type)
+        setSelectedMetric(client.business_type === 'leadgen' ? 'costperconv' : 'roas')
+      }
+    }
+  }, [selectedClient, selectedAdAccount, clientsFromTable, adAccountsFromDB, businessTypeManual])
 
   // Fetch performance data
   const { data: performance } = useQuery({
@@ -177,16 +198,24 @@ export default function DataAnalytics() {
   })
 
   const { data: metaCreatives } = useQuery({
-    queryKey: ['meta_creatives', selectedClient],
-    queryFn: () => db.getMetaCreatives(selectedClient),
+    queryKey: ['meta_creatives', selectedClient, dateRange],
+    queryFn: () => db.getMetaCreatives(selectedClient, dateRange.start, dateRange.end),
     enabled: selectedPlatform === 'all' || selectedPlatform === 'meta_ads',
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   })
 
   const { data: googleKeywords } = useQuery({
-    queryKey: ['google_keywords', selectedClient],
-    queryFn: () => db.getGoogleKeywords(selectedClient),
+    queryKey: ['google_keywords', selectedClient, dateRange],
+    queryFn: () => db.getGoogleKeywords(selectedClient, dateRange.start, dateRange.end),
+    enabled: selectedPlatform === 'all' || selectedPlatform === 'google_ads',
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  })
+
+  const { data: googleSearchTerms } = useQuery({
+    queryKey: ['google_search_terms', selectedClient, dateRange],
+    queryFn: () => db.getGoogleSearchTerms(selectedClient, dateRange.start, dateRange.end),
     enabled: selectedPlatform === 'all' || selectedPlatform === 'google_ads',
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
@@ -457,9 +486,9 @@ export default function DataAnalytics() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
             <Database className="text-blue-600" />
-            Data Analytics
+            Account Performance
           </h1>
-          <p className="text-gray-500 mt-1">Performance metrics across all platforms</p>
+          <p className="text-gray-500 mt-1">Deep-dive performance metrics by account</p>
         </div>
       </div>
 
@@ -476,9 +505,12 @@ export default function DataAnalytics() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-gray-600">Business Type:</span>
+            {!businessTypeManual && selectedClient !== 'all' && (
+              <span className="text-xs text-gray-400 italic">Auto-detected</span>
+            )}
             <div className="flex rounded-lg border border-gray-200 p-1">
               <button
-                onClick={() => setBusinessType('leadgen')}
+                onClick={() => { setBusinessType('leadgen'); setBusinessTypeManual(true); setSelectedMetric('costperconv') }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${businessType === 'leadgen'
                     ? 'bg-blue-600 text-white'
                     : 'text-gray-600 hover:bg-gray-100'
@@ -488,7 +520,7 @@ export default function DataAnalytics() {
                 Lead Gen
               </button>
               <button
-                onClick={() => setBusinessType('ecommerce')}
+                onClick={() => { setBusinessType('ecommerce'); setBusinessTypeManual(true); setSelectedMetric('roas') }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${businessType === 'ecommerce'
                     ? 'bg-blue-600 text-white'
                     : 'text-gray-600 hover:bg-gray-100'
@@ -498,6 +530,14 @@ export default function DataAnalytics() {
                 eCommerce
               </button>
             </div>
+            {businessTypeManual && (
+              <button
+                onClick={() => setBusinessTypeManual(false)}
+                className="text-xs text-blue-600 hover:text-blue-700 underline"
+              >
+                Auto-detect
+              </button>
+            )}
           </div>
 
           <button
@@ -527,9 +567,9 @@ export default function DataAnalytics() {
             </button>
             {showClientDropdown && (
               <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-60 overflow-y-auto">
-                <button onClick={() => { setSelectedClient('all'); setSelectedAdAccount(''); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50">All Clients</button>
+                <button onClick={() => { setSelectedClient('all'); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50">All Clients</button>
                 {clients?.map(client => (
-                  <button key={client.id} onClick={() => { setSelectedClient(client.id); setSelectedAdAccount(''); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50">
+                  <button key={client.id} onClick={() => { setSelectedClient(client.id); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50">
                     <div className="font-medium">{client.name}</div>
                     {client.business_type && (
                       <div className="text-xs text-gray-500">{client.business_type === 'leadgen' ? 'Lead Gen' : 'eCommerce'}</div>
@@ -916,38 +956,90 @@ export default function DataAnalytics() {
       {/* Google Keyword Performance */}
       {(selectedPlatform === 'all' || selectedPlatform === 'google_ads') && googleKeywords && googleKeywords.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <span className="text-red-600">🔍</span>
-            Google Search Term / Keyword Performance
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Keyword</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Campaign</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Match Type</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Clicks</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {googleKeywords.map((keyword: any) => (
-                  <tr key={keyword.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium">{keyword.keyword}</td>
-                    <td className="px-4 py-3 text-sm">{keyword.campaign_name}</td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">{keyword.match_type}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right">${(keyword.spend || 0).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right">{keyword.clicks}</td>
-                    <td className="px-4 py-3 text-right">{keyword.conversions}</td>
+          <details>
+            <summary className="text-lg font-semibold text-gray-900 mb-4 cursor-pointer flex items-center gap-2">
+              <span className="text-red-600">🔑</span>
+              Google Keywords ({googleKeywords.length} records)
+            </summary>
+            <div className="overflow-x-auto mt-4">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Keyword</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Campaign</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Group</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Match Type</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Clicks</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">CTR</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">CPC</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {googleKeywords.map((keyword: any) => (
+                    <tr key={keyword.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium">{keyword.keyword}</td>
+                      <td className="px-4 py-3 text-sm">{keyword.campaign_name}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{keyword.ad_group_name}</td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">{keyword.match_type}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">${(keyword.spend || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right">{keyword.clicks}</td>
+                      <td className="px-4 py-3 text-right">{keyword.ctr ? `${Number(keyword.ctr).toFixed(2)}%` : '-'}</td>
+                      <td className="px-4 py-3 text-right">{keyword.conversions}</td>
+                      <td className="px-4 py-3 text-right">{keyword.cpc ? `$${Number(keyword.cpc).toFixed(2)}` : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      )}
+
+      {/* Google Search Terms */}
+      {(selectedPlatform === 'all' || selectedPlatform === 'google_ads') && googleSearchTerms && googleSearchTerms.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <details>
+            <summary className="text-lg font-semibold text-gray-900 mb-4 cursor-pointer flex items-center gap-2">
+              <span className="text-orange-600">🔍</span>
+              Google Search Terms ({googleSearchTerms.length} records)
+            </summary>
+            <div className="overflow-x-auto mt-4">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Search Term</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Campaign</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Group</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Match Type</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Impressions</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Clicks</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {googleSearchTerms.map((term: any) => (
+                    <tr key={term.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium">{term.search_term}</td>
+                      <td className="px-4 py-3 text-sm">{term.campaign_name}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{term.ad_group_name}</td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs px-2 py-1 rounded-full bg-orange-100 text-orange-700">{term.match_type}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">${(term.spend || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right">{(term.impressions || 0).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right">{term.clicks}</td>
+                      <td className="px-4 py-3 text-right">{term.conversions}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
         </div>
       )}
     </div>
