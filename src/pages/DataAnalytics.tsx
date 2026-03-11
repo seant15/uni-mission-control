@@ -805,24 +805,24 @@ export default function DataAnalytics() {
         </details>
       </div>
 
-      {/* Meta Adset Performance */}
+      {/* Meta Ad Set Performance */}
       {(selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && metaAdsets && metaAdsets.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <details>
-            <summary className="text-lg font-semibold text-gray-900 mb-4 cursor-pointer flex items-center gap-2">
+            <summary className="text-lg font-semibold text-gray-900 cursor-pointer flex items-center gap-2">
               <span className="text-blue-600">📊</span>
-              Meta Adset Performance ({metaAdsets.length} records)
+              Meta Ad Set Performance ({metaAdsets.length} records)
             </summary>
             <div className="overflow-x-auto mt-4">
-              <table className="w-full">
+              <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Date</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Client</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Account</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Campaign</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Adset</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Set</th>
                     <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Impressions</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Clicks</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">CTR</th>
                     <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
                     <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">
                       {businessType === 'leadgen' ? 'CPA' : 'ROAS'}
@@ -832,23 +832,31 @@ export default function DataAnalytics() {
                 <tbody className="divide-y divide-gray-200">
                   {metaAdsets.map((adset: any) => {
                     const spend = adset.spend || 0
+                    const impressions = adset.impressions || 0
+                    const clicks = adset.clicks || 0
                     const conversions = adset.conversions || 0
                     const revenue = adset.revenue || 0
                     const roas = spend > 0 ? (revenue / spend) : 0
                     const cpa = conversions > 0 ? (spend / conversions) : 0
-                    const clientName = clients.find(c => c.id === adset.client_id)?.name || 'Unknown'
+                    const ctr = impressions > 0 ? (clicks / impressions * 100) : 0
 
                     return (
                       <tr key={adset.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm">{adset.date}</td>
-                        <td className="px-4 py-3 text-sm font-medium">{clientName}</td>
-                        <td className="px-4 py-3 text-xs font-mono">{adset.ad_account_id}</td>
-                        <td className="px-4 py-3 text-sm">{adset.campaign_name}</td>
-                        <td className="px-4 py-3 text-sm font-medium">{adset.ad_set_name}</td>
-                        <td className="px-4 py-3 text-right">${spend.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right">{conversions}</td>
+                        <td className="px-4 py-3 text-gray-600 max-w-[180px] truncate">{adset.campaign_name}</td>
+                        <td className="px-4 py-3 font-medium max-w-[200px] truncate">{adset.ad_set_name}</td>
+                        <td className="px-4 py-3 text-right font-medium">${spend.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">{impressions.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right">{clicks.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right">{ctr.toFixed(2)}%</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${conversions > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {conversions}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 text-right font-semibold">
-                          {businessType === 'leadgen' ? `$${cpa.toFixed(2)}` : `${roas.toFixed(2)}x`}
+                          {businessType === 'leadgen'
+                            ? (cpa > 0 ? `$${cpa.toFixed(2)}` : '-')
+                            : (roas > 0 ? `${roas.toFixed(2)}x` : '-')}
                         </td>
                       </tr>
                     )
@@ -917,39 +925,93 @@ export default function DataAnalytics() {
         </div>
       )}
 
-      {/* Meta Ad Creative Report */}
+      {/* Meta Creative Table */}
       {(selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && metaCreatives && metaCreatives.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <span className="text-blue-600">📘</span>
-            Meta Ad Creative Report
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Name</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Campaign</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Type</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {metaCreatives.map((creative: any) => (
-                  <tr key={creative.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium">{creative.ad_name}</td>
-                    <td className="px-4 py-3 text-sm">{creative.campaign_name}</td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700">Ad</span>
-                    </td>
-                    <td className="px-4 py-3 text-right">${(creative.spend || 0).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right">{creative.conversions}</td>
+          <details open>
+            <summary className="text-lg font-semibold text-gray-900 cursor-pointer flex items-center gap-2">
+              <span className="text-purple-600">🎨</span>
+              Meta Creative Performance ({metaCreatives.length} ads)
+            </summary>
+            <div className="overflow-x-auto mt-4">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 w-16">Creative</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Name / Copy</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Campaign</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Set</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Impressions</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">CTR</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">
+                      {businessType === 'leadgen' ? 'CPA' : 'ROAS'}
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {metaCreatives.map((creative: any) => {
+                    const spend = creative.spend || 0
+                    const impressions = creative.impressions || 0
+                    const clicks = creative.clicks || 0
+                    const conversions = creative.conversions || 0
+                    const revenue = creative.revenue || 0
+                    const ctr = impressions > 0 ? (clicks / impressions * 100) : 0
+                    const roas = spend > 0 ? (revenue / spend) : 0
+                    const cpa = conversions > 0 ? (spend / conversions) : 0
+                    const imgSrc = creative.image_url || creative.thumbnail_url
+
+                    return (
+                      <tr key={creative.id} className="hover:bg-purple-50 align-top">
+                        <td className="px-4 py-3">
+                          {imgSrc ? (
+                            <img
+                              src={imgSrc}
+                              alt={creative.ad_name}
+                              className="w-12 h-12 object-cover rounded-lg border border-gray-200"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                            />
+                          ) : (
+                            <div className="w-12 h-12 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 text-xs">N/A</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-gray-900 max-w-[200px] truncate">{creative.ad_name}</div>
+                          {creative.headline && (
+                            <div className="text-xs text-gray-500 mt-0.5 max-w-[200px] truncate">{creative.headline}</div>
+                          )}
+                          {creative.primary_copy && (
+                            <div className="text-xs text-gray-400 mt-0.5 max-w-[200px] truncate italic">"{creative.primary_copy}"</div>
+                          )}
+                          {creative.call_to_action_type && (
+                            <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                              {creative.call_to_action_type.replace(/_/g, ' ')}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 max-w-[160px] truncate">{creative.campaign_name}</td>
+                        <td className="px-4 py-3 text-gray-600 max-w-[160px] truncate">{creative.ad_set_name}</td>
+                        <td className="px-4 py-3 text-right font-medium">${spend.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">{impressions.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right">{ctr.toFixed(2)}%</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${conversions > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {conversions}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          {businessType === 'leadgen'
+                            ? (cpa > 0 ? `$${cpa.toFixed(2)}` : '-')
+                            : (roas > 0 ? `${roas.toFixed(2)}x` : '-')}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </details>
         </div>
       )}
 
@@ -1014,26 +1076,36 @@ export default function DataAnalytics() {
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Search Term</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Campaign</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Group</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Match Type</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Match</th>
                     <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Impressions</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Impr.</th>
                     <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Clicks</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">CTR</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">CPC</th>
                     <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">CPA</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {googleSearchTerms.map((term: any) => (
                     <tr key={term.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium">{term.search_term}</td>
-                      <td className="px-4 py-3 text-sm">{term.campaign_name}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{term.ad_group_name}</td>
+                      <td className="px-4 py-3 font-medium max-w-[200px] truncate">{term.search_term}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 max-w-[150px] truncate">{term.campaign_name}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 max-w-[120px] truncate">{term.ad_group_name}</td>
                       <td className="px-4 py-3">
-                        <span className="text-xs px-2 py-1 rounded-full bg-orange-100 text-orange-700">{term.match_type}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">{term.match_type}</span>
                       </td>
                       <td className="px-4 py-3 text-right">${(term.spend || 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right">{(term.impressions || 0).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right">{term.clicks}</td>
-                      <td className="px-4 py-3 text-right">{term.conversions}</td>
+                      <td className="px-4 py-3 text-right">{term.clicks || 0}</td>
+                      <td className="px-4 py-3 text-right">{term.ctr ? `${(Number(term.ctr) * 100).toFixed(2)}%` : '-'}</td>
+                      <td className="px-4 py-3 text-right">{term.cpc ? `$${Number(term.cpc).toFixed(2)}` : '-'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${(term.conversions || 0) > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {term.conversions || 0}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">{term.cost_per_conversion ? `$${Number(term.cost_per_conversion).toFixed(2)}` : '-'}</td>
                     </tr>
                   ))}
                 </tbody>

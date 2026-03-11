@@ -120,13 +120,14 @@ export const db = {
 
     /**
      * Fetch Meta ad creatives with client and date filtering
+     * Includes creative fields: image_url, thumbnail_url, headline, primary_copy, description, call_to_action_type
      */
     async getMetaCreatives(clientId?: string, startDate?: string, endDate?: string) {
         let query = supabase
             .from('meta_ads_ads')
-            .select('id, client_id, date, campaign_id, campaign_name, ad_set_id, ad_set_name, ad_id, ad_name, spend, impressions, clicks, conversions, revenue')
+            .select('id, client_id, date, campaign_id, campaign_name, ad_set_id, ad_set_name, ad_id, ad_name, spend, impressions, clicks, conversions, revenue, image_url, thumbnail_url, headline, primary_copy, description, call_to_action_type')
             .order('spend', { ascending: false })
-            .limit(50)
+            .limit(100)
 
         if (clientId && clientId !== 'all') {
             query = query.eq('client_id', clientId)
@@ -170,7 +171,7 @@ export const db = {
     async getGoogleSearchTerms(clientId?: string, startDate?: string, endDate?: string) {
         let query = supabase
             .from('google_ads_search_terms')
-            .select('id, client_id, customer_id, date, campaign_id, campaign_name, ad_group_id, ad_group_name, search_term, match_type, impressions, clicks, cost_micros, conversions')
+            .select('id, client_id, customer_id, date, campaign_id, campaign_name, ad_group_id, ad_group_name, search_term, match_type, impressions, clicks, cost_micros, ctr, cpc, conversions, cost_per_conversion')
             .order('cost_micros', { ascending: false })
             .limit(100)
 
@@ -252,9 +253,9 @@ export const db = {
      */
     async getMetaAdsets(filters: { clientId?: string; adAccountId?: string; startDate?: string; endDate?: string }) {
         let query = supabase
-            .from('meta_ads_adsets')
-            .select('id, client_id, date, ad_account_id, campaign_name, ad_set_name, spend, conversions, revenue')
-            .order('date', { ascending: false })
+            .from('meta_ads_ad_sets')
+            .select('id, client_id, date, ad_account_id, campaign_id, campaign_name, ad_set_id, ad_set_name, spend, impressions, clicks, conversions, revenue')
+            .order('spend', { ascending: false })
             .limit(500)
 
         if (filters.clientId && filters.clientId !== 'all') {
