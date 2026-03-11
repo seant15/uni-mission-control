@@ -1,10 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, AlertTriangle, Users, Settings as SettingsIcon, Bell, Search, Database } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, Users, Bell, Search, Database } from 'lucide-react'
 import MarketingOverview from './pages/MarketingOverview'
 import Alerts from './pages/Alerts'
 import ClientsOverview from './pages/ClientsOverview'
 import DataAnalytics from './pages/DataAnalytics'
-import SettingsPage from './pages/Settings'
 import DashboardSettings from './pages/DashboardSettings'
 
 function App() {
@@ -36,10 +35,6 @@ function App() {
             <NavLink to="/clients-overview" icon={Users} label="Clients Overview" />
             <NavLink to="/data-analytics" icon={Database} label="Data Analytics" />
 
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-6 px-4">
-              System
-            </div>
-            <NavLink to="/settings" icon={SettingsIcon} label="Settings" />
           </nav>
           
           {/* User Profile */}
@@ -88,7 +83,6 @@ function App() {
               <Route path="/clients-overview" element={<ClientsOverview />} />
               <Route path="/data-analytics" element={<DataAnalytics />} />
               <Route path="/dashboard/settings" element={<DashboardSettings />} />
-              <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </main>
         </div>
