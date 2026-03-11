@@ -124,7 +124,7 @@ export default function Alerts() {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
+    <div className="space-y-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Performance Alerts</h1>
       </div>
@@ -281,7 +281,7 @@ export default function Alerts() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600 capitalize">
-                    {alert.alert_type.replace('_', ' ')}
+                    {(alert.alert_type || '-').replace(/_/g, ' ')}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
                     {new Date(alert.created_at).toLocaleString()}

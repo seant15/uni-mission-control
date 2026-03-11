@@ -1,518 +1,372 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  TrendingUp, DollarSign, Target,
-  Users, AlertTriangle, ArrowUpDown
+  TrendingUp, DollarSign, Target, Users, AlertTriangle,
+  ArrowUpRight, ArrowDownRight, ArrowUpDown
 } from 'lucide-react'
-import {
-  BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { supabase } from '../lib/supabase'
-import type { ClientAccount, ClientsOverviewSummary, TimePeriod } from '../types'
+import type { TimePeriod } from '../types'
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+type ChartMetric = 'total_spend' | 'total_revenue' | 'roas' | 'conversions'
+type SortField = 'account_name' | 'total_spend' | 'total_revenue' | 'roas' | 'conversions' | 'platform'
+type SortDir = 'asc' | 'desc'
 
-type SortField = 'account_name' | 'total_spend' | 'total_revenue' | 'roas' | 'platform'
-type SortDirection = 'asc' | 'desc'
+const PLATFORM_OPTIONS = [
+  { id: 'all', label: 'All Platforms' },
+  { id: 'meta_ads', label: 'Meta Ads' },
+  { id: 'google_ads', label: 'Google Ads' },
+  { id: 'tiktok_ads', label: 'TikTok Ads' },
+]
+
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316']
+
+const PLATFORM_DISPLAY: Record<string, string> = {
+  meta_ads: 'Meta Ads', google_ads: 'Google Ads', tiktok_ads: 'TikTok Ads',
+  linkedin_ads: 'LinkedIn Ads', twitter_ads: 'Twitter Ads',
+}
+
+function getDates(period: TimePeriod) {
+  const end = new Date()
+  const start = new Date()
+  const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365
+  start.setDate(end.getDate() - days)
+  const prevEnd = new Date(start); prevEnd.setDate(prevEnd.getDate() - 1)
+  const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days)
+  return {
+    cur: { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] },
+    prev: { start: prevStart.toISOString().split('T')[0], end: prevEnd.toISOString().split('T')[0] },
+  }
+}
+
+function pct(cur: number, prev: number) {
+  if (prev === 0) return cur > 0 ? 100 : 0
+  return ((cur - prev) / prev) * 100
+}
+
+function aggregateByClient(rows: any[], clients: any[]) {
+  return clients.map(client => {
+    const cd = rows.filter(r => r.client_id === client.id)
+    const spend = cd.reduce((s, r) => s + (Number(r.cost) || 0), 0)
+    const revenue = cd.reduce((s, r) => s + (Number(r.revenue) || 0), 0)
+    const conversions = cd.reduce((s, r) => s + (Number(r.conversions) || 0), 0)
+    const impressions = cd.reduce((s, r) => s + (Number(r.impressions) || 0), 0)
+    const clicks = cd.reduce((s, r) => s + (Number(r.clicks) || 0), 0)
+    const roas = spend > 0 ? revenue / spend : 0
+    const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0
+    const cpc = clicks > 0 ? spend / clicks : 0
+
+    // Primary platform by spend
+    const platSpend = cd.reduce((acc: any, r) => {
+      const p = r.platform || 'Unknown'
+      acc[p] = (acc[p] || 0) + (Number(r.cost) || 0)
+      return acc
+    }, {})
+    const platform = Object.keys(platSpend).length
+      ? Object.keys(platSpend).reduce((a, b) => platSpend[a] > platSpend[b] ? a : b)
+      : 'Unknown'
+
+    return {
+      id: client.id,
+      account_name: client.name,
+      platform: PLATFORM_DISPLAY[platform] || platform,
+      total_spend: spend,
+      total_revenue: revenue,
+      roas,
+      conversions,
+      ctr,
+      cpc,
+      status: client.status || 'active',
+    }
+  }).filter(a => a.total_spend > 0)
+}
 
 export default function ClientsOverview() {
   const [period, setPeriod] = useState<TimePeriod>('30d')
+  const [selectedPlatform, setSelectedPlatform] = useState('all')
+  const [chartMetric, setChartMetric] = useState<ChartMetric>('total_spend')
   const [sortField, setSortField] = useState<SortField>('total_spend')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
 
-  // Calculate date range based on period
-  const getDateRange = (period: TimePeriod) => {
-    const endDate = new Date()
-    const startDate = new Date()
+  const dates = getDates(period)
 
-    switch (period) {
-      case '7d':
-        startDate.setDate(startDate.getDate() - 7)
-        break
-      case '30d':
-        startDate.setDate(startDate.getDate() - 30)
-        break
-      case '90d':
-        startDate.setDate(startDate.getDate() - 90)
-        break
-      case '1yr':
-        startDate.setFullYear(startDate.getFullYear() - 1)
-        break
-    }
-
-    return {
-      start: startDate.toISOString().split('T')[0],
-      end: endDate.toISOString().split('T')[0],
-    }
+  const fetchPerf = async (start: string, end: string) => {
+    let q = supabase.from('daily_performance')
+      .select('client_id, cost, revenue, impressions, clicks, conversions, platform')
+      .gte('date', start).lte('date', end)
+    if (selectedPlatform !== 'all') q = q.eq('platform', selectedPlatform)
+    const { data, error } = await q
+    if (error) throw new Error(error.message)
+    return data || []
   }
 
-  // Fetch clients and their performance data
-  const { data: clients, isLoading: clientsLoading, error: clientsError } = useQuery({
+  const { data: clients, isLoading: cLoading, error: cError } = useQuery({
     queryKey: ['clients'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .order('name')
-
+      const { data, error } = await supabase.from('clients').select('*').order('name')
       if (error) throw new Error(error.message)
-      return data
+      return data || []
     },
   })
 
-  const { data: performanceData, isLoading: perfLoading, error: perfError } = useQuery({
-    queryKey: ['daily_performance_by_client', period],
-    queryFn: async () => {
-      const dateRange = getDateRange(period)
-
-      const { data, error } = await supabase
-        .from('daily_performance')
-        .select('*')
-        .gte('date', dateRange.start)
-        .lte('date', dateRange.end)
-
-      if (error) throw new Error(error.message)
-      return data
-    },
+  const { data: curRows, isLoading: perfLoading, error: perfError } = useQuery({
+    queryKey: ['co_cur', period, selectedPlatform],
+    queryFn: () => fetchPerf(dates.cur.start, dates.cur.end),
   })
 
-  const isLoading = clientsLoading || perfLoading
-  const error = clientsError || perfError
+  const { data: prevRows } = useQuery({
+    queryKey: ['co_prev', period, selectedPlatform],
+    queryFn: () => fetchPerf(dates.prev.start, dates.prev.end),
+  })
 
-  // Aggregate performance by client
-  const accounts: ClientAccount[] | undefined = (clients && performanceData) ?
-    clients.map(client => {
-      // Filter performance data for this client
-      const clientData = performanceData.filter(row => row.client_id === client.id)
+  const isLoading = cLoading || perfLoading
+  const error = cError || perfError
 
-      const total_spend = clientData.reduce((sum, row) => sum + (Number(row.cost) || 0), 0)
-      const total_revenue = clientData.reduce((sum, row) => sum + (Number(row.revenue) || 0), 0)
-      const impressions = clientData.reduce((sum, row) => sum + (Number(row.impressions) || 0), 0)
-      const clicks = clientData.reduce((sum, row) => sum + (Number(row.clicks) || 0), 0)
-      const conversions = clientData.reduce((sum, row) => sum + (Number(row.conversions) || 0), 0)
+  const curAccounts = clients && curRows ? aggregateByClient(curRows, clients) : []
+  const prevAccounts = clients && prevRows ? aggregateByClient(prevRows, clients) : []
 
-      const roas = total_spend > 0 ? total_revenue / total_spend : 0
-      const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0
-      const cpc = clicks > 0 ? total_spend / clicks : 0
+  // Summary totals
+  const sumField = (arr: typeof curAccounts, f: keyof typeof arr[0]) =>
+    arr.reduce((s, a) => s + (Number(a[f]) || 0), 0)
 
-      // Determine primary platform (platform with most spend)
-      const platformSpend = clientData.reduce((acc: any, row) => {
-        const platform = row.platform || 'Unknown'
-        acc[platform] = (acc[platform] || 0) + (Number(row.cost) || 0)
-        return acc
-      }, {})
-      const platform = Object.keys(platformSpend).reduce((a, b) =>
-        platformSpend[a] > platformSpend[b] ? a : b, 'Unknown'
-      )
+  const curSpend = sumField(curAccounts, 'total_spend')
+  const curRevenue = sumField(curAccounts, 'total_revenue')
+  const curConv = sumField(curAccounts, 'conversions')
+  const curRoas = curSpend > 0 ? curRevenue / curSpend : 0
 
-      // Map platform names to display format
-      const platformMap: { [key: string]: string } = {
-        'meta_ads': 'Meta Ads',
-        'google_ads': 'Google Ads',
-        'tiktok_ads': 'TikTok Ads',
-        'linkedin_ads': 'LinkedIn Ads',
-        'twitter_ads': 'Twitter Ads',
-      }
+  const prevSpend = sumField(prevAccounts, 'total_spend')
+  const prevRevenue = sumField(prevAccounts, 'total_revenue')
+  const prevConv = sumField(prevAccounts, 'conversions')
+  const prevRoas = prevSpend > 0 ? prevRevenue / prevSpend : 0
 
-      return {
-        id: client.id,
-        account_name: client.name,
-        platform: (platformMap[platform] || platform) as any,
-        total_spend,
-        total_revenue,
-        roas,
-        ctr,
-        cpc,
-        impressions,
-        clicks,
-        conversions,
-        active_campaigns: 0, // Not available in daily_performance
-        total_campaigns: 0,
-        status: client.status || 'active',
-        health_score: undefined,
-        last_updated: new Date().toISOString(),
-        created_at: client.created_at,
-      } as ClientAccount
-    }).filter(account => account.total_spend > 0) // Only show accounts with spend
-  : undefined
+  const kpis: { key: ChartMetric; label: string; value: string; change: number; icon: any; color: string }[] = [
+    { key: 'total_spend',   label: 'Total Spend',   value: formatCurrency(curSpend),   change: pct(curSpend, prevSpend),     icon: DollarSign,  color: 'bg-blue-600' },
+    { key: 'total_revenue', label: 'Total Revenue', value: formatCurrency(curRevenue), change: pct(curRevenue, prevRevenue), icon: TrendingUp,  color: 'bg-green-600' },
+    { key: 'roas',          label: 'Avg ROAS',      value: `${curRoas.toFixed(2)}x`,   change: pct(curRoas, prevRoas),       icon: Target,      color: 'bg-purple-600' },
+    { key: 'conversions',   label: 'Conversions',   value: formatNumber(curConv),      change: pct(curConv, prevConv),       icon: TrendingUp,  color: 'bg-orange-600' },
+  ]
 
-  // Calculate summary
-  const summary: ClientsOverviewSummary = accounts?.reduce(
-    (acc, account) => {
-      acc.total_accounts++
-      if (account.status === 'active') acc.active_accounts++
-      acc.total_spend += account.total_spend
-      acc.total_revenue += account.total_revenue
-      acc.total_conversions += account.conversions
-      return acc
-    },
-    {
-      total_accounts: 0,
-      active_accounts: 0,
-      total_spend: 0,
-      total_revenue: 0,
-      average_roas: 0,
-      total_conversions: 0,
-      period,
-    }
-  ) || {
-    total_accounts: 0,
-    active_accounts: 0,
-    total_spend: 0,
-    total_revenue: 0,
-    average_roas: 0,
-    total_conversions: 0,
-    period,
+  // Chart data sorted by selected metric
+  const chartData = [...curAccounts]
+    .sort((a, b) => {
+      const av = chartMetric === 'roas' ? a.roas : chartMetric === 'conversions' ? a.conversions : chartMetric === 'total_revenue' ? a.total_revenue : a.total_spend
+      const bv = chartMetric === 'roas' ? b.roas : chartMetric === 'conversions' ? b.conversions : chartMetric === 'total_revenue' ? b.total_revenue : b.total_spend
+      return bv - av
+    })
+    .slice(0, 10)
+    .map(a => ({
+      name: a.account_name.length > 12 ? a.account_name.substring(0, 12) + '…' : a.account_name,
+      value: chartMetric === 'roas' ? Number(a.roas.toFixed(2))
+           : chartMetric === 'conversions' ? a.conversions
+           : chartMetric === 'total_revenue' ? a.total_revenue
+           : a.total_spend,
+    }))
+
+  const activeKpi = kpis.find(k => k.key === chartMetric)!
+  const chartLabel = activeKpi.label
+
+  // Sorted table
+  const sorted = [...curAccounts].sort((a, b) => {
+    let av: any = a[sortField as keyof typeof a]
+    let bv: any = b[sortField as keyof typeof b]
+    if (typeof av === 'string') { av = av.toLowerCase(); bv = (bv as string).toLowerCase() }
+    return sortDir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1)
+  })
+
+  const handleSort = (f: SortField) => {
+    if (sortField === f) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortField(f); setSortDir('desc') }
   }
 
-  if (summary.total_spend > 0) {
-    summary.average_roas = summary.total_revenue / summary.total_spend
-  }
-
-  // Sort accounts
-  const sortedAccounts = accounts ? [...accounts].sort((a, b) => {
-    let aVal: any = a[sortField]
-    let bVal: any = b[sortField]
-
-    if (sortField === 'account_name' || sortField === 'platform') {
-      aVal = aVal.toLowerCase()
-      bVal = bVal.toLowerCase()
-    }
-
-    if (sortDirection === 'asc') {
-      return aVal > bVal ? 1 : -1
-    } else {
-      return aVal < bVal ? 1 : -1
-    }
-  }) : []
-
-  // Platform breakdown for pie chart
-  const platformData = accounts?.reduce((acc, account) => {
-    const existing = acc.find(p => p.platform === account.platform)
-    if (existing) {
-      existing.spend += account.total_spend
-      existing.revenue += account.total_revenue
-    } else {
-      acc.push({
-        platform: account.platform,
-        spend: account.total_spend,
-        revenue: account.total_revenue,
-      })
-    }
-    return acc
-  }, [] as { platform: string; spend: number; revenue: number }[]) || []
-
-  // Top performers for bar chart
-  const topPerformers = accounts
-    ? [...accounts]
-        .sort((a, b) => b.roas - a.roas)
-        .slice(0, 10)
-        .map(a => ({
-          name: a.account_name.length > 15
-            ? a.account_name.substring(0, 15) + '...'
-            : a.account_name,
-          roas: Number(a.roas.toFixed(2)),
-          spend: a.total_spend,
-        }))
-    : []
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortField(field)
-      setSortDirection('desc')
-    }
-  }
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value)
-  }
-
-  const formatNumber = (value: number) => {
-    return new Intl.NumberFormat('en-US').format(value)
-  }
-
-  const getPeriodLabel = (p: TimePeriod) => {
-    switch (p) {
-      case '7d': return 'Last 7 Days'
-      case '30d': return 'Last 30 Days'
-      case '90d': return 'Last 90 Days'
-      case '1yr': return 'Last Year'
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'text-green-700 bg-green-100'
-      case 'paused': return 'text-gray-700 bg-gray-100'
-      case 'warning': return 'text-yellow-700 bg-yellow-100'
-      case 'error': return 'text-red-700 bg-red-100'
-      default: return 'text-gray-700 bg-gray-100'
-    }
-  }
+  const periodLabel = period === '7d' ? '7 Days' : period === '30d' ? '30 Days' : period === '90d' ? '90 Days' : '1 Year'
 
   return (
-    <div className="p-8 max-w-[1600px] mx-auto">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">Clients Overview</h1>
-
-        {/* Period Selector */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+            <Users className="text-blue-600" />
+            Clients Overview
+          </h1>
+          <p className="text-gray-500 mt-1">Account performance across all clients</p>
+        </div>
         <div className="flex items-center gap-2">
           {(['7d', '30d', '90d', '1yr'] as TimePeriod[]).map(p => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                period === p
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              {getPeriodLabel(p)}
+            <button key={p} onClick={() => setPeriod(p)}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                period === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+              }`}>
+              {p === '7d' ? '7 Days' : p === '30d' ? '30 Days' : p === '90d' ? '90 Days' : '1 Year'}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-5 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm text-gray-600">Total Accounts</div>
-              <div className="text-3xl font-bold mt-1">{summary.total_accounts}</div>
-              <div className="text-sm text-green-600 mt-1">
-                {summary.active_accounts} active
-              </div>
-            </div>
-            <Users className="w-10 h-10 text-blue-500" />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm text-gray-600">Total Spend</div>
-              <div className="text-3xl font-bold mt-1">{formatCurrency(summary.total_spend)}</div>
-              <div className="text-sm text-gray-500 mt-1">{getPeriodLabel(period)}</div>
-            </div>
-            <DollarSign className="w-10 h-10 text-green-500" />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm text-gray-600">Total Revenue</div>
-              <div className="text-3xl font-bold mt-1">{formatCurrency(summary.total_revenue)}</div>
-              <div className="text-sm text-gray-500 mt-1">{getPeriodLabel(period)}</div>
-            </div>
-            <TrendingUp className="w-10 h-10 text-purple-500" />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm text-gray-600">Average ROAS</div>
-              <div className="text-3xl font-bold mt-1">{summary.average_roas.toFixed(2)}x</div>
-              <div className="text-sm text-gray-500 mt-1">Return on Ad Spend</div>
-            </div>
-            <Target className="w-10 h-10 text-orange-500" />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm text-gray-600">Conversions</div>
-              <div className="text-3xl font-bold mt-1">{formatNumber(summary.total_conversions)}</div>
-              <div className="text-sm text-gray-500 mt-1">{getPeriodLabel(period)}</div>
-            </div>
-            <TrendingUp className="w-10 h-10 text-green-500" />
+      {/* Platform Filter */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-gray-600">Platform:</span>
+          <div className="flex rounded-lg border border-gray-200 p-1 gap-1">
+            {PLATFORM_OPTIONS.map(opt => (
+              <button key={opt.id} onClick={() => setSelectedPlatform(opt.id)}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
+                  selectedPlatform === opt.id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+                }`}>
+                {opt.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-2 gap-6 mb-6">
-        {/* Top Performers by ROAS */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Top Performers by ROAS</h2>
-          {topPerformers.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={topPerformers}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="roas" fill="#3b82f6" name="ROAS" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[300px] flex items-center justify-center text-gray-500">
-              No data available
-            </div>
-          )}
-        </div>
-
-        {/* Platform Distribution */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Spend by Platform</h2>
-          {platformData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={platformData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ platform, percent }) => `${platform} (${(percent * 100).toFixed(0)}%)`}
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="spend"
-                >
-                  {platformData.map((_entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[300px] flex items-center justify-center text-gray-500">
-              No data available
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Error State */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center gap-2 text-red-700">
-            <AlertTriangle size={20} />
-            <div>
-              <div className="font-medium">Failed to load client accounts</div>
-              <div className="text-sm">{error.message}</div>
-              <div className="text-xs mt-1 text-red-600">
-                Please check your Supabase configuration in environment variables
-              </div>
-            </div>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 text-red-700">
+          <AlertTriangle size={20} />
+          <div>
+            <div className="font-medium">Failed to load data</div>
+            <div className="text-sm">{(error as Error).message}</div>
           </div>
         </div>
       )}
 
-      {/* Loading State */}
       {isLoading && (
-        <div className="text-center py-12">
+        <div className="text-center py-16">
           <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          <div className="mt-2 text-gray-600">Loading client accounts...</div>
+          <div className="mt-2 text-gray-500">Loading...</div>
         </div>
       )}
 
-      {/* Accounts Table */}
-      {!isLoading && sortedAccounts && sortedAccounts.length > 0 && (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="px-4 py-3 text-left">
-                  <button
-                    onClick={() => handleSort('account_name')}
-                    className="flex items-center gap-1 text-xs font-medium text-gray-600 uppercase hover:text-gray-900"
-                  >
-                    Account
-                    {sortField === 'account_name' && <ArrowUpDown size={14} />}
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-left">
-                  <button
-                    onClick={() => handleSort('platform')}
-                    className="flex items-center gap-1 text-xs font-medium text-gray-600 uppercase hover:text-gray-900"
-                  >
-                    Platform
-                    {sortField === 'platform' && <ArrowUpDown size={14} />}
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('total_spend')}
-                    className="flex items-center gap-1 justify-end text-xs font-medium text-gray-600 uppercase hover:text-gray-900"
-                  >
-                    Spend
-                    {sortField === 'total_spend' && <ArrowUpDown size={14} />}
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('total_revenue')}
-                    className="flex items-center gap-1 justify-end text-xs font-medium text-gray-600 uppercase hover:text-gray-900"
-                  >
-                    Revenue
-                    {sortField === 'total_revenue' && <ArrowUpDown size={14} />}
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('roas')}
-                    className="flex items-center gap-1 justify-end text-xs font-medium text-gray-600 uppercase hover:text-gray-900"
-                  >
-                    ROAS
-                    {sortField === 'roas' && <ArrowUpDown size={14} />}
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-600 uppercase">CTR</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-600 uppercase">CPC</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-600 uppercase">Conversions</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {sortedAccounts.map(account => (
-                <tr key={account.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium">{account.account_name}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{account.platform}</td>
-                  <td className="px-4 py-3 text-sm text-right font-medium">{formatCurrency(account.total_spend)}</td>
-                  <td className="px-4 py-3 text-sm text-right font-medium text-green-600">{formatCurrency(account.total_revenue)}</td>
-                  <td className="px-4 py-3 text-sm text-right">
-                    <span className={`font-semibold ${account.roas >= 2 ? 'text-green-600' : account.roas >= 1 ? 'text-blue-600' : 'text-red-600'}`}>
-                      {account.roas.toFixed(2)}x
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-right text-gray-600">{account.ctr.toFixed(2)}%</td>
-                  <td className="px-4 py-3 text-sm text-right text-gray-600">{formatCurrency(account.cpc)}</td>
-                  <td className="px-4 py-3 text-sm text-right text-gray-600">{formatNumber(account.conversions)}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(account.status)}`}>
-                      {account.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {!isLoading && (
+        <>
+          {/* KPI Cards — clickable, drive chart */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {kpis.map(kpi => {
+              const isPos = kpi.change >= 0
+              return (
+                <div key={kpi.key} onClick={() => setChartMetric(kpi.key)}
+                  className={`bg-white rounded-xl shadow-sm border-2 cursor-pointer transition-all p-6 ${
+                    chartMetric === kpi.key ? 'border-blue-500 shadow-lg scale-105' : 'border-gray-200 hover:border-gray-300'
+                  }`}>
+                  <div className="flex items-start justify-between mb-3">
+                    <div className={`p-3 rounded-lg ${kpi.color}`}>
+                      <kpi.icon className="w-5 h-5 text-white" />
+                    </div>
+                    <div className={`flex items-center gap-1 text-sm font-medium ${isPos ? 'text-green-600' : 'text-red-600'}`}>
+                      {isPos ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                      {Math.abs(kpi.change).toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="text-2xl font-bold text-gray-900">{kpi.value}</div>
+                  <div className="text-sm text-gray-500 mt-1">{kpi.label}</div>
+                  {chartMetric === kpi.key && (
+                    <div className="text-xs text-blue-600 font-medium mt-1">↓ Chart below</div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
 
-      {/* Empty State */}
-      {!isLoading && !error && sortedAccounts && sortedAccounts.length === 0 && (
-        <div className="bg-white rounded-lg shadow p-12 text-center">
-          <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No client accounts found</h3>
-          <p className="text-gray-600">
-            Add client accounts to start tracking their performance.
-          </p>
-        </div>
+          {/* Chart — top 10 by selected metric */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              Top Accounts by {chartLabel} — Last {periodLabel}
+            </h2>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={chartData} margin={{ bottom: 40 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="name" angle={-35} textAnchor="end" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    formatter={(v: number) =>
+                      chartMetric === 'total_spend' || chartMetric === 'total_revenue'
+                        ? formatCurrency(v)
+                        : chartMetric === 'roas'
+                        ? `${v}x`
+                        : v.toLocaleString()
+                    }
+                  />
+                  <Bar dataKey="value" name={chartLabel} radius={[4, 4, 0, 0]}>
+                    {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-gray-400">No data</div>
+            )}
+          </div>
+
+          {/* Table */}
+          {sorted.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {([
+                      ['account_name', 'Account', 'left'],
+                      ['platform', 'Platform', 'left'],
+                      ['total_spend', 'Spend', 'right'],
+                      ['total_revenue', 'Revenue', 'right'],
+                      ['roas', 'ROAS', 'right'],
+                      ['conversions', 'Conv.', 'right'],
+                    ] as [SortField, string, string][]).map(([f, l, align]) => (
+                      <th key={f} className={`px-4 py-3 text-${align}`}>
+                        <button onClick={() => handleSort(f)}
+                          className={`flex items-center gap-1 text-xs font-medium text-gray-500 uppercase hover:text-gray-800 ${align === 'right' ? 'ml-auto' : ''}`}>
+                          {l}
+                          {sortField === f && <ArrowUpDown size={12} />}
+                        </button>
+                      </th>
+                    ))}
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">CTR</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {sorted.map(a => (
+                    <tr key={a.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{a.account_name}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500">{a.platform}</td>
+                      <td className="px-4 py-3 text-sm text-right font-medium">{formatCurrency(a.total_spend)}</td>
+                      <td className="px-4 py-3 text-sm text-right text-green-600 font-medium">{formatCurrency(a.total_revenue)}</td>
+                      <td className="px-4 py-3 text-sm text-right">
+                        <span className={`font-semibold ${a.roas >= 2 ? 'text-green-600' : a.roas >= 1 ? 'text-blue-600' : 'text-red-600'}`}>
+                          {a.roas.toFixed(2)}x
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right text-gray-600">{a.conversions.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500">{a.ctr.toFixed(2)}%</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${
+                          a.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {a.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {!error && sorted.length === 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No client data found for the selected period and platform.</p>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
+}
+
+function formatCurrency(v: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
+}
+
+function formatNumber(v: number) {
+  return v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toFixed(0)
 }

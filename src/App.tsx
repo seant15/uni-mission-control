@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, AlertTriangle, Users, Bell, Search, Database } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, Users, Bell, Search, Database, Settings } from 'lucide-react'
 import MarketingOverview from './pages/MarketingOverview'
 import Alerts from './pages/Alerts'
 import ClientsOverview from './pages/ClientsOverview'
@@ -35,6 +35,10 @@ function App() {
             <NavLink to="/clients-overview" icon={Users} label="Clients Overview" />
             <NavLink to="/data-analytics" icon={Database} label="Data Analytics" />
 
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-6 px-4">
+              System
+            </div>
+            <NavLink to="/dashboard/settings" icon={Settings} label="Settings" />
           </nav>
           
           {/* User Profile */}
