@@ -171,6 +171,7 @@ export const db = {
     async getGoogleSearchTerms(clientId?: string, startDate?: string, endDate?: string) {
         let query = supabase
             .from('google_ads_search_terms')
+            // Note: campaign_name and ad_group_name are stored since sync fix; older rows may be null
             .select('id, client_id, customer_id, date, campaign_id, campaign_name, ad_group_id, ad_group_name, search_term, match_type, impressions, clicks, cost_micros, ctr, cpc, conversions, cost_per_conversion')
             .order('cost_micros', { ascending: false })
             .limit(100)
@@ -359,21 +360,37 @@ export const db = {
      * Returns current window rows and previous window rows for comparison
      */
     async getHourlyPerformance(filters: { windowHours: HourWindow; clientId?: string }) {
+        // hourly_performance table uses date (DATE) + hour (INT 0-23), not a timestamp column
         const now = new Date()
         const windowStart = new Date(now.getTime() - filters.windowHours * 60 * 60 * 1000)
         const prevWindowStart = new Date(windowStart.getTime() - filters.windowHours * 60 * 60 * 1000)
 
-        const cols = 'id, client_id, client_name, ad_account_id, platform, hour_timestamp, impressions, clicks, conversions, cost, revenue'
+        // Build date+hour pairs for current window
+        const toDateHour = (d: Date) => ({
+            date: d.toISOString().split('T')[0],
+            hour: d.getUTCHours(),
+        })
 
+        const curWindowStartDH = toDateHour(windowStart)
+        const curWindowEndDH = toDateHour(now)
+        const prevWindowStartDH = toDateHour(prevWindowStart)
+        const prevWindowEndDH = toDateHour(windowStart)
+
+        const cols = 'id, client_id, client_name, ad_account_id, platform, date, hour, impressions, clicks, conversions, cost, revenue'
+
+        // Filter: date >= windowStart.date AND (date > windowStart.date OR hour >= windowStart.hour)
+        // Simplified: fetch by date range and filter in JS for hour boundaries
         let curQ = supabase.from('hourly_performance').select(cols)
-            .gte('hour_timestamp', windowStart.toISOString())
-            .lte('hour_timestamp', now.toISOString())
-            .order('hour_timestamp', { ascending: false })
+            .gte('date', curWindowStartDH.date)
+            .lte('date', curWindowEndDH.date)
+            .order('date', { ascending: false })
+            .order('hour', { ascending: false })
 
         let prevQ = supabase.from('hourly_performance').select(cols)
-            .gte('hour_timestamp', prevWindowStart.toISOString())
-            .lt('hour_timestamp', windowStart.toISOString())
-            .order('hour_timestamp', { ascending: false })
+            .gte('date', prevWindowStartDH.date)
+            .lte('date', prevWindowEndDH.date)
+            .order('date', { ascending: false })
+            .order('hour', { ascending: false })
 
         if (filters.clientId && filters.clientId !== 'all') {
             curQ = curQ.eq('client_id', filters.clientId)
@@ -384,9 +401,20 @@ export const db = {
         if (curRes.error) throw curRes.error
         if (prevRes.error) throw prevRes.error
 
+        // Filter rows precisely by date+hour boundaries
+        const inWindow = (row: any, startDH: { date: string; hour: number }, endDH: { date: string; hour: number }) => {
+            if (row.date < startDH.date || row.date > endDH.date) return false
+            if (row.date === startDH.date && row.hour < startDH.hour) return false
+            if (row.date === endDH.date && row.hour > endDH.hour) return false
+            return true
+        }
+
+        const currentRows = (curRes.data || []).filter(r => inWindow(r, curWindowStartDH, curWindowEndDH))
+        const previousRows = (prevRes.data || []).filter(r => inWindow(r, prevWindowStartDH, prevWindowEndDH))
+
         return {
-            current: curRes.data || [],
-            previous: prevRes.data || [],
+            current: currentRows,
+            previous: previousRows,
             windowStart: windowStart.toISOString(),
             windowEnd: now.toISOString(),
             prevWindowStart: prevWindowStart.toISOString(),
