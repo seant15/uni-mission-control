@@ -15,22 +15,6 @@ const TZ_OPTIONS: { value: TzMode; label: string; emoji: string }[] = [
   { value: 'account', label: 'Account Local', emoji: '📍' },
 ]
 
-function formatHourInTz(utcDate: string, utcHour: number, mode: TzMode, accountTz?: string): string {
-  // Build a UTC Date from the stored date+hour
-  const dt = new Date(`${utcDate}T${String(utcHour).padStart(2,'0')}:00:00Z`)
-  if (mode === 'utc') {
-    return `${String(dt.getUTCHours()).padStart(2,'0')}:00 UTC`
-  }
-  if (mode === 'browser') {
-    return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })
-  }
-  if (mode === 'account' && accountTz && accountTz !== 'advertiser_tz') {
-    try {
-      return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: accountTz, timeZoneName: 'short' })
-    } catch { /* invalid tz, fall through */ }
-  }
-  return `${String(dt.getUTCHours()).padStart(2,'0')}:00 UTC`
-}
 
 function tzOffsetLabel(tz: string): string {
   if (!tz || tz === 'advertiser_tz') return ''
