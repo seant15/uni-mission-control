@@ -546,10 +546,18 @@ export default function DataAnalytics() {
   const CreativeThumb = ({ creative }: { creative: any }) => {
     const isVideo = !!creative.video_id
     const imgSrc = creative.image_url || creative.thumbnail_url
+    const videoUrl = creative.video_id ? `https://www.facebook.com/videos/${creative.video_id}` : null
+
+    const wrapLink = (content: React.ReactNode) =>
+      videoUrl ? (
+        <a href={videoUrl} target="_blank" rel="noopener noreferrer" title="View video" className="block">
+          {content}
+        </a>
+      ) : <>{content}</>
 
     if (isVideo && !imgSrc) {
-      return (
-        <div className="w-14 h-14 bg-gray-800 rounded-lg flex flex-col items-center justify-center gap-1">
+      return wrapLink(
+        <div className="w-14 h-14 bg-gray-800 rounded-lg flex flex-col items-center justify-center gap-1 hover:opacity-80 transition-opacity cursor-pointer">
           <Video size={18} className="text-white" />
           <span className="text-white text-[9px]">VIDEO</span>
         </div>
@@ -557,15 +565,14 @@ export default function DataAnalytics() {
     }
 
     if (imgSrc) {
-      return (
+      return wrapLink(
         <div className="relative w-14 h-14">
           <img
             src={imgSrc}
             alt={creative.ad_name}
-            className="w-14 h-14 object-cover rounded-lg border border-gray-200"
+            className={`w-14 h-14 object-cover rounded-lg border border-gray-200 ${videoUrl ? 'hover:opacity-80 transition-opacity cursor-pointer' : ''}`}
             onError={(e) => {
               const target = e.target as HTMLImageElement
-              // On error, show placeholder
               target.style.display = 'none'
               const parent = target.parentElement
               if (parent) {
