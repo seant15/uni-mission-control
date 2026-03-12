@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle, CheckCircle, Clock, Filter,
-  Edit2, X, AlertCircle, Info
+  Edit2, X, AlertCircle, Info, RotateCcw
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Alert, AlertSeverity, AlertStatus } from '../types'
@@ -417,6 +417,15 @@ export default function Alerts() {
                           title="Mark in progress"
                         >
                           <Clock size={16} />
+                        </button>
+                      )}
+                      {(alert.status === 'resolved' || alert.status === 'ignored') && (
+                        <button
+                          onClick={() => updateStatusMutation.mutate({ id: alert.id, status: 'new' })}
+                          className="text-orange-500 hover:text-orange-600 text-sm"
+                          title="Reopen"
+                        >
+                          <RotateCcw size={16} />
                         </button>
                       )}
                       {alert.status !== 'ignored' && (
