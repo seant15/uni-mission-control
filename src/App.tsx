@@ -1,11 +1,12 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, AlertTriangle, Users, Bell, Search, Database, Settings, Activity } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, Users, Bell, Search, Database, Settings, Activity, Layers } from 'lucide-react'
 import MarketingOverview from './pages/MarketingOverview'
 import Alerts from './pages/Alerts'
 import ClientsOverview from './pages/ClientsOverview'
 import DataAnalytics from './pages/DataAnalytics'
 import DashboardSettings from './pages/DashboardSettings'
 import RealtimePerformance from './pages/RealtimePerformance'
+import CreativePerformance from './pages/CreativePerformance'
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
             <NavLink to="/clients-overview" icon={Users} label="Clients Overview" />
             <NavLink to="/realtime-performance" icon={Activity} label="Real-time Performance" />
             <NavLink to="/data-analytics" icon={Database} label="Account Performance" />
+            <NavLink to="/creative-performance" icon={Layers} label="Creative Performance" />
 
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-6 px-4">
               System
@@ -89,6 +91,7 @@ function App() {
               <Route path="/clients-overview" element={<ClientsOverview />} />
               <Route path="/realtime-performance" element={<RealtimePerformance />} />
               <Route path="/data-analytics" element={<DataAnalytics />} />
+              <Route path="/creative-performance" element={<CreativePerformance />} />
               <Route path="/dashboard/settings" element={<DashboardSettings />} />
             </Routes>
           </main>
