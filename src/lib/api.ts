@@ -429,8 +429,25 @@ export const db = {
         const cutoff = new Date(Date.now() - hoursBack * 60 * 60 * 1000).toISOString()
         const { data, error } = await supabase
             .from('alerts')
-            .select('id, severity, status, account_name, message, alert_type, created_at')
+            .select('id, severity, status, account_name, platform, message, alert_type, metric_name, metric_value, metric_change, threshold, triggered_date, triggered_hour, created_at')
             .gte('created_at', cutoff)
+            .order('created_at', { ascending: false })
+
+        if (error) throw error
+        return data
+    },
+
+    /**
+     * Today's alerts (triggered_date = today) for Real-time Performance page
+     */
+    async getTodayAlerts() {
+        const today = new Date().toISOString().split('T')[0]
+        const { data, error } = await supabase
+            .from('alerts')
+            .select('id, severity, status, account_name, platform, message, alert_type, metric_name, metric_value, metric_change, threshold, triggered_date, triggered_hour, created_at')
+            .eq('triggered_date', today)
+            .not('status', 'eq', 'ignored')
+            .order('severity', { ascending: true })
             .order('created_at', { ascending: false })
 
         if (error) throw error

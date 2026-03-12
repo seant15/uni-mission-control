@@ -7,16 +7,31 @@ import {
 import { supabase } from '../lib/supabase'
 import type { Alert, AlertSeverity, AlertStatus } from '../types'
 
+const PLATFORM_LABEL: Record<string, string> = {
+  google_ads: 'Google',
+  meta_ads: 'Meta',
+  tiktok_ads: 'TikTok',
+  all: 'All',
+}
+
+const PLATFORM_COLOR: Record<string, string> = {
+  google_ads: 'bg-blue-100 text-blue-700',
+  meta_ads: 'bg-indigo-100 text-indigo-700',
+  tiktok_ads: 'bg-pink-100 text-pink-700',
+  all: 'bg-gray-100 text-gray-700',
+}
+
 export default function Alerts() {
   const [selectedSeverity, setSelectedSeverity] = useState<AlertSeverity[]>([])
   const [selectedStatus, setSelectedStatus] = useState<AlertStatus[]>([])
+  const [selectedPlatform, setSelectedPlatform] = useState<string[]>([])
   const [editingNote, setEditingNote] = useState<string | null>(null)
   const [noteText, setNoteText] = useState('')
   const queryClient = useQueryClient()
 
   // Fetch alerts
   const { data: alerts, isLoading, error } = useQuery({
-    queryKey: ['alerts', selectedSeverity, selectedStatus],
+    queryKey: ['alerts', selectedSeverity, selectedStatus, selectedPlatform],
     queryFn: async () => {
       let query = supabase
         .from('alerts')
@@ -29,6 +44,10 @@ export default function Alerts() {
 
       if (selectedStatus.length > 0) {
         query = query.in('status', selectedStatus)
+      }
+
+      if (selectedPlatform.length > 0) {
+        query = query.in('platform', selectedPlatform)
       }
 
       const { data, error } = await query
@@ -209,11 +228,32 @@ export default function Alerts() {
             ))}
           </div>
 
-          {(selectedSeverity.length > 0 || selectedStatus.length > 0) && (
+          {/* Platform Filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Platform:</span>
+            {(['google_ads', 'meta_ads'] as const).map(p => (
+              <button
+                key={p}
+                onClick={() => setSelectedPlatform(prev =>
+                  prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
+                )}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  selectedPlatform.includes(p)
+                    ? PLATFORM_COLOR[p]
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {PLATFORM_LABEL[p]}
+              </button>
+            ))}
+          </div>
+
+          {(selectedSeverity.length > 0 || selectedStatus.length > 0 || selectedPlatform.length > 0) && (
             <button
               onClick={() => {
                 setSelectedSeverity([])
                 setSelectedStatus([])
+                setSelectedPlatform([])
               }}
               className="text-sm text-blue-600 hover:text-blue-700"
             >
@@ -271,12 +311,36 @@ export default function Alerts() {
                       {alert.severity}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm font-medium">{alert.account_name}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <div className="font-medium">{alert.account_name || '—'}</div>
+                    {alert.platform && (
+                      <span className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium ${PLATFORM_COLOR[alert.platform] || 'bg-gray-100 text-gray-600'}`}>
+                        {PLATFORM_LABEL[alert.platform] || alert.platform}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-sm">
                     <div>{alert.message}</div>
-                    {alert.metric_change && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        {alert.metric_name}: {alert.metric_change}
+                    {(alert.metric_name || alert.metric_value != null) && (
+                      <div className="flex items-center gap-2 mt-1">
+                        {alert.metric_name && (
+                          <span className="text-xs text-gray-500">{alert.metric_name}:</span>
+                        )}
+                        {alert.metric_value != null && (
+                          <span className="text-xs font-medium text-gray-700">
+                            {typeof alert.metric_value === 'number' && alert.metric_value > 1
+                              ? `$${alert.metric_value.toFixed(0)}`
+                              : `${(Number(alert.metric_value) * 100).toFixed(2)}%`}
+                          </span>
+                        )}
+                        {alert.threshold != null && (
+                          <span className="text-xs text-gray-400">
+                            vs ${typeof alert.threshold === 'number' ? alert.threshold.toFixed(0) : alert.threshold} expected
+                          </span>
+                        )}
+                        {alert.metric_change && (
+                          <span className="text-xs text-red-600">{alert.metric_change}</span>
+                        )}
                       </div>
                     )}
                   </td>
@@ -284,7 +348,9 @@ export default function Alerts() {
                     {(alert.alert_type || '-').replace(/_/g, ' ')}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
-                    {new Date(alert.created_at).toLocaleString()}
+                    {alert.triggered_date
+                      ? `${alert.triggered_date}${alert.triggered_hour != null ? ` h${alert.triggered_hour}` : ''}`
+                      : new Date(alert.created_at).toLocaleString()}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(alert.status)}`}>
