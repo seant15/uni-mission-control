@@ -274,7 +274,7 @@ export default function CreativePerformance() {
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="sticky top-[52px] z-30 bg-white/95 backdrop-blur-sm shadow-md border-b border-gray-200 rounded-xl px-4 py-3">
         <div className="flex flex-wrap items-center gap-3">
           {/* Client Picker */}
           <div className="relative">

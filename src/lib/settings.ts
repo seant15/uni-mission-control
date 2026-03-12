@@ -19,6 +19,11 @@ export interface DashboardSettings {
   cacheTimeout: number
   autoRefresh: boolean
   refreshInterval: number
+
+  // Announcement Banner
+  announcementEnabled: boolean
+  announcementText: string
+  announcementStyle: 'info' | 'warning' | 'success' | 'neutral'
 }
 
 export const DEFAULT_SETTINGS: DashboardSettings = {
@@ -33,6 +38,9 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   cacheTimeout: 5,
   autoRefresh: false,
   refreshInterval: 60,
+  announcementEnabled: false,
+  announcementText: '',
+  announcementStyle: 'info',
 }
 
 export async function getDashboardSettings(userId: string): Promise<DashboardSettings> {
@@ -52,6 +60,9 @@ export async function getDashboardSettings(userId: string): Promise<DashboardSet
         cacheTimeout: dbSettings.cache_timeout,
         autoRefresh: dbSettings.auto_refresh,
         refreshInterval: dbSettings.refresh_interval,
+        announcementEnabled: dbSettings.announcement_enabled ?? false,
+        announcementText: dbSettings.announcement_text ?? '',
+        announcementStyle: dbSettings.announcement_style ?? 'info',
       }
     }
 
@@ -79,6 +90,9 @@ export async function saveDashboardSettings(
       cache_timeout: settings.cacheTimeout,
       auto_refresh: settings.autoRefresh,
       refresh_interval: settings.refreshInterval,
+      announcement_enabled: settings.announcementEnabled,
+      announcement_text: settings.announcementText,
+      announcement_style: settings.announcementStyle,
     }
 
     await db.saveSettings(userId, dbSettings)

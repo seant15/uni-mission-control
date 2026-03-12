@@ -284,6 +284,82 @@ export default function DashboardSettingsPage() {
         </div>
       </div>
 
+      {/* Announcement Banner */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 lg:col-span-2">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">📢 Announcement Banner</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Display a banner at the top of every page. Supports basic HTML (e.g. <code className="bg-gray-100 px-1 rounded">&lt;b&gt;bold&lt;/b&gt;</code>, <code className="bg-gray-100 px-1 rounded">&lt;a href="..."&gt;link&lt;/a&gt;</code>).
+          </p>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <span className="text-sm font-medium text-gray-700">Enable Banner</span>
+                <p className="text-xs text-gray-500">Show the announcement bar at the top</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.announcementEnabled}
+                onChange={(e) => setSettings({...settings, announcementEnabled: e.target.checked})}
+                className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Banner Style</label>
+              <div className="flex gap-2">
+                {(['info', 'warning', 'success', 'neutral'] as const).map(style => {
+                  const colors = {
+                    info: 'bg-blue-600 text-white',
+                    warning: 'bg-amber-500 text-white',
+                    success: 'bg-green-600 text-white',
+                    neutral: 'bg-slate-700 text-slate-100',
+                  }
+                  return (
+                    <button
+                      key={style}
+                      onClick={() => setSettings({...settings, announcementStyle: style})}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition ${
+                        settings.announcementStyle === style
+                          ? colors[style] + ' ring-2 ring-offset-1 ring-blue-400'
+                          : colors[style] + ' opacity-50'
+                      }`}
+                    >
+                      {style}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Banner Text</label>
+              <textarea
+                value={settings.announcementText}
+                onChange={(e) => setSettings({...settings, announcementText: e.target.value})}
+                rows={3}
+                placeholder='e.g. 🚀 <b>Q1 Reporting Week</b> — All accounts reviewed by Friday. Questions? Slack <a href="#" style="text-decoration:underline">@sean</a>'
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-mono resize-y"
+              />
+              <p className="text-xs text-gray-400 mt-1">Rendered as HTML. Keep it concise — one line is best.</p>
+            </div>
+
+            {settings.announcementEnabled && settings.announcementText && (
+              <div>
+                <p className="text-xs text-gray-500 mb-2">Preview:</p>
+                <div className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
+                  settings.announcementStyle === 'info' ? 'bg-blue-600 text-white' :
+                  settings.announcementStyle === 'warning' ? 'bg-amber-500 text-white' :
+                  settings.announcementStyle === 'success' ? 'bg-green-600 text-white' :
+                  'bg-slate-700 text-slate-100'
+                }`}>
+                  <span className="text-sm font-medium" dangerouslySetInnerHTML={{ __html: settings.announcementText }} />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
       {/* Reset to Defaults */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-2">Reset Settings</h2>

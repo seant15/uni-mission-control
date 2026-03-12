@@ -269,8 +269,8 @@ export default function RealtimePerformance() {
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center gap-6 flex-wrap">
+      {/* Controls — sticky filter bar */}
+      <div className="sticky top-[52px] z-30 bg-white/95 backdrop-blur-sm shadow-md border-b border-gray-200 rounded-xl px-4 py-3 flex items-center gap-6 flex-wrap">
         {/* Window selector */}
         <div>
           <label className="text-xs font-medium text-gray-500 uppercase block mb-1">Time Window</label>

@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, AlertTriangle, Users, Bell, Search, Database, Settings, Activity, Layers } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { LayoutDashboard, AlertTriangle, Users, Bell, Database, Settings, Activity, Layers, Megaphone, X } from 'lucide-react'
 import MarketingOverview from './pages/MarketingOverview'
 import Alerts from './pages/Alerts'
 import ClientsOverview from './pages/ClientsOverview'
@@ -7,6 +8,41 @@ import DataAnalytics from './pages/DataAnalytics'
 import DashboardSettings from './pages/DashboardSettings'
 import RealtimePerformance from './pages/RealtimePerformance'
 import CreativePerformance from './pages/CreativePerformance'
+import { getDashboardSettings } from './lib/settings'
+
+const ANNOUNCEMENT_STYLES = {
+  info:    { bar: 'bg-blue-600',   text: 'text-white',          icon: 'text-blue-200' },
+  warning: { bar: 'bg-amber-500',  text: 'text-white',          icon: 'text-amber-200' },
+  success: { bar: 'bg-green-600',  text: 'text-white',          icon: 'text-green-200' },
+  neutral: { bar: 'bg-slate-700',  text: 'text-slate-100',      icon: 'text-slate-400' },
+}
+
+function AnnouncementBanner() {
+  const [ann, setAnn] = useState<{ enabled: boolean; text: string; style: string } | null>(null)
+  const [dismissed, setDismissed] = useState(false)
+
+  useEffect(() => {
+    getDashboardSettings('default_user').then(s => {
+      setAnn({ enabled: s.announcementEnabled, text: s.announcementText, style: s.announcementStyle })
+    })
+  }, [])
+
+  if (!ann || !ann.enabled || !ann.text || dismissed) return null
+
+  const st = ANNOUNCEMENT_STYLES[ann.style as keyof typeof ANNOUNCEMENT_STYLES] || ANNOUNCEMENT_STYLES.info
+
+  return (
+    <div className={`${st.bar} px-8 py-2 flex items-center gap-3 min-h-[40px]`}>
+      <Megaphone size={15} className={st.icon} />
+      <p className={`flex-1 text-sm font-medium ${st.text}`}
+        dangerouslySetInnerHTML={{ __html: ann.text }}
+      />
+      <button onClick={() => setDismissed(true)} className={`${st.icon} hover:opacity-80`}>
+        <X size={15} />
+      </button>
+    </div>
+  )
+}
 
 function App() {
   return (
@@ -15,18 +51,20 @@ function App() {
         {/* Sidebar */}
         <aside className="w-72 bg-slate-900 text-white flex flex-col fixed h-full z-50">
           {/* Logo */}
-          <div className="p-6 border-b border-slate-800">
+          <div className="p-5 border-b border-slate-800">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center font-bold text-lg shadow-lg">
-                U
-              </div>
+              <img
+                src="/uni-logo.gif"
+                alt="UNI"
+                className="w-10 h-10 rounded-xl object-cover"
+              />
               <div>
                 <h1 className="font-bold text-lg tracking-tight">UNI Mission Control</h1>
                 <p className="text-xs text-slate-400">Marketing Performance Hub</p>
               </div>
             </div>
           </div>
-          
+
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 px-4">
@@ -44,7 +82,7 @@ function App() {
             </div>
             <NavLink to="/dashboard/settings" icon={Settings} label="Settings" />
           </nav>
-          
+
           {/* User Profile */}
           <div className="p-4 border-t border-slate-800">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/50">
@@ -61,30 +99,23 @@ function App() {
         </aside>
 
         {/* Main Content Area */}
-        <div className="flex-1 ml-72">
-          {/* Top Header */}
-          <header className="h-16 bg-white border-b border-gray-200 sticky top-0 z-40 px-8 flex items-center justify-between">
-            <div className="flex items-center gap-4 flex-1">
-              <div className="relative max-w-md w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search alerts, clients, or metrics..."
-                  className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-4">
+        <div className="flex-1 ml-72 flex flex-col">
+          {/* Top Header — announcement banner + bell */}
+          <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+            <AnnouncementBanner />
+            <div className="h-12 px-8 flex items-center justify-between">
+              <span className="text-xs text-gray-400 font-medium tracking-wide uppercase select-none">
+                UNI Mission Control
+              </span>
               <button className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                <Bell size={20} />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                <Bell size={18} />
+                <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full" />
               </button>
             </div>
           </header>
 
           {/* Page Content */}
-          <main className="p-8 max-w-7xl mx-auto">
+          <main className="p-8 max-w-7xl mx-auto w-full">
             <Routes>
               <Route path="/" element={<MarketingOverview />} />
               <Route path="/alerts" element={<Alerts />} />
@@ -104,7 +135,7 @@ function App() {
 function NavLink({ to, icon: Icon, label }: { to: string; icon: any; label: string }) {
   const location = useLocation()
   const isActive = location.pathname === to
-  
+
   return (
     <Link
       to={to}
