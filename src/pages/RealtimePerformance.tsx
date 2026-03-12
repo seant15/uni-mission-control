@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Activity, AlertTriangle, ChevronDown, TrendingUp, TrendingDown,
-  Minus, RefreshCw, Clock, ArrowUpDown, ArrowUp, ArrowDown, Globe
+  Minus, RefreshCw, Clock, ArrowUpDown, ArrowUp, ArrowDown, Globe, Copy, Check
 } from 'lucide-react'
 import { db } from '../lib/api'
 import type { HourWindow } from '../lib/api'
@@ -72,6 +72,43 @@ function PctBadge({ change, invertTrend = false }: { change: number; invertTrend
   )
 }
 
+// Copy-on-hover Account ID cell
+function AccountIdCell({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false)
+  const short = id.length > 8 ? '…' + id.slice(-8) : id
+  const copy = () => {
+    navigator.clipboard.writeText(id)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <div className="flex items-center gap-1 group font-mono text-xs" title={id}>
+      <span>{short}</span>
+      <button
+        onClick={copy}
+        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-gray-400 hover:text-gray-700"
+      >
+        {copied ? <Check size={11} className="text-green-500" /> : <Copy size={11} />}
+      </button>
+    </div>
+  )
+}
+
+// Platform badge
+function PlatformBadge({ platform }: { platform: string }) {
+  if (!platform) return null
+  const isMeta = platform === 'meta_ads'
+  const isGoogle = platform === 'google_ads'
+  if (!isMeta && !isGoogle) return <span className="text-xs text-gray-400">{platform}</span>
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+      isMeta ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+    }`}>
+      {isMeta ? 'Meta' : 'Google'}
+    </span>
+  )
+}
+
 type RTSortField = 'spend' | 'conversions' | 'roas' | 'client_name'
 type RTSortDir = 'asc' | 'desc'
 
@@ -130,16 +167,17 @@ export default function RealtimePerformance() {
   const prevCpa = prevTotals.conversions > 0 ? prevTotals.cost / prevTotals.conversions : 0
 
   // Per-account breakdown
-  const accountMap = new Map<string, { account_id: string; client_id: string; client_name: string; account_tz: string; cur: any; prev: any }>()
+  const accountMap = new Map<string, { account_id: string; client_id: string; client_name: string; account_tz: string; platform: string; cur: any; prev: any }>()
 
   currentRows.forEach((r: any) => {
-    const key = r.ad_account_id || r.client_id
+    const key = (r.ad_account_id || r.client_id) + '|' + (r.platform || '')
     if (!accountMap.has(key)) {
       accountMap.set(key, {
         account_id: r.ad_account_id || r.client_id,
         client_id: r.client_id,
         client_name: r.client_name || r.client_id,
         account_tz: r.account_timezone || '',
+        platform: r.platform || '',
         cur: { impressions: 0, clicks: 0, conversions: 0, cost: 0, revenue: 0 },
         prev: { impressions: 0, clicks: 0, conversions: 0, cost: 0, revenue: 0 },
       })
@@ -154,13 +192,14 @@ export default function RealtimePerformance() {
   })
 
   previousRows.forEach((r: any) => {
-    const key = r.ad_account_id || r.client_id
+    const key = (r.ad_account_id || r.client_id) + '|' + (r.platform || '')
     if (!accountMap.has(key)) {
       accountMap.set(key, {
         account_id: r.ad_account_id || r.client_id,
         client_id: r.client_id,
         client_name: r.client_name || r.client_id,
         account_tz: r.account_timezone || '',
+        platform: r.platform || '',
         cur: { impressions: 0, clicks: 0, conversions: 0, cost: 0, revenue: 0 },
         prev: { impressions: 0, clicks: 0, conversions: 0, cost: 0, revenue: 0 },
       })
@@ -323,50 +362,29 @@ export default function RealtimePerformance() {
 
       {!isLoading && (
         <>
-          {/* Summary KPI Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          {/* Summary KPI Cards — unified 7-card row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             {[
-              { label: 'Spend', cur: curTotals.cost, prev: prevTotals.cost, fmt: fmt$, invert: false },
-              { label: 'Impressions', cur: curTotals.impressions, prev: prevTotals.impressions, fmt: fmtN, invert: false },
-              { label: 'Clicks', cur: curTotals.clicks, prev: prevTotals.clicks, fmt: fmtN, invert: false },
-              { label: 'Conversions', cur: curTotals.conversions, prev: prevTotals.conversions, fmt: fmtN, invert: false },
-              { label: 'ROAS', cur: curRoas, prev: prevRoas, fmt: (v: number) => `${v.toFixed(2)}x`, invert: false },
+              { label: 'Spend',       cur: curTotals.cost,        prev: prevTotals.cost,        fmt: fmt$,                                        invert: false },
+              { label: 'Revenue',     cur: curTotals.revenue,     prev: prevTotals.revenue,     fmt: fmt$,                                        invert: false },
+              { label: 'ROAS',        cur: curRoas,               prev: prevRoas,               fmt: (v: number) => v > 0 ? `${v.toFixed(2)}x` : '—', invert: false },
+              { label: 'CPA',         cur: curCpa,                prev: prevCpa,                fmt: (v: number) => v > 0 ? fmt$(v) : '—',       invert: true  },
+              { label: 'Conversions', cur: curTotals.conversions, prev: prevTotals.conversions, fmt: fmtN,                                        invert: false },
+              { label: 'Clicks',      cur: curTotals.clicks,      prev: prevTotals.clicks,      fmt: fmtN,                                        invert: false },
+              { label: 'Impressions', cur: curTotals.impressions, prev: prevTotals.impressions, fmt: fmtN,                                        invert: false },
             ].map(kpi => {
               const change = pctChange(kpi.cur, kpi.prev)
               return (
-                <div key={kpi.label} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="text-xs text-gray-500 mb-1">{kpi.label}</div>
-                  <div className="text-2xl font-bold text-gray-900">{kpi.fmt(kpi.cur)}</div>
-                  <div className="flex items-center justify-between mt-2">
+                <div key={kpi.label} className="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
+                  <div className="text-xs text-gray-500 mb-1 truncate">{kpi.label}</div>
+                  <div className="text-xl font-bold text-gray-900 truncate">{kpi.fmt(kpi.cur)}</div>
+                  <div className="flex items-center justify-between mt-1.5 gap-1">
                     <PctBadge change={change} invertTrend={kpi.invert} />
-                    <span className="text-xs text-gray-400">vs prev {windowHours}h</span>
                   </div>
-                  <div className="text-xs text-gray-400 mt-1">Prev: {kpi.fmt(kpi.prev)}</div>
+                  <div className="text-[10px] text-gray-400 mt-1">Prev: {kpi.fmt(kpi.prev)}</div>
                 </div>
               )
             })}
-          </div>
-
-          {/* CPA KPI */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <div className="text-xs text-gray-500 mb-1">CPA (Cost Per Conversion)</div>
-              <div className="text-2xl font-bold text-gray-900">{curCpa > 0 ? fmt$(curCpa) : '-'}</div>
-              {curCpa > 0 && prevCpa > 0 && (
-                <div className="flex items-center justify-between mt-2">
-                  <PctBadge change={pctChange(curCpa, prevCpa)} invertTrend={true} />
-                  <span className="text-xs text-gray-400">vs prev {windowHours}h</span>
-                </div>
-              )}
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <div className="text-xs text-gray-500 mb-1">Revenue</div>
-              <div className="text-2xl font-bold text-gray-900">{fmt$(curTotals.revenue)}</div>
-              <div className="flex items-center justify-between mt-2">
-                <PctBadge change={pctChange(curTotals.revenue, prevTotals.revenue)} />
-                <span className="text-xs text-gray-400">vs prev {windowHours}h</span>
-              </div>
-            </div>
           </div>
 
           {/* Per-Account Comparison Table */}
@@ -380,6 +398,7 @@ export default function RealtimePerformance() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Account</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Platform</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">
                         <button onClick={() => handleSort('client_name')} className="flex items-center gap-1 hover:text-gray-800">
                           Client <SortIcon field="client_name" />
@@ -410,8 +429,9 @@ export default function RealtimePerformance() {
                       const curRoasAcc = acc.cur.cost > 0 ? acc.cur.revenue / acc.cur.cost : 0
                       const prevRoasAcc = acc.prev.cost > 0 ? acc.prev.revenue / acc.prev.cost : 0
                       return (
-                        <tr key={acc.account_id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 font-mono text-xs">{acc.account_id}</td>
+                        <tr key={acc.account_id + acc.platform} className="hover:bg-gray-50">
+                          <td className="px-4 py-3"><AccountIdCell id={acc.account_id} /></td>
+                          <td className="px-4 py-3"><PlatformBadge platform={acc.platform} /></td>
                           <td className="px-4 py-3 font-medium">
                             <div>{acc.client_name}</div>
                             <div className="text-[10px] font-mono text-gray-400 mt-0.5">

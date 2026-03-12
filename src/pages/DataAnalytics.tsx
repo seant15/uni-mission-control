@@ -8,7 +8,10 @@ import {
 } from 'lucide-react'
 import { db } from '../lib/api'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
+import {
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  ComposedChart, Area, Line, LineChart
+} from 'recharts'
 
 // ── Sort helpers ──────────────────────────────────────────────────────────────
 function useTableSort(defaultField: string, defaultDir: 'asc' | 'desc' = 'desc') {
@@ -187,6 +190,8 @@ export default function DataAnalytics() {
   const [businessType, setBusinessType] = useState<'leadgen' | 'ecommerce'>('ecommerce')
   const [businessTypeManual, setBusinessTypeManual] = useState(false)
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>('roas')
+  const [secondaryMetric, setSecondaryMetric] = useState<MetricKey | 'none'>('none')
+  const [showRolling7, setShowRolling7] = useState(false)
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
 
   // Load settings
@@ -480,6 +485,16 @@ export default function DataAnalytics() {
     return acc
   }, []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
+  // 7-day rolling avg
+  const chartData = dailyDataWithMetrics.map((d, i) => {
+    const window = dailyDataWithMetrics.slice(Math.max(0, i - 6), i + 1)
+    const rolling7 = window.reduce((s: number, r: any) => s + (r[selectedMetric] || 0), 0) / window.length
+    return { ...d, rolling7 }
+  })
+
+  // Sparkline data (last 7 days per metric)
+  const last7 = dailyDataWithMetrics.slice(-7)
+
   const getChartDomain = (metricKey: MetricKey): [number, number] => {
     const values = dailyDataWithMetrics.map(d => parseFloat(d[metricKey]) || 0)
     const maxValue = Math.max(...values, 1)
@@ -736,6 +751,8 @@ export default function DataAnalytics() {
           const isPositive = (kpi as any).invertTrend ? kpi.change <= 0 : kpi.change >= 0
           const changeColor = isPositive ? 'text-green-600' : 'text-red-600'
           const ArrowIcon = kpi.change >= 0 ? ArrowUpRight : ArrowDownRight
+          const sparkColor = isPositive ? '#16a34a' : '#dc2626'
+          const sparkData = last7.map((d: any) => ({ v: d[kpi.key] || 0 }))
 
           return (
             <div
@@ -761,6 +778,13 @@ export default function DataAnalytics() {
                 )}
                 {selectedMetric === kpi.key && <div className="text-xs text-blue-600 font-medium">↓ Chart</div>}
               </div>
+              {sparkData.length > 1 && (
+                <div className="mt-2 -mx-1">
+                  <LineChart width={140} height={36} data={sparkData}>
+                    <Line type="monotone" dataKey="v" stroke={sparkColor} dot={false} strokeWidth={1.5} isAnimationActive={false} />
+                  </LineChart>
+                </div>
+              )}
             </div>
           )
         })}
@@ -768,7 +792,35 @@ export default function DataAnalytics() {
 
       {/* Dynamic Chart */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">{currentMetricConfig.label} Trend (Daily)</h3>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h3 className="text-lg font-semibold text-gray-900">{currentMetricConfig.label} Trend (Daily)</h3>
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Secondary metric */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-500">Overlay:</label>
+              <select
+                value={secondaryMetric}
+                onChange={e => setSecondaryMetric(e.target.value as MetricKey | 'none')}
+                className="text-xs px-2 py-1 border border-gray-200 rounded-lg bg-gray-50"
+              >
+                <option value="none">None</option>
+                {(Object.keys(metricConfig) as MetricKey[]).filter(k => k !== selectedMetric).map(k => (
+                  <option key={k} value={k}>{metricConfig[k].label}</option>
+                ))}
+              </select>
+            </div>
+            {/* 7-day rolling avg toggle */}
+            <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showRolling7}
+                onChange={e => setShowRolling7(e.target.checked)}
+                className="rounded"
+              />
+              7-day avg
+            </label>
+          </div>
+        </div>
         {performanceData.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <Calendar className="mx-auto mb-2" size={32} />
@@ -777,7 +829,7 @@ export default function DataAnalytics() {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={settings.chartHeight}>
-            <AreaChart data={dailyDataWithMetrics}>
+            <ComposedChart data={chartData}>
               <defs>
                 <linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={currentMetricConfig.color} stopOpacity={0.8} />
@@ -786,10 +838,25 @@ export default function DataAnalytics() {
               </defs>
               {settings.showGridLines && <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />}
               <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} domain={getChartDomain(selectedMetric)} />
-              <Tooltip formatter={(value: number) => [currentMetricConfig.formatter(value), currentMetricConfig.label]} />
-              <Area type="monotone" dataKey={selectedMetric} stroke={currentMetricConfig.color} fillOpacity={1} fill="url(#colorMetric)" isAnimationActive={settings.animateChart} />
-            </AreaChart>
+              <YAxis yAxisId="left" tick={{ fontSize: 12 }} domain={getChartDomain(selectedMetric)} />
+              {secondaryMetric !== 'none' && (
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
+              )}
+              <Tooltip
+                formatter={(value: any, name: string) => {
+                  if (name === 'rolling7') return [currentMetricConfig.formatter(value), '7-day avg']
+                  if (secondaryMetric !== 'none' && name === secondaryMetric) return [metricConfig[secondaryMetric as MetricKey].formatter(value), metricConfig[secondaryMetric as MetricKey].label]
+                  return [currentMetricConfig.formatter(value), currentMetricConfig.label]
+                }}
+              />
+              <Area yAxisId="left" type="monotone" dataKey={selectedMetric} stroke={currentMetricConfig.color} fillOpacity={1} fill="url(#colorMetric)" isAnimationActive={settings.animateChart} />
+              {showRolling7 && (
+                <Line yAxisId="left" type="monotone" dataKey="rolling7" stroke="#6366f1" strokeDasharray="4 4" dot={false} strokeWidth={2} name="rolling7" isAnimationActive={false} />
+              )}
+              {secondaryMetric !== 'none' && (
+                <Line yAxisId="right" type="monotone" dataKey={secondaryMetric} stroke={metricConfig[secondaryMetric as MetricKey].color} dot={false} strokeWidth={2} isAnimationActive={false} />
+              )}
+            </ComposedChart>
           </ResponsiveContainer>
         )}
       </div>
