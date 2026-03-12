@@ -2,10 +2,45 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Activity, AlertTriangle, ChevronDown, TrendingUp, TrendingDown,
-  Minus, RefreshCw, Clock, ArrowUpDown, ArrowUp, ArrowDown
+  Minus, RefreshCw, Clock, ArrowUpDown, ArrowUp, ArrowDown, Globe
 } from 'lucide-react'
 import { db } from '../lib/api'
 import type { HourWindow } from '../lib/api'
+
+// Timezone display options
+type TzMode = 'utc' | 'browser' | 'account'
+const TZ_OPTIONS: { value: TzMode; label: string; emoji: string }[] = [
+  { value: 'utc',     label: 'UTC',          emoji: '🌐' },
+  { value: 'browser', label: 'My Local',     emoji: '🖥️' },
+  { value: 'account', label: 'Account Local', emoji: '📍' },
+]
+
+function formatHourInTz(utcDate: string, utcHour: number, mode: TzMode, accountTz?: string): string {
+  // Build a UTC Date from the stored date+hour
+  const dt = new Date(`${utcDate}T${String(utcHour).padStart(2,'0')}:00:00Z`)
+  if (mode === 'utc') {
+    return `${String(dt.getUTCHours()).padStart(2,'0')}:00 UTC`
+  }
+  if (mode === 'browser') {
+    return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })
+  }
+  if (mode === 'account' && accountTz && accountTz !== 'advertiser_tz') {
+    try {
+      return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: accountTz, timeZoneName: 'short' })
+    } catch { /* invalid tz, fall through */ }
+  }
+  return `${String(dt.getUTCHours()).padStart(2,'0')}:00 UTC`
+}
+
+function tzOffsetLabel(tz: string): string {
+  if (!tz || tz === 'advertiser_tz') return ''
+  try {
+    const now = new Date()
+    const formatter = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'short' })
+    const parts = formatter.formatToParts(now)
+    return parts.find(p => p.type === 'timeZoneName')?.value || tz
+  } catch { return tz }
+}
 
 const WINDOW_OPTIONS: { label: string; value: HourWindow }[] = [
   { label: '1h', value: 1 },
@@ -63,6 +98,7 @@ export default function RealtimePerformance() {
   const [lastRefreshed, setLastRefreshed] = useState(new Date())
   const [sortField, setSortField] = useState<RTSortField>('spend')
   const [sortDir, setSortDir] = useState<RTSortDir>('desc')
+  const [tzMode, setTzMode] = useState<TzMode>('utc')
 
   const handleSort = (field: RTSortField) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -110,7 +146,7 @@ export default function RealtimePerformance() {
   const prevCpa = prevTotals.conversions > 0 ? prevTotals.cost / prevTotals.conversions : 0
 
   // Per-account breakdown
-  const accountMap = new Map<string, { account_id: string; client_id: string; client_name: string; cur: any; prev: any }>()
+  const accountMap = new Map<string, { account_id: string; client_id: string; client_name: string; account_tz: string; cur: any; prev: any }>()
 
   currentRows.forEach((r: any) => {
     const key = r.ad_account_id || r.client_id
@@ -119,11 +155,13 @@ export default function RealtimePerformance() {
         account_id: r.ad_account_id || r.client_id,
         client_id: r.client_id,
         client_name: r.client_name || r.client_id,
+        account_tz: r.account_timezone || '',
         cur: { impressions: 0, clicks: 0, conversions: 0, cost: 0, revenue: 0 },
         prev: { impressions: 0, clicks: 0, conversions: 0, cost: 0, revenue: 0 },
       })
     }
     const entry = accountMap.get(key)!
+    if (r.account_timezone && !entry.account_tz) entry.account_tz = r.account_timezone
     entry.cur.impressions += r.impressions || 0
     entry.cur.clicks += r.clicks || 0
     entry.cur.conversions += r.conversions || 0
@@ -138,6 +176,7 @@ export default function RealtimePerformance() {
         account_id: r.ad_account_id || r.client_id,
         client_id: r.client_id,
         client_name: r.client_name || r.client_id,
+        account_tz: r.account_timezone || '',
         cur: { impressions: 0, clicks: 0, conversions: 0, cost: 0, revenue: 0 },
         prev: { impressions: 0, clicks: 0, conversions: 0, cost: 0, revenue: 0 },
       })
@@ -192,7 +231,11 @@ export default function RealtimePerformance() {
         </div>
         <div className="flex items-center gap-3 text-sm text-gray-500">
           <Clock size={14} />
-          <span>Last updated: {lastRefreshed.toLocaleTimeString()}</span>
+          <span>Last updated: {
+            tzMode === 'utc'
+              ? `${lastRefreshed.toISOString().slice(11,19)} UTC`
+              : lastRefreshed.toLocaleTimeString()
+          }</span>
           <button
             onClick={() => refetch()}
             className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
@@ -222,6 +265,35 @@ export default function RealtimePerformance() {
                 {opt.label}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Timezone toggle */}
+        <div>
+          <label className="text-xs font-medium text-gray-500 uppercase block mb-1 flex items-center gap-1">
+            <Globe size={11} /> Time Display
+          </label>
+          <div className="flex gap-1 items-center">
+            {TZ_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setTzMode(opt.value)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                  tzMode === opt.value
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+                title={opt.label}
+              >
+                {opt.emoji} {opt.label}
+              </button>
+            ))}
+            {/* Active timezone indicator */}
+            <span className="ml-2 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-xs font-mono text-blue-700">
+              {tzMode === 'utc' ? '🌐 UTC+0' :
+               tzMode === 'browser' ? `🖥️ ${new Intl.DateTimeFormat('en', { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || 'Local'}` :
+               '📍 Account TZ'}
+            </span>
           </div>
         </div>
 
@@ -361,6 +433,11 @@ export default function RealtimePerformance() {
                             <div className="text-[10px] font-mono text-gray-400 mt-0.5">
                               {(clients as any[])?.find((c: any) => c.id === acc.client_id)?.currency || 'USD'}
                             </div>
+                            {acc.account_tz && acc.account_tz !== 'advertiser_tz' && (
+                              <div className="text-[10px] text-blue-500 mt-0.5" title={acc.account_tz}>
+                                📍 {tzOffsetLabel(acc.account_tz)}
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-right">
                             {clientCurrencyMap.get(acc.client_id) || '$'}{acc.cur.cost.toFixed(2)}
@@ -436,7 +513,9 @@ export default function RealtimePerformance() {
                         <p className="text-sm text-gray-700 mt-0.5">{alert.message}</p>
                       </div>
                       <span className="text-xs text-gray-400 whitespace-nowrap">
-                        {new Date(alert.created_at).toLocaleTimeString()}
+                        {tzMode === 'utc'
+                          ? `${new Date(alert.created_at).toISOString().slice(11,19)} UTC`
+                          : new Date(alert.created_at).toLocaleTimeString()}
                       </span>
                     </div>
                   )
