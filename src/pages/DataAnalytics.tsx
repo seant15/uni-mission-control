@@ -1,14 +1,52 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   Database, ChevronDown, TrendingUp, DollarSign, CreditCard,
   AlertCircle, Calendar, Settings, MousePointer2, ShoppingCart, Users,
-  ArrowUpRight, ArrowDownRight, Video, Image
+  ArrowUpRight, ArrowDownRight, Video, Image, ArrowUpDown, ArrowUp, ArrowDown
 } from 'lucide-react'
 import { db } from '../lib/api'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
+
+// ── Sort helpers ──────────────────────────────────────────────────────────────
+function useTableSort(defaultField: string, defaultDir: 'asc' | 'desc' = 'desc') {
+  const [sortField, setSortField] = useState(defaultField)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultDir)
+  const toggle = useCallback((field: string) => {
+    setSortField(prev => {
+      if (prev === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+      else { setSortDir('desc') }
+      return field
+    })
+  }, [])
+  const sortRows = (rows: any[], numericFields: string[] = []) =>
+    [...rows].sort((a, b) => {
+      const av = a[sortField] ?? 0, bv = b[sortField] ?? 0
+      if (typeof av === 'string' && !numericFields.includes(sortField))
+        return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      return sortDir === 'asc' ? Number(av) - Number(bv) : Number(bv) - Number(av)
+    })
+  return { sortField, sortDir, toggle, sortRows }
+}
+
+function SortTh({ label, field, sort, align = 'right' }: { label: string; field: string; sort: ReturnType<typeof useTableSort>; align?: 'left' | 'right' }) {
+  const active = sort.sortField === field
+  const Icon = !active ? ArrowUpDown : sort.sortDir === 'asc' ? ArrowUp : ArrowDown
+  return (
+    <th className={`px-4 py-3 text-xs font-medium text-gray-500 text-${align}`}>
+      <button
+        onClick={() => sort.toggle(field)}
+        className={`flex items-center gap-1 text-xs font-medium uppercase hover:text-gray-800 ${align === 'right' ? 'ml-auto' : ''} ${active ? 'text-blue-600' : 'text-gray-500'}`}
+      >
+        {label}
+        <Icon size={11} className={active ? 'text-blue-600' : 'text-gray-400'} />
+      </button>
+    </th>
+  )
+}
+// ──────────────────────────────────────────────────────────────────────────────
 
 interface DailyPerformance {
   id: string
@@ -29,6 +67,8 @@ interface Client {
   name: string
   industry?: string
   business_type?: 'leadgen' | 'ecommerce'
+  currency?: string
+  currency_symbol?: string
 }
 
 const DATE_PRESETS = [
@@ -136,6 +176,12 @@ export default function DataAnalytics() {
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [showDatePresets, setShowDatePresets] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Table sort states
+  const adsetSort = useTableSort('spend')
+  const creativeSort = useTableSort('spend')
+  const keywordSort = useTableSort('spend')
+  const searchTermSort = useTableSort('spend')
 
   // Business Type and Selected Metric
   const [businessType, setBusinessType] = useState<'leadgen' | 'ecommerce'>('ecommerce')
@@ -470,6 +516,14 @@ export default function DataAnalytics() {
     ? 'All Clients'
     : clients?.find(c => c.id === selectedClient)?.name || 'Unknown'
 
+  // Currency symbol helper — per-client in tables; KPI cards always show USD (mixed currencies)
+  const selectedClientCurrencySym = selectedClient !== 'all'
+    ? (clients?.find(c => c.id === selectedClient)?.currency_symbol || '$')
+    : '$'
+  const selectedClientCurrency = selectedClient !== 'all'
+    ? (clients?.find(c => c.id === selectedClient)?.currency || 'USD')
+    : 'USD (mixed)'
+
   useEffect(() => {
     if (error) {
       const timer = setTimeout(() => setError(null), 5000)
@@ -652,6 +706,13 @@ export default function DataAnalytics() {
             )}
           </div>
 
+          {/* Currency badge */}
+          {selectedClient !== 'all' && (
+            <span className="px-2 py-1 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-lg text-xs font-mono font-semibold">
+              {selectedClientCurrency}
+            </span>
+          )}
+
           {/* Settings */}
           <button
             onClick={() => navigate('/dashboard/settings')}
@@ -739,20 +800,23 @@ export default function DataAnalytics() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Campaign</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Set</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Impr.</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Clicks</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">CTR</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">
-                      {businessType === 'leadgen' ? 'CPA' : 'ROAS'}
-                    </th>
+                    <SortTh label="Campaign" field="campaign_name" sort={adsetSort} align="left" />
+                    <SortTh label="Ad Set" field="ad_set_name" sort={adsetSort} align="left" />
+                    <SortTh label="Spend" field="spend" sort={adsetSort} />
+                    <SortTh label="Impr." field="impressions" sort={adsetSort} />
+                    <SortTh label="Clicks" field="clicks" sort={adsetSort} />
+                    <SortTh label="CTR" field="_ctr" sort={adsetSort} />
+                    <SortTh label="Conv." field="conversions" sort={adsetSort} />
+                    <SortTh label={businessType === 'leadgen' ? 'CPA' : 'ROAS'} field={businessType === 'leadgen' ? '_cpa' : '_roas'} sort={adsetSort} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {aggAdsets.map((adset: any) => {
+                  {adsetSort.sortRows(aggAdsets.map((a: any) => ({
+                    ...a,
+                    _ctr: a.impressions > 0 ? a.clicks / a.impressions * 100 : 0,
+                    _roas: a.spend > 0 ? a.revenue / a.spend : 0,
+                    _cpa: a.conversions > 0 ? a.spend / a.conversions : 0,
+                  }))).map((adset: any) => {
                     const prev = prevAggAdsets.find((p: any) => p.ad_set_id === adset.ad_set_id)
                     const ctr = adset.impressions > 0 ? adset.clicks / adset.impressions * 100 : 0
                     const roas = adset.spend > 0 ? adset.revenue / adset.spend : 0
@@ -762,7 +826,7 @@ export default function DataAnalytics() {
                         <td className="px-4 py-3 text-gray-600 max-w-[180px] truncate">{adset.campaign_name}</td>
                         <td className="px-4 py-3 font-medium max-w-[200px] truncate">{adset.ad_set_name}</td>
                         <td className="px-4 py-3 text-right font-medium">
-                          ${adset.spend.toFixed(2)}
+                          {selectedClientCurrencySym}{adset.spend.toFixed(2)}
                           {prev && <PctBadge current={adset.spend} previous={prev.spend} />}
                         </td>
                         <td className="px-4 py-3 text-right">{adset.impressions.toLocaleString()}</td>
@@ -776,7 +840,7 @@ export default function DataAnalytics() {
                         </td>
                         <td className="px-4 py-3 text-right font-semibold">
                           {businessType === 'leadgen'
-                            ? (cpa > 0 ? `$${cpa.toFixed(2)}` : '-')
+                            ? (cpa > 0 ? `${selectedClientCurrencySym}${cpa.toFixed(2)}` : '-')
                             : (roas > 0 ? `${roas.toFixed(2)}x` : '-')}
                           {prev && businessType === 'leadgen' && cpa > 0 && (
                             <PctBadge current={cpa} previous={prev.conversions > 0 ? prev.spend / prev.conversions : 0} invertTrend />
@@ -810,19 +874,22 @@ export default function DataAnalytics() {
                   <tr>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 w-20">Creative</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad / Copy</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Campaign</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Set</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Impr.</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">CTR</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">
-                      {businessType === 'leadgen' ? 'CPA' : 'ROAS'}
-                    </th>
+                    <SortTh label="Campaign" field="campaign_name" sort={creativeSort} align="left" />
+                    <SortTh label="Ad Set" field="ad_set_name" sort={creativeSort} align="left" />
+                    <SortTh label="Spend" field="spend" sort={creativeSort} />
+                    <SortTh label="Impr." field="impressions" sort={creativeSort} />
+                    <SortTh label="CTR" field="_ctr" sort={creativeSort} />
+                    <SortTh label="Conv." field="conversions" sort={creativeSort} />
+                    <SortTh label={businessType === 'leadgen' ? 'CPA' : 'ROAS'} field={businessType === 'leadgen' ? '_cpa' : '_roas'} sort={creativeSort} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {aggCreatives.map((creative: any) => {
+                  {creativeSort.sortRows(aggCreatives.map((c: any) => ({
+                    ...c,
+                    _ctr: c.impressions > 0 ? c.clicks / c.impressions * 100 : 0,
+                    _roas: c.spend > 0 ? c.revenue / c.spend : 0,
+                    _cpa: c.conversions > 0 ? c.spend / c.conversions : 0,
+                  }))).map((creative: any) => {
                     const prev = prevAggCreativesMap.get(creative.ad_id)
                     const ctr = creative.impressions > 0 ? creative.clicks / creative.impressions * 100 : 0
                     const roas = creative.spend > 0 ? creative.revenue / creative.spend : 0
@@ -845,7 +912,7 @@ export default function DataAnalytics() {
                         <td className="px-4 py-3 text-gray-600 max-w-[160px] truncate">{creative.campaign_name}</td>
                         <td className="px-4 py-3 text-gray-600 max-w-[160px] truncate">{creative.ad_set_name}</td>
                         <td className="px-4 py-3 text-right font-medium">
-                          ${creative.spend.toFixed(2)}
+                          {selectedClientCurrencySym}{creative.spend.toFixed(2)}
                           {prev && <PctBadge current={creative.spend} previous={prev.spend} />}
                         </td>
                         <td className="px-4 py-3 text-right">{creative.impressions.toLocaleString()}</td>
@@ -861,7 +928,7 @@ export default function DataAnalytics() {
                         </td>
                         <td className="px-4 py-3 text-right font-semibold">
                           {businessType === 'leadgen'
-                            ? (cpa > 0 ? `$${cpa.toFixed(2)}` : '-')
+                            ? (cpa > 0 ? `${selectedClientCurrencySym}${cpa.toFixed(2)}` : '-')
                             : (roas > 0 ? `${roas.toFixed(2)}x` : '-')}
                           {prev && businessType === 'leadgen' && cpa > 0 && (
                             <PctBadge current={cpa} previous={prev.conversions > 0 ? prev.spend / prev.conversions : 0} invertTrend />
@@ -893,19 +960,23 @@ export default function DataAnalytics() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Keyword</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Campaign</th>
+                    <SortTh label="Keyword" field="keyword" sort={keywordSort} align="left" />
+                    <SortTh label="Campaign" field="campaign_name" sort={keywordSort} align="left" />
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Group</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Match</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Clicks</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">CTR</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">CPC</th>
+                    <SortTh label="Spend" field="spend" sort={keywordSort} />
+                    <SortTh label="Clicks" field="clicks" sort={keywordSort} />
+                    <SortTh label="CTR" field="_ctr" sort={keywordSort} />
+                    <SortTh label="Conv." field="conversions" sort={keywordSort} />
+                    <SortTh label="CPC" field="_cpc" sort={keywordSort} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {aggKeywords.map((kw: any) => {
+                  {keywordSort.sortRows(aggKeywords.map((k: any) => ({
+                    ...k,
+                    _ctr: k.impressions > 0 ? k.clicks / k.impressions * 100 : 0,
+                    _cpc: k.clicks > 0 ? k.spend / k.clicks : 0,
+                  }))).map((kw: any) => {
                     const prev = prevAggKeywordsMap.get(kw.keyword_id)
                     const ctr = kw.impressions > 0 ? kw.clicks / kw.impressions * 100 : 0
                     const cpc = kw.clicks > 0 ? kw.spend / kw.clicks : 0
@@ -918,7 +989,7 @@ export default function DataAnalytics() {
                           <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">{kw.match_type}</span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          ${kw.spend.toFixed(2)}
+                          {selectedClientCurrencySym}{kw.spend.toFixed(2)}
                           {prev && <PctBadge current={kw.spend} previous={prev.spend} />}
                         </td>
                         <td className="px-4 py-3 text-right">{kw.clicks}</td>
@@ -951,19 +1022,23 @@ export default function DataAnalytics() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Search Term</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Campaign</th>
+                    <SortTh label="Search Term" field="search_term" sort={searchTermSort} align="left" />
+                    <SortTh label="Campaign" field="campaign_name" sort={searchTermSort} align="left" />
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Match</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Impr.</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Clicks</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">CTR</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">CPC</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
+                    <SortTh label="Spend" field="spend" sort={searchTermSort} />
+                    <SortTh label="Impr." field="impressions" sort={searchTermSort} />
+                    <SortTh label="Clicks" field="clicks" sort={searchTermSort} />
+                    <SortTh label="CTR" field="_ctr" sort={searchTermSort} />
+                    <SortTh label="CPC" field="_cpc" sort={searchTermSort} />
+                    <SortTh label="Conv." field="conversions" sort={searchTermSort} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {aggSearchTerms.map((term: any) => {
+                  {searchTermSort.sortRows(aggSearchTerms.map((t: any) => ({
+                    ...t,
+                    _ctr: t.impressions > 0 ? t.clicks / t.impressions * 100 : 0,
+                    _cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
+                  }))).map((term: any) => {
                     const prev = prevAggSearchTermsMap.get(term.search_term)
                     const ctr = term.impressions > 0 ? term.clicks / term.impressions * 100 : 0
                     const cpc = term.clicks > 0 ? term.spend / term.clicks : 0
@@ -975,7 +1050,7 @@ export default function DataAnalytics() {
                           <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">{term.match_type}</span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          ${term.spend.toFixed(2)}
+                          {selectedClientCurrencySym}{term.spend.toFixed(2)}
                           {prev && <PctBadge current={term.spend} previous={prev.spend} />}
                         </td>
                         <td className="px-4 py-3 text-right">{term.impressions.toLocaleString()}</td>

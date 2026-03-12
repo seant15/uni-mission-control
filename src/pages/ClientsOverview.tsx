@@ -66,6 +66,7 @@ function aggregateByClient(rows: any[], clients: any[]) {
       ? Object.keys(platSpend).reduce((a, b) => platSpend[a] > platSpend[b] ? a : b)
       : 'Unknown'
 
+    const sym = client.currency_symbol || '$'
     return {
       id: client.id,
       account_name: client.name,
@@ -77,6 +78,8 @@ function aggregateByClient(rows: any[], clients: any[]) {
       ctr,
       cpc,
       status: client.status || 'active',
+      currency: client.currency || 'USD',
+      currency_symbol: sym,
     }
   }).filter(a => a.total_spend > 0)
 }
@@ -103,7 +106,7 @@ export default function ClientsOverview() {
   const { data: clients, isLoading: cLoading, error: cError } = useQuery({
     queryKey: ['clients'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('clients').select('*').order('name')
+      const { data, error } = await supabase.from('clients').select('id, name, status, business_type, currency, currency_symbol').order('name')
       if (error) throw new Error(error.message)
       return data || []
     },
@@ -320,6 +323,7 @@ export default function ClientsOverview() {
                       </th>
                     ))}
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">CTR</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Currency</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                   </tr>
                 </thead>
@@ -328,8 +332,8 @@ export default function ClientsOverview() {
                     <tr key={a.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">{a.account_name}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">{a.platform}</td>
-                      <td className="px-4 py-3 text-sm text-right font-medium">{formatCurrency(a.total_spend)}</td>
-                      <td className="px-4 py-3 text-sm text-right text-green-600 font-medium">{formatCurrency(a.total_revenue)}</td>
+                      <td className="px-4 py-3 text-sm text-right font-medium">{a.currency_symbol}{a.total_spend.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                      <td className="px-4 py-3 text-sm text-right text-green-600 font-medium">{a.currency_symbol}{a.total_revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
                       <td className="px-4 py-3 text-sm text-right">
                         <span className={`font-semibold ${a.roas >= 2 ? 'text-green-600' : a.roas >= 1 ? 'text-blue-600' : 'text-red-600'}`}>
                           {a.roas.toFixed(2)}x
@@ -337,6 +341,9 @@ export default function ClientsOverview() {
                       </td>
                       <td className="px-4 py-3 text-sm text-right text-gray-600">{a.conversions.toLocaleString()}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">{a.ctr.toFixed(2)}%</td>
+                      <td className="px-4 py-3 text-sm">
+                        <span className="text-xs font-mono px-2 py-0.5 bg-gray-100 rounded text-gray-600">{a.currency || 'USD'}</span>
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${
                           a.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'

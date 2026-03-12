@@ -70,7 +70,7 @@ export const db = {
     async getClients() {
         const { data, error } = await supabase
             .from('clients')
-            .select('id, name, business_type')
+            .select('id, name, business_type, currency, currency_symbol')
             .order('name')
         if (error) throw error
         return data

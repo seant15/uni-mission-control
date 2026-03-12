@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Activity, AlertTriangle, ChevronDown, TrendingUp, TrendingDown,
-  Minus, RefreshCw, Clock
+  Minus, RefreshCw, Clock, ArrowUpDown, ArrowUp, ArrowDown
 } from 'lucide-react'
 import { db } from '../lib/api'
 import type { HourWindow } from '../lib/api'
@@ -53,11 +53,25 @@ function PctBadge({ change, invertTrend = false }: { change: number; invertTrend
   )
 }
 
+type RTSortField = 'spend' | 'conversions' | 'roas' | 'client_name'
+type RTSortDir = 'asc' | 'desc'
+
 export default function RealtimePerformance() {
   const [windowHours, setWindowHours] = useState<HourWindow>(24)
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [lastRefreshed, setLastRefreshed] = useState(new Date())
+  const [sortField, setSortField] = useState<RTSortField>('spend')
+  const [sortDir, setSortDir] = useState<RTSortDir>('desc')
+
+  const handleSort = (field: RTSortField) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortField(field); setSortDir('desc') }
+  }
+  const SortIcon = ({ field }: { field: RTSortField }) => {
+    if (sortField !== field) return <ArrowUpDown size={12} className="text-gray-400" />
+    return sortDir === 'asc' ? <ArrowUp size={12} className="text-blue-600" /> : <ArrowDown size={12} className="text-blue-600" />
+  }
 
   const { data: clients } = useQuery({
     queryKey: ['clients_table'],
@@ -96,13 +110,14 @@ export default function RealtimePerformance() {
   const prevCpa = prevTotals.conversions > 0 ? prevTotals.cost / prevTotals.conversions : 0
 
   // Per-account breakdown
-  const accountMap = new Map<string, { account_id: string; client_name: string; cur: any; prev: any }>()
+  const accountMap = new Map<string, { account_id: string; client_id: string; client_name: string; cur: any; prev: any }>()
 
   currentRows.forEach((r: any) => {
     const key = r.ad_account_id || r.client_id
     if (!accountMap.has(key)) {
       accountMap.set(key, {
         account_id: r.ad_account_id || r.client_id,
+        client_id: r.client_id,
         client_name: r.client_name || r.client_id,
         cur: { impressions: 0, clicks: 0, conversions: 0, cost: 0, revenue: 0 },
         prev: { impressions: 0, clicks: 0, conversions: 0, cost: 0, revenue: 0 },
@@ -121,6 +136,7 @@ export default function RealtimePerformance() {
     if (!accountMap.has(key)) {
       accountMap.set(key, {
         account_id: r.ad_account_id || r.client_id,
+        client_id: r.client_id,
         client_name: r.client_name || r.client_id,
         cur: { impressions: 0, clicks: 0, conversions: 0, cost: 0, revenue: 0 },
         prev: { impressions: 0, clicks: 0, conversions: 0, cost: 0, revenue: 0 },
@@ -134,11 +150,27 @@ export default function RealtimePerformance() {
     entry.prev.revenue += r.revenue || 0
   })
 
-  const accounts = Array.from(accountMap.values()).sort((a, b) => b.cur.cost - a.cur.cost)
+  const accounts = Array.from(accountMap.values()).sort((a, b) => {
+    let av: number, bv: number
+    if (sortField === 'client_name') {
+      return sortDir === 'asc'
+        ? a.client_name.localeCompare(b.client_name)
+        : b.client_name.localeCompare(a.client_name)
+    }
+    if (sortField === 'spend') { av = a.cur.cost; bv = b.cur.cost }
+    else if (sortField === 'conversions') { av = a.cur.conversions; bv = b.cur.conversions }
+    else { av = a.cur.cost > 0 ? a.cur.revenue / a.cur.cost : 0; bv = b.cur.cost > 0 ? b.cur.revenue / b.cur.cost : 0 }
+    return sortDir === 'asc' ? av - bv : bv - av
+  })
 
   const selectedClientName = selectedClient === 'all'
     ? 'All Clients'
     : clients?.find((c: any) => c.id === selectedClient)?.name || selectedClient
+
+  // Build client_id → currency_symbol map for per-row display
+  const clientCurrencyMap = new Map<string, string>(
+    (clients || []).map((c: any) => [c.id, c.currency_symbol || '$'])
+  )
 
   const alertsBySeverity = recentAlerts?.reduce((acc: any, a: any) => {
     acc[a.severity] = (acc[a.severity] || 0) + 1
@@ -292,12 +324,28 @@ export default function RealtimePerformance() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Account</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Client</th>
-                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Spend</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">
+                        <button onClick={() => handleSort('client_name')} className="flex items-center gap-1 hover:text-gray-800">
+                          Client <SortIcon field="client_name" />
+                        </button>
+                      </th>
+                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">
+                        <button onClick={() => handleSort('spend')} className="flex items-center gap-1 ml-auto hover:text-gray-800">
+                          Spend <SortIcon field="spend" />
+                        </button>
+                      </th>
                       <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">vs Prev</th>
-                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Conv.</th>
+                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">
+                        <button onClick={() => handleSort('conversions')} className="flex items-center gap-1 ml-auto hover:text-gray-800">
+                          Conv. <SortIcon field="conversions" />
+                        </button>
+                      </th>
                       <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">vs Prev</th>
-                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">ROAS</th>
+                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">
+                        <button onClick={() => handleSort('roas')} className="flex items-center gap-1 ml-auto hover:text-gray-800">
+                          ROAS <SortIcon field="roas" />
+                        </button>
+                      </th>
                       <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">vs Prev</th>
                     </tr>
                   </thead>
@@ -308,8 +356,15 @@ export default function RealtimePerformance() {
                       return (
                         <tr key={acc.account_id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 font-mono text-xs">{acc.account_id}</td>
-                          <td className="px-4 py-3 font-medium">{acc.client_name}</td>
-                          <td className="px-4 py-3 text-right">{fmt$(acc.cur.cost)}</td>
+                          <td className="px-4 py-3 font-medium">
+                            <div>{acc.client_name}</div>
+                            <div className="text-[10px] font-mono text-gray-400 mt-0.5">
+                              {(clients as any[])?.find((c: any) => c.id === acc.client_id)?.currency || 'USD'}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {clientCurrencyMap.get(acc.client_id) || '$'}{acc.cur.cost.toFixed(2)}
+                          </td>
                           <td className="px-4 py-3 text-right">
                             <PctBadge change={pctChange(acc.cur.cost, acc.prev.cost)} />
                           </td>
