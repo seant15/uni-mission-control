@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
   Users, Plus, ChevronDown, ChevronUp,
-  Check, X, Save, AlertCircle
+  Check, X, Save, AlertCircle, Key, Eye, EyeOff
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import {
@@ -11,6 +11,28 @@ import {
 } from '../lib/permissions'
 import type { AppUserWithAccess, UserClientAccess, ClientGranularAccess, AppRole } from '../types/permissions'
 import { ROLE_LABELS, ROLE_COLORS, STANDARD_ACCESS, FULL_ACCESS, MINIMAL_ACCESS } from '../types/permissions'
+
+const SUPABASE_URL = (import.meta as any).env.VITE_SUPABASE_URL || 'https://jcghdthijgjttmpthagj.supabase.co'
+
+async function createAuthUser(
+  session: any,
+  appUserId: string,
+  email: string,
+  password: string,
+  displayName: string
+): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-auth-user`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ email, password, display_name: displayName, app_user_id: appUserId }),
+  })
+  const json = await res.json()
+  if (!res.ok) return { success: false, error: json.error || 'Unknown error' }
+  return { success: true }
+}
 
 // Granular toggle labels
 const GRANULAR_LABELS: { key: keyof ClientGranularAccess; label: string; description: string }[] = [
@@ -152,9 +174,17 @@ interface UserCardProps {
 }
 
 function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
+  const { session } = useAuth()
   const [expanded, setExpanded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  // Password section
+  const [showPwSection, setShowPwSection] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwResult, setPwResult] = useState<{ ok: boolean; msg: string } | null>(null)
 
   // Local editable state
   const [displayName, setDisplayName] = useState(user.display_name)
@@ -172,6 +202,50 @@ function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
 
   function handleGrantChange(clientId: string, grant: UserClientAccess | null) {
     setGrants(prev => ({ ...prev, [clientId]: grant }))
+  }
+
+  async function handleSetPassword() {
+    if (!newPassword || newPassword.length < 6) {
+      setPwResult({ ok: false, msg: 'Password must be at least 6 characters.' })
+      return
+    }
+    setPwSaving(true)
+    setPwResult(null)
+
+    if (!user.auth_user_id) {
+      // No auth account yet — create one
+      const result = await createAuthUser(session, user.id, user.email, newPassword, user.display_name)
+      setPwSaving(false)
+      if (result.success) {
+        setPwResult({ ok: true, msg: 'Account created! User can now log in.' })
+        setNewPassword('')
+        onSaved()
+      } else {
+        setPwResult({ ok: false, msg: result.error || 'Failed to create account.' })
+      }
+    } else {
+      // Auth account exists — update password via Edge Function
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/create-auth-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'reset_password',
+          auth_user_id: user.auth_user_id,
+          password: newPassword,
+        }),
+      })
+      const json = await res.json()
+      setPwSaving(false)
+      if (res.ok) {
+        setPwResult({ ok: true, msg: 'Password updated successfully.' })
+        setNewPassword('')
+      } else {
+        setPwResult({ ok: false, msg: json.error || 'Failed to update password.' })
+      }
+    }
   }
 
   async function handleSave() {
@@ -347,6 +421,62 @@ function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
               </div>
             </div>
           )}
+
+          {/* Password / Auth Account */}
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setShowPwSection(!showPwSection)}
+              className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition text-sm"
+            >
+              <span className="flex items-center gap-2 font-medium text-gray-700">
+                <Key size={14} />
+                {user.auth_user_id ? 'Change Password' : 'Set Password & Activate Account'}
+              </span>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${user.auth_user_id ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                {user.auth_user_id ? 'Active' : 'No login yet'}
+              </span>
+            </button>
+            {showPwSection && (
+              <div className="px-4 py-3 space-y-3">
+                {!user.auth_user_id && (
+                  <p className="text-xs text-amber-700 bg-amber-50 rounded px-3 py-2">
+                    This user has no login account. Set a password to activate their access.
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      placeholder="New password (min 6 chars)"
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 pr-10 focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  <button
+                    onClick={handleSetPassword}
+                    disabled={pwSaving || !newPassword}
+                    className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {pwSaving ? 'Saving…' : user.auth_user_id ? 'Update Password' : 'Activate'}
+                  </button>
+                </div>
+                {pwResult && (
+                  <p className={`text-xs flex items-center gap-1 ${pwResult.ok ? 'text-green-700' : 'text-red-600'}`}>
+                    {pwResult.ok ? <Check size={12} /> : <AlertCircle size={12} />}
+                    {pwResult.msg}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Notes */}
           <div>

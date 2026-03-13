@@ -9,5 +9,12 @@ if (!supabaseUrl || !supabaseKey) {
 
 export const supabase = createClient(
     supabaseUrl || 'https://jcghdthijgjttmpthagj.supabase.co',
-    supabaseKey || 'dev-key-placeholder'
+    supabaseKey || 'dev-key-placeholder',
+    {
+        auth: {
+            lock: async (name: string, acquireTimeout: number, fn: () => Promise<any>) => {
+                return await fn()
+            },
+        },
+    }
 )
