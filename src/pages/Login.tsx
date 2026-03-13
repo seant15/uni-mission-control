@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+import { useState, FormEvent, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase'
 type Mode = 'login' | 'signup'
 
 export default function Login() {
-  const { signIn } = useAuth()
+  const { signIn, session } = useAuth()
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
@@ -15,6 +15,11 @@ export default function Login() {
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Redirect once session is confirmed
+  useEffect(() => {
+    if (session) navigate('/', { replace: true })
+  }, [session, navigate])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -25,7 +30,7 @@ export default function Login() {
     try {
       if (mode === 'login') {
         await signIn(email, password)
-        navigate('/')
+        // navigation handled by useEffect above once session updates
       } else {
         // Sign up via Supabase Auth
         const { data, error: signUpError } = await supabase.auth.signUp({
