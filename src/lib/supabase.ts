@@ -12,7 +12,7 @@ export const supabase = createClient(
     supabaseKey || 'dev-key-placeholder',
     {
         auth: {
-            lock: async (name: string, acquireTimeout: number, fn: () => Promise<any>) => {
+            lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => {
                 return await fn()
             },
         },
