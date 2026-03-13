@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Settings as SettingsIcon, Save, ArrowLeft, Check, Users, UserCircle } from 'lucide-react'
 import { getDashboardSettings, saveDashboardSettings, DEFAULT_SETTINGS, DashboardSettings } from '../lib/settings'
 import UserManagement from './UserManagement'
@@ -10,8 +10,11 @@ type SettingsTab = 'dashboard' | 'users' | 'profile'
 
 export default function DashboardSettingsPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { user, appUser } = useAuth()
-  const [activeTab, setActiveTab] = useState<SettingsTab>('dashboard')
+  const [activeTab, setActiveTab] = useState<SettingsTab>(
+    (searchParams.get('tab') as SettingsTab) || 'dashboard'
+  )
   const [settings, setSettings] = useState<DashboardSettings>(DEFAULT_SETTINGS)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)

@@ -124,9 +124,13 @@ function AppShell() {
           {/* User Profile */}
           <div className="p-4 border-t border-slate-800">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/50">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-sm font-semibold">
+              <Link
+                to="/dashboard/settings?tab=profile"
+                title="Edit profile"
+                className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-sm font-semibold hover:opacity-80 transition flex-shrink-0"
+              >
                 {(appUser?.display_name || 'U')[0].toUpperCase()}
-              </div>
+              </Link>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{appUser?.display_name || 'User'}</p>
                 <p className="text-xs text-slate-400 capitalize">{appUser?.role?.replace('_', ' ') || 'viewer'}</p>

@@ -440,7 +440,32 @@ export default function UserManagement() {
   const activeUsers = users.filter(u => u.is_active)
   const inactiveUsers = users.filter(u => !u.is_active)
 
-  if (appUser?.role !== 'super_admin') {
+  // Still loading auth context — don't block yet
+  if (appUser === null && loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-gray-400">
+        Loading users…
+      </div>
+    )
+  }
+
+  if (appUser === null) {
+    return (
+      <div className="flex items-center justify-center py-20 text-gray-400">
+        <div className="text-center">
+          <p className="text-lg font-medium text-gray-500">Profile not found</p>
+          <p className="text-sm mt-1 text-gray-400">
+            Your account isn't linked to an app_users record yet.
+          </p>
+          <p className="text-xs mt-2 text-gray-300">
+            Run the Supabase SQL to link your auth_user_id, then sign out and back in.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (appUser.role !== 'super_admin') {
     return (
       <div className="flex items-center justify-center py-20 text-gray-400">
         <div className="text-center">
