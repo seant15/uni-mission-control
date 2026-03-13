@@ -8,7 +8,6 @@ import type {
   AppUserWithAccess,
   UserClientAccess,
   ClientGranularAccess,
-  FULL_ACCESS,
 } from '../types/permissions'
 import { STANDARD_ACCESS } from '../types/permissions'
 

@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  Users, Plus, ChevronDown, ChevronUp, Shield, Eye, EyeOff,
-  Trash2, Check, X, Save, UserCheck, UserX, AlertCircle
+  Users, Plus, ChevronDown, ChevronUp,
+  Check, X, Save, AlertCircle
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import {
   getAllUsersWithAccess, createUser, updateUser,
-  deactivateUser, setUserClientAccess
+  setUserClientAccess
 } from '../lib/permissions'
 import type { AppUserWithAccess, UserClientAccess, ClientGranularAccess, AppRole } from '../types/permissions'
 import { ROLE_LABELS, ROLE_COLORS, STANDARD_ACCESS, FULL_ACCESS, MINIMAL_ACCESS } from '../types/permissions'

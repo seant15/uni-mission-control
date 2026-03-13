@@ -48,11 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    const { data: { subscription } } = onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = onAuthStateChange(async (_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        loadAppUser(session.user.id)
+        await loadAppUser(session.user.id)
       } else {
         setAppUser(null)
       }
