@@ -109,7 +109,7 @@ export default function DashboardSettingsPage() {
       {activeTab === 'users' && <UserManagement />}
 
       {/* Dashboard tab */}
-      {activeTab === 'dashboard' && <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {activeTab === 'dashboard' && <div className="space-y-6"><div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* Display Preferences */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -414,7 +414,7 @@ export default function DashboardSettingsPage() {
           Reset to Defaults
         </button>
       </div>
-      </div>}
+      </div></div>}
     </div>
   )
 }
