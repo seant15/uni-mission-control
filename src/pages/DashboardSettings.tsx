@@ -1,19 +1,30 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings as SettingsIcon, Save, ArrowLeft, Check, Users } from 'lucide-react'
+import { Settings as SettingsIcon, Save, ArrowLeft, Check, Users, UserCircle } from 'lucide-react'
 import { getDashboardSettings, saveDashboardSettings, DEFAULT_SETTINGS, DashboardSettings } from '../lib/settings'
 import UserManagement from './UserManagement'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 
-type SettingsTab = 'dashboard' | 'users'
+type SettingsTab = 'dashboard' | 'users' | 'profile'
 
 export default function DashboardSettingsPage() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, appUser } = useAuth()
   const [activeTab, setActiveTab] = useState<SettingsTab>('dashboard')
   const [settings, setSettings] = useState<DashboardSettings>(DEFAULT_SETTINGS)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  // Profile tab state
+  const [profileName, setProfileName] = useState('')
+  const [profileSaved, setProfileSaved] = useState(false)
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [profileError, setProfileError] = useState('')
+
+  useEffect(() => {
+    if (appUser) setProfileName(appUser.display_name)
+  }, [appUser])
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -33,6 +44,23 @@ export default function DashboardSettingsPage() {
       setTimeout(() => setSaved(false), 3000)
     } else {
       alert('Failed to save settings. Please try again.')
+    }
+  }
+
+  async function handleProfileSave() {
+    if (!appUser || !profileName.trim()) return
+    setProfileSaving(true)
+    setProfileError('')
+    const { error } = await supabase
+      .from('app_users')
+      .update({ display_name: profileName.trim() })
+      .eq('id', appUser.id)
+    setProfileSaving(false)
+    if (error) {
+      setProfileError('Failed to save. Please try again.')
+    } else {
+      setProfileSaved(true)
+      setTimeout(() => setProfileSaved(false), 3000)
     }
   }
 
@@ -102,10 +130,92 @@ export default function DashboardSettingsPage() {
           <Users size={15} />
           Users & Access
         </button>
+        <button
+          onClick={() => setActiveTab('profile')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
+            activeTab === 'profile'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <UserCircle size={15} />
+          My Profile
+        </button>
       </div>
 
       {/* Users tab */}
       {activeTab === 'users' && <UserManagement />}
+
+      {/* Profile tab */}
+      {activeTab === 'profile' && (
+        <div className="max-w-lg space-y-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-5">
+            <h2 className="text-lg font-semibold text-gray-900">My Profile</h2>
+
+            {/* Avatar preview */}
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-2xl font-bold">
+                {(profileName || appUser?.display_name || 'U')[0].toUpperCase()}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700">Profile Avatar</p>
+                <p className="text-xs text-gray-400">Your initials are used as your avatar</p>
+              </div>
+            </div>
+
+            {/* Display name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Display Name</label>
+              <input
+                type="text"
+                value={profileName}
+                onChange={e => setProfileName(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="Your name"
+              />
+              <p className="text-xs text-gray-400 mt-1">Shown in the sidebar and used as your avatar initial</p>
+            </div>
+
+            {/* Email (read-only) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+              <input
+                type="text"
+                value={user?.email || ''}
+                readOnly
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+              />
+              <p className="text-xs text-gray-400 mt-1">Email cannot be changed here</p>
+            </div>
+
+            {/* Role (read-only) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+              <input
+                type="text"
+                value={appUser?.role?.replace(/_/g, ' ') || ''}
+                readOnly
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed capitalize"
+              />
+            </div>
+
+            {profileError && (
+              <p className="text-sm text-red-600">{profileError}</p>
+            )}
+
+            <button
+              onClick={handleProfileSave}
+              disabled={profileSaving || !profileName.trim()}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition text-white font-medium ${
+                profileSaved ? 'bg-green-600' : 'bg-blue-600 hover:bg-blue-700'
+              } disabled:opacity-50`}
+            >
+              {profileSaved ? <Check size={16} /> : <Save size={16} />}
+              {profileSaving ? 'Saving…' : profileSaved ? 'Saved!' : 'Save Profile'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Dashboard tab */}
       {activeTab === 'dashboard' && (

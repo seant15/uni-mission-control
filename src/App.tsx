@@ -73,6 +73,16 @@ function App() {
 
 function AppShell() {
   const { appUser, signOut } = useAuth()
+  const navigate = useNavigate()
+
+  async function handleSignOut() {
+    try {
+      await signOut()
+      navigate('/login', { replace: true })
+    } catch (e) {
+      console.error('Sign out failed:', e)
+    }
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -121,7 +131,7 @@ function AppShell() {
                 <p className="text-sm font-medium truncate">{appUser?.display_name || 'User'}</p>
                 <p className="text-xs text-slate-400 capitalize">{appUser?.role?.replace('_', ' ') || 'viewer'}</p>
               </div>
-              <button onClick={signOut} title="Sign out" className="text-slate-500 hover:text-slate-300 transition">
+              <button onClick={handleSignOut} title="Sign out" className="text-slate-500 hover:text-slate-300 transition">
                 <LogOut size={16} />
               </button>
             </div>
