@@ -440,6 +440,17 @@ export default function UserManagement() {
   const activeUsers = users.filter(u => u.is_active)
   const inactiveUsers = users.filter(u => !u.is_active)
 
+  if (appUser?.role !== 'super_admin') {
+    return (
+      <div className="flex items-center justify-center py-20 text-gray-400">
+        <div className="text-center">
+          <p className="text-lg font-medium text-gray-500">Access Restricted</p>
+          <p className="text-sm mt-1">Only administrators can manage users and access.</p>
+        </div>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-gray-400">

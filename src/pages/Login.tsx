@@ -32,23 +32,13 @@ export default function Login() {
         await signIn(email, password)
         // navigation handled by useEffect above once session updates
       } else {
-        // Sign up via Supabase Auth
-        const { data, error: signUpError } = await supabase.auth.signUp({
+        // Sign up via Supabase Auth — DB trigger handles app_users insert
+        const { error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: { data: { display_name: name } },
         })
         if (signUpError) throw signUpError
-
-        // Insert into app_users (role defaults to team_member until an admin promotes)
-        if (data.user) {
-          await supabase.from('app_users').insert({
-            email,
-            display_name: name || email,
-            role: 'team_member',
-            auth_user_id: data.user.id,
-          })
-        }
 
         setInfo('Account created! Check your email to confirm, then sign in.')
         setMode('login')
