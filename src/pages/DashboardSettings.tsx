@@ -1,26 +1,32 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings as SettingsIcon, Save, ArrowLeft, Check } from 'lucide-react'
+import { Settings as SettingsIcon, Save, ArrowLeft, Check, Users } from 'lucide-react'
 import { getDashboardSettings, saveDashboardSettings, DEFAULT_SETTINGS, DashboardSettings } from '../lib/settings'
+import UserManagement from './UserManagement'
+import { useAuth } from '../contexts/AuthContext'
+
+type SettingsTab = 'dashboard' | 'users'
 
 export default function DashboardSettingsPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const [activeTab, setActiveTab] = useState<SettingsTab>('dashboard')
   const [settings, setSettings] = useState<DashboardSettings>(DEFAULT_SETTINGS)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const loadSettings = async () => {
-      const userId = 'default_user' // TODO: Get from auth
+      const userId = user?.id || 'default_user'
       const loaded = await getDashboardSettings(userId)
       setSettings(loaded)
       setLoading(false)
     }
     loadSettings()
-  }, [])
+  }, [user])
 
   const handleSave = async () => {
-    const userId = 'default_user' // TODO: Get from auth
+    const userId = user?.id || 'default_user'
     const success = await saveDashboardSettings(userId, settings)
 
     if (success) {
@@ -53,26 +59,57 @@ export default function DashboardSettingsPage() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
               <SettingsIcon className="text-blue-600" />
-              Dashboard Settings
+              Settings
             </h1>
-            <p className="text-gray-500 mt-1">Configure your analytics dashboard preferences</p>
+            <p className="text-gray-500 mt-1">Dashboard preferences and user access control</p>
           </div>
         </div>
+        {activeTab === 'dashboard' && (
+          <button
+            onClick={handleSave}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+              saved
+                ? 'bg-green-600 text-white'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            {saved ? <Check size={18} /> : <Save size={18} />}
+            {saved ? 'Saved!' : 'Save Settings'}
+          </button>
+        )}
+      </div>
+
+      {/* Tab navigation */}
+      <div className="flex gap-1 border-b border-gray-200">
         <button
-          onClick={handleSave}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-            saved
-              ? 'bg-green-600 text-white'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
+          onClick={() => setActiveTab('dashboard')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
+            activeTab === 'dashboard'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          {saved ? <Check size={18} /> : <Save size={18} />}
-          {saved ? 'Saved!' : 'Save Settings'}
+          <SettingsIcon size={15} />
+          Dashboard
+        </button>
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
+            activeTab === 'users'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Users size={15} />
+          Users & Access
         </button>
       </div>
 
-      {/* Settings Sections */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Users tab */}
+      {activeTab === 'users' && <UserManagement />}
+
+      {/* Dashboard tab */}
+      {activeTab === 'dashboard' && <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* Display Preferences */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -377,6 +414,7 @@ export default function DashboardSettingsPage() {
           Reset to Defaults
         </button>
       </div>
+      </div>}
     </div>
   )
 }

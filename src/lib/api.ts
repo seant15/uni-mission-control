@@ -376,7 +376,7 @@ export const db = {
         const prevWindowStartDH = toDateHour(prevWindowStart)
         const prevWindowEndDH = toDateHour(windowStart)
 
-        const cols = 'id, client_id, client_name, ad_account_id, platform, date, hour, account_timezone, impressions, clicks, conversions, cost, revenue'
+        const cols = 'id, client_id, client_name, ad_account_id, platform, date, hour, impressions, clicks, conversions, cost, revenue'
 
         // Filter: date >= windowStart.date AND (date > windowStart.date OR hour >= windowStart.hour)
         // Simplified: fetch by date range and filter in JS for hour boundaries

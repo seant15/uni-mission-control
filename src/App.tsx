@@ -1,6 +1,7 @@
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
+import React from 'react'
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { LayoutDashboard, AlertTriangle, Users, Bell, Database, Settings, Activity, Layers, Megaphone, X } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, Users, Bell, Database, Settings, Activity, Layers, Megaphone, X, LogOut } from 'lucide-react'
 import MarketingOverview from './pages/MarketingOverview'
 import Alerts from './pages/Alerts'
 import ClientsOverview from './pages/ClientsOverview'
@@ -8,7 +9,9 @@ import DataAnalytics from './pages/DataAnalytics'
 import DashboardSettings from './pages/DashboardSettings'
 import RealtimePerformance from './pages/RealtimePerformance'
 import CreativePerformance from './pages/CreativePerformance'
+import Login from './pages/Login'
 import { getDashboardSettings } from './lib/settings'
+import { useAuth } from './contexts/AuthContext'
 
 const ANNOUNCEMENT_STYLES = {
   info:    { bar: 'bg-blue-600',   text: 'text-white',          icon: 'text-blue-200' },
@@ -20,12 +23,14 @@ const ANNOUNCEMENT_STYLES = {
 function AnnouncementBanner() {
   const [ann, setAnn] = useState<{ enabled: boolean; text: string; style: string } | null>(null)
   const [dismissed, setDismissed] = useState(false)
+  const { user } = useAuth()
 
   useEffect(() => {
-    getDashboardSettings('default_user').then(s => {
+    const userId = user?.id || 'default_user'
+    getDashboardSettings(userId).then(s => {
       setAnn({ enabled: s.announcementEnabled, text: s.announcementText, style: s.announcementStyle })
     })
-  }, [])
+  }, [user])
 
   if (!ann || !ann.enabled || !ann.text || dismissed) return null
 
@@ -44,10 +49,33 @@ function AnnouncementBanner() {
   )
 }
 
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { session, loading } = useAuth()
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen bg-slate-900">
+      <div className="text-slate-400">Loading...</div>
+    </div>
+  )
+  if (!session) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
+
 function App() {
   return (
     <Router>
-      <div className="flex min-h-screen bg-gray-50">
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/*" element={<ProtectedRoute><AppShell /></ProtectedRoute>} />
+      </Routes>
+    </Router>
+  )
+}
+
+function AppShell() {
+  const { appUser, signOut } = useAuth()
+
+  return (
+    <div className="flex min-h-screen bg-gray-50">
         {/* Sidebar */}
         <aside className="w-72 bg-slate-900 text-white flex flex-col fixed h-full z-50">
           {/* Logo */}
@@ -87,13 +115,15 @@ function App() {
           <div className="p-4 border-t border-slate-800">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/50">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-sm font-semibold">
-                S
+                {(appUser?.display_name || 'U')[0].toUpperCase()}
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">Sean</p>
-                <p className="text-xs text-slate-400">Administrator</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{appUser?.display_name || 'User'}</p>
+                <p className="text-xs text-slate-400 capitalize">{appUser?.role?.replace('_', ' ') || 'viewer'}</p>
               </div>
-              <div className="w-2 h-2 bg-green-500 rounded-full" />
+              <button onClick={signOut} title="Sign out" className="text-slate-500 hover:text-slate-300 transition">
+                <LogOut size={16} />
+              </button>
             </div>
           </div>
         </aside>
@@ -128,7 +158,6 @@ function App() {
           </main>
         </div>
       </div>
-    </Router>
   )
 }
 
