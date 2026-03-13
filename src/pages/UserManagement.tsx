@@ -12,25 +12,20 @@ import {
 import type { AppUserWithAccess, UserClientAccess, ClientGranularAccess, AppRole } from '../types/permissions'
 import { ROLE_LABELS, ROLE_COLORS, STANDARD_ACCESS, FULL_ACCESS, MINIMAL_ACCESS } from '../types/permissions'
 
-const SUPABASE_URL = (import.meta as any).env.VITE_SUPABASE_URL || 'https://jcghdthijgjttmpthagj.supabase.co'
-
-async function createAuthUser(
-  session: any,
+async function setUserPassword(
   appUserId: string,
   email: string,
   password: string,
   displayName: string
 ): Promise<{ success: boolean; error?: string }> {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-auth-user`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({ email, password, display_name: displayName, app_user_id: appUserId }),
+  const { data, error } = await supabase.rpc('set_user_password', {
+    p_app_user_id: appUserId,
+    p_email: email,
+    p_password: password,
+    p_display_name: displayName,
   })
-  const json = await res.json()
-  if (!res.ok) return { success: false, error: json.error || 'Unknown error' }
+  if (error) return { success: false, error: error.message }
+  if (data?.error) return { success: false, error: data.error }
   return { success: true }
 }
 
@@ -174,7 +169,7 @@ interface UserCardProps {
 }
 
 function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
-  const { session } = useAuth()
+  useAuth()
   const [expanded, setExpanded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -211,40 +206,14 @@ function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
     }
     setPwSaving(true)
     setPwResult(null)
-
-    if (!user.auth_user_id) {
-      // No auth account yet — create one
-      const result = await createAuthUser(session, user.id, user.email, newPassword, user.display_name)
-      setPwSaving(false)
-      if (result.success) {
-        setPwResult({ ok: true, msg: 'Account created! User can now log in.' })
-        setNewPassword('')
-        onSaved()
-      } else {
-        setPwResult({ ok: false, msg: result.error || 'Failed to create account.' })
-      }
+    const result = await setUserPassword(user.id, user.email, newPassword, user.display_name)
+    setPwSaving(false)
+    if (result.success) {
+      setPwResult({ ok: true, msg: user.auth_user_id ? 'Password updated!' : 'Account activated! User can now log in.' })
+      setNewPassword('')
+      onSaved()
     } else {
-      // Auth account exists — update password via Edge Function
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/create-auth-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({
-          action: 'reset_password',
-          auth_user_id: user.auth_user_id,
-          password: newPassword,
-        }),
-      })
-      const json = await res.json()
-      setPwSaving(false)
-      if (res.ok) {
-        setPwResult({ ok: true, msg: 'Password updated successfully.' })
-        setNewPassword('')
-      } else {
-        setPwResult({ ok: false, msg: json.error || 'Failed to update password.' })
-      }
+      setPwResult({ ok: false, msg: result.error || 'Failed.' })
     }
   }
 
