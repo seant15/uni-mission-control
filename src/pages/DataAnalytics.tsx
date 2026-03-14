@@ -802,7 +802,7 @@ export default function DataAnalytics() {
                     <SortTh label="Clicks" field="clicks" sort={metaCampaignSort} />
                     <SortTh label="CTR" field="_ctr" sort={metaCampaignSort} />
                     <SortTh label="Conv." field="conversions" sort={metaCampaignSort} />
-                    <SortTh label={businessType === 'leadgen' ? 'CPA' : 'ROAS / CPA'} field={businessType === 'leadgen' ? '_cpa' : '_roas'} sort={metaCampaignSort} />
+                    <SortTh label={businessType === 'leadgen' ? 'CPA' : 'ROAS'} field={businessType === 'leadgen' ? '_cpa' : '_roas'} sort={metaCampaignSort} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -836,10 +836,10 @@ export default function DataAnalytics() {
                           {prev && <PctBadge current={camp.conversions} previous={prev.conversions} />}
                         </td>
                         <td className="px-4 py-3 text-right font-semibold">
-                          {businessType === 'leadgen' || roas === 0
+                          {businessType === 'leadgen'
                             ? (cpa > 0 ? `${selectedClientCurrencySym}${cpa.toFixed(2)}` : '-')
-                            : `${roas.toFixed(2)}x`}
-                          {prev && (businessType === 'leadgen' || roas === 0) && cpa > 0 && (
+                            : (roas > 0 ? `${roas.toFixed(2)}x` : '-')}
+                          {prev && businessType === 'leadgen' && cpa > 0 && (
                             <PctBadge current={cpa} previous={prev.conversions > 0 ? prev.spend / prev.conversions : 0} invertTrend />
                           )}
                           {prev && businessType === 'ecommerce' && roas > 0 && (
@@ -875,7 +875,7 @@ export default function DataAnalytics() {
                     <SortTh label="Clicks" field="clicks" sort={googleCampaignSort} />
                     <SortTh label="CTR" field="_ctr" sort={googleCampaignSort} />
                     <SortTh label="Conv." field="conversions" sort={googleCampaignSort} />
-                    <SortTh label={businessType === 'leadgen' ? 'CPA' : 'ROAS / CPA'} field={businessType === 'leadgen' ? '_cpa' : '_roas'} sort={googleCampaignSort} />
+                    <SortTh label={businessType === 'leadgen' ? 'CPA' : 'ROAS'} field={businessType === 'leadgen' ? '_cpa' : '_roas'} sort={googleCampaignSort} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -909,10 +909,10 @@ export default function DataAnalytics() {
                           {prev && <PctBadge current={camp.conversions} previous={prev.conversions} />}
                         </td>
                         <td className="px-4 py-3 text-right font-semibold">
-                          {businessType === 'leadgen' || roas === 0
+                          {businessType === 'leadgen'
                             ? (cpa > 0 ? `${selectedClientCurrencySym}${cpa.toFixed(2)}` : '-')
-                            : `${roas.toFixed(2)}x`}
-                          {prev && (businessType === 'leadgen' || roas === 0) && cpa > 0 && (
+                            : (roas > 0 ? `${roas.toFixed(2)}x` : '-')}
+                          {prev && businessType === 'leadgen' && cpa > 0 && (
                             <PctBadge current={cpa} previous={prev.conversions > 0 ? prev.spend / prev.conversions : 0} invertTrend />
                           )}
                           {prev && businessType === 'ecommerce' && roas > 0 && (
