@@ -13,7 +13,7 @@ export default function DashboardSettingsPage() {
   const [searchParams] = useSearchParams()
   const { user, appUser } = useAuth()
   const [activeTab, setActiveTab] = useState<SettingsTab>(
-    (searchParams.get('tab') as SettingsTab) || 'dashboard'
+    (searchParams.get('tab') as SettingsTab) || 'profile'
   )
   const [settings, setSettings] = useState<DashboardSettings>(DEFAULT_SETTINGS)
   const [saved, setSaved] = useState(false)
@@ -112,6 +112,17 @@ export default function DashboardSettingsPage() {
       {/* Tab navigation */}
       <div className="flex gap-1 border-b border-gray-200">
         <button
+          onClick={() => setActiveTab('profile')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
+            activeTab === 'profile'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <UserCircle size={15} />
+          My Profile
+        </button>
+        <button
           onClick={() => setActiveTab('dashboard')}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
             activeTab === 'dashboard'
@@ -120,7 +131,7 @@ export default function DashboardSettingsPage() {
           }`}
         >
           <SettingsIcon size={15} />
-          Dashboard
+          Performance Dashboard
         </button>
         <button
           onClick={() => setActiveTab('users')}
@@ -132,17 +143,6 @@ export default function DashboardSettingsPage() {
         >
           <Users size={15} />
           Users & Access
-        </button>
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
-            activeTab === 'profile'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <UserCircle size={15} />
-          My Profile
         </button>
       </div>
 
