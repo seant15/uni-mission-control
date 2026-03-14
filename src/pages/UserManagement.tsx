@@ -16,16 +16,29 @@ async function setUserPassword(
   appUserId: string,
   email: string,
   password: string,
-  displayName: string
+  displayName: string,
+  authUserId: string | null
 ): Promise<{ success: boolean; error?: string }> {
-  const { data, error } = await supabase.rpc('set_user_password', {
-    p_app_user_id: appUserId,
-    p_email: email,
-    p_password: password,
-    p_display_name: displayName,
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return { success: false, error: 'Not authenticated' }
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://jcghdthijgjttmpthagj.supabase.co'
+  const fnUrl = `${supabaseUrl}/functions/v1/create-auth-user`
+
+  const body = authUserId
+    ? { action: 'reset_password', auth_user_id: authUserId, password }
+    : { action: 'create', email, password, display_name: displayName, app_user_id: appUserId }
+
+  const res = await fetch(fnUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify(body),
   })
-  if (error) return { success: false, error: error.message }
-  if (data?.error) return { success: false, error: data.error }
+  const json = await res.json()
+  if (!res.ok || json.error) return { success: false, error: json.error || 'Request failed' }
   return { success: true }
 }
 
@@ -206,7 +219,7 @@ function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
     }
     setPwSaving(true)
     setPwResult(null)
-    const result = await setUserPassword(user.id, user.email, newPassword, user.display_name)
+    const result = await setUserPassword(user.id, user.email, newPassword, user.display_name, user.auth_user_id ?? null)
     setPwSaving(false)
     if (result.success) {
       setPwResult({ ok: true, msg: user.auth_user_id ? 'Password updated!' : 'Account activated! User can now log in.' })
