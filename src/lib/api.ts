@@ -286,15 +286,12 @@ export const db = {
     async getMetaCampaigns(filters: { clientId?: string; adAccountId?: string; startDate?: string; endDate?: string }) {
         let query = supabase
             .from('meta_ads')
-            .select('id, client_id, date, ad_account_id, campaign_id, campaign_name, spend, impressions, clicks, conversions, revenue')
+            .select('id, client_id, date, campaign_id, campaign_name, spend, impressions, clicks, conversions, revenue')
             .order('spend', { ascending: false })
             .limit(500)
 
         if (filters.clientId && filters.clientId !== 'all') {
             query = query.eq('client_id', filters.clientId)
-        }
-        if (filters.adAccountId) {
-            query = query.eq('ad_account_id', filters.adAccountId)
         }
         if (filters.startDate) {
             query = query.gte('date', filters.startDate)
@@ -314,15 +311,12 @@ export const db = {
     async getGoogleCampaigns(filters: { clientId?: string; adAccountId?: string; startDate?: string; endDate?: string }) {
         let query = supabase
             .from('google_ads')
-            .select('id, client_id, date, ad_account_id, campaign_id, campaign_name, spend, impressions, clicks, conversions, revenue')
+            .select('id, client_id, date, campaign_id, campaign_name, spend, impressions, clicks, conversions, revenue')
             .order('spend', { ascending: false })
             .limit(500)
 
         if (filters.clientId && filters.clientId !== 'all') {
             query = query.eq('client_id', filters.clientId)
-        }
-        if (filters.adAccountId) {
-            query = query.eq('ad_account_id', filters.adAccountId)
         }
         if (filters.startDate) {
             query = query.gte('date', filters.startDate)
