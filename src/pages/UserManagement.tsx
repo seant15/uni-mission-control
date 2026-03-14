@@ -22,7 +22,7 @@ async function setUserPassword(
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) return { success: false, error: 'Not authenticated' }
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://jcghdthijgjttmpthagj.supabase.co'
+  const supabaseUrl = 'https://jcghdthijgjttmpthagj.supabase.co'
   const fnUrl = `${supabaseUrl}/functions/v1/create-auth-user`
 
   const body = authUserId
