@@ -281,6 +281,62 @@ export const db = {
     },
 
     /**
+     * Fetch Meta campaigns with filtering
+     */
+    async getMetaCampaigns(filters: { clientId?: string; adAccountId?: string; startDate?: string; endDate?: string }) {
+        let query = supabase
+            .from('meta_ads')
+            .select('id, client_id, date, ad_account_id, campaign_id, campaign_name, spend, impressions, clicks, conversions, revenue')
+            .order('spend', { ascending: false })
+            .limit(500)
+
+        if (filters.clientId && filters.clientId !== 'all') {
+            query = query.eq('client_id', filters.clientId)
+        }
+        if (filters.adAccountId) {
+            query = query.eq('ad_account_id', filters.adAccountId)
+        }
+        if (filters.startDate) {
+            query = query.gte('date', filters.startDate)
+        }
+        if (filters.endDate) {
+            query = query.lte('date', filters.endDate)
+        }
+
+        const { data, error } = await query
+        if (error) throw error
+        return data
+    },
+
+    /**
+     * Fetch Google campaigns with filtering
+     */
+    async getGoogleCampaigns(filters: { clientId?: string; adAccountId?: string; startDate?: string; endDate?: string }) {
+        let query = supabase
+            .from('google_ads')
+            .select('id, client_id, date, ad_account_id, campaign_id, campaign_name, spend, impressions, clicks, conversions, revenue')
+            .order('spend', { ascending: false })
+            .limit(500)
+
+        if (filters.clientId && filters.clientId !== 'all') {
+            query = query.eq('client_id', filters.clientId)
+        }
+        if (filters.adAccountId) {
+            query = query.eq('ad_account_id', filters.adAccountId)
+        }
+        if (filters.startDate) {
+            query = query.gte('date', filters.startDate)
+        }
+        if (filters.endDate) {
+            query = query.lte('date', filters.endDate)
+        }
+
+        const { data, error } = await query
+        if (error) throw error
+        return data
+    },
+
+    /**
      * Fetch Meta ads with filtering
      */
     async getMetaAds(filters: { clientId?: string; adAccountId?: string; startDate?: string; endDate?: string }) {

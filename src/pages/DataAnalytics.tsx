@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Database, ChevronDown, TrendingUp, DollarSign, CreditCard,
   AlertCircle, Calendar, Settings, MousePointer2, ShoppingCart, Users,
-  ArrowUpRight, ArrowDownRight, Video, Image, ArrowUpDown, ArrowUp, ArrowDown
+  ArrowUpRight, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown
 } from 'lucide-react'
 import { db } from '../lib/api'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
@@ -119,40 +119,6 @@ function aggregateRows<T extends Record<string, any>>(
   return result
 }
 
-// Aggregate creatives by ad_id, keeping latest creative fields
-function aggregateCreatives(rows: any[]): any[] {
-  const map = new Map<string, any>()
-  for (const row of rows) {
-    const key = row.ad_id || row.id
-    if (!map.has(key)) {
-      map.set(key, {
-        _key: key,
-        ad_id: row.ad_id,
-        ad_name: row.ad_name,
-        campaign_name: row.campaign_name,
-        ad_set_name: row.ad_set_name,
-        image_url: row.image_url,
-        thumbnail_url: row.thumbnail_url,
-        video_id: row.video_id,
-        headline: row.headline,
-        primary_copy: row.primary_copy,
-        call_to_action_type: row.call_to_action_type,
-        spend: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0,
-      })
-    }
-    const entry = map.get(key)!
-    entry.spend += Number(row.spend) || 0
-    entry.impressions += Number(row.impressions) || 0
-    entry.clicks += Number(row.clicks) || 0
-    entry.conversions += Number(row.conversions) || 0
-    entry.revenue += Number(row.revenue) || 0
-    // Prefer row with image
-    if (!entry.image_url && row.image_url) entry.image_url = row.image_url
-    if (!entry.thumbnail_url && row.thumbnail_url) entry.thumbnail_url = row.thumbnail_url
-    if (!entry.video_id && row.video_id) entry.video_id = row.video_id
-  }
-  return Array.from(map.values()).sort((a, b) => b.spend - a.spend)
-}
 
 // Pct change badge
 function PctBadge({ current, previous, invertTrend = false }: { current: number; previous: number; invertTrend?: boolean }) {
@@ -181,8 +147,8 @@ export default function DataAnalytics() {
   const [error, setError] = useState<string | null>(null)
 
   // Table sort states
-  const adsetSort = useTableSort('spend')
-  const creativeSort = useTableSort('spend')
+  const metaCampaignSort = useTableSort('spend')
+  const googleCampaignSort = useTableSort('spend')
   const keywordSort = useTableSort('spend')
   const searchTermSort = useTableSort('spend')
 
@@ -298,10 +264,10 @@ export default function DataAnalytics() {
 
   const previousPerformanceData: DailyPerformance[] = (previousPerformance as DailyPerformance[]) || []
 
-  // Meta data
-  const { data: metaAdsets } = useQuery({
-    queryKey: ['meta_adsets', selectedClient, selectedAdAccount, dateRange],
-    queryFn: () => db.getMetaAdsets({
+  // Meta campaigns
+  const { data: metaCampaigns } = useQuery({
+    queryKey: ['meta_campaigns', selectedClient, selectedAdAccount, dateRange],
+    queryFn: () => db.getMetaCampaigns({
       clientId: selectedClient,
       adAccountId: selectedAdAccount || undefined,
       startDate: dateRange.start,
@@ -312,10 +278,9 @@ export default function DataAnalytics() {
     gcTime: 15 * 60 * 1000,
   })
 
-  // Previous period Meta adsets
-  const { data: prevMetaAdsets } = useQuery({
-    queryKey: ['meta_adsets_prev', selectedClient, selectedAdAccount, previousPeriodRange],
-    queryFn: () => db.getMetaAdsets({
+  const { data: prevMetaCampaigns } = useQuery({
+    queryKey: ['meta_campaigns_prev', selectedClient, selectedAdAccount, previousPeriodRange],
+    queryFn: () => db.getMetaCampaigns({
       clientId: selectedClient,
       adAccountId: selectedAdAccount || undefined,
       startDate: previousPeriodRange.start,
@@ -326,19 +291,29 @@ export default function DataAnalytics() {
     gcTime: 15 * 60 * 1000,
   })
 
-  const { data: metaCreatives } = useQuery({
-    queryKey: ['meta_creatives', selectedClient, dateRange],
-    queryFn: () => db.getMetaCreatives(selectedClient, dateRange.start, dateRange.end),
-    enabled: selectedPlatform === 'all' || selectedPlatform === 'meta_ads',
+  // Google campaigns
+  const { data: googleCampaigns } = useQuery({
+    queryKey: ['google_campaigns', selectedClient, selectedAdAccount, dateRange],
+    queryFn: () => db.getGoogleCampaigns({
+      clientId: selectedClient,
+      adAccountId: selectedAdAccount || undefined,
+      startDate: dateRange.start,
+      endDate: dateRange.end,
+    }),
+    enabled: selectedPlatform === 'all' || selectedPlatform === 'google_ads',
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   })
 
-  // Previous period creatives
-  const { data: prevMetaCreatives } = useQuery({
-    queryKey: ['meta_creatives_prev', selectedClient, previousPeriodRange],
-    queryFn: () => db.getMetaCreatives(selectedClient, previousPeriodRange.start, previousPeriodRange.end),
-    enabled: (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && !!previousPeriodRange.start,
+  const { data: prevGoogleCampaigns } = useQuery({
+    queryKey: ['google_campaigns_prev', selectedClient, selectedAdAccount, previousPeriodRange],
+    queryFn: () => db.getGoogleCampaigns({
+      clientId: selectedClient,
+      adAccountId: selectedAdAccount || undefined,
+      startDate: previousPeriodRange.start,
+      endDate: previousPeriodRange.end,
+    }),
+    enabled: (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && !!previousPeriodRange.start,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   })
@@ -380,10 +355,10 @@ export default function DataAnalytics() {
   const clients: Client[] = clientsFromTable || []
 
   // Aggregated data
-  const aggAdsets = aggregateRows(metaAdsets || [], 'ad_set_id', 'ad_set_name', ['campaign_name'])
-  const prevAggAdsets = aggregateRows(prevMetaAdsets || [], 'ad_set_id', 'ad_set_name', ['campaign_name'])
-  const aggCreatives = aggregateCreatives(metaCreatives || [])
-  const prevAggCreativesMap = new Map((aggregateCreatives(prevMetaCreatives || [])).map(r => [r.ad_id, r]))
+  const aggMetaCampaigns = aggregateRows(metaCampaigns || [], 'campaign_id', 'campaign_name', [])
+  const prevAggMetaCampaignsMap = new Map((aggregateRows(prevMetaCampaigns || [], 'campaign_id', 'campaign_name', [])).map(r => [r.campaign_id, r]))
+  const aggGoogleCampaigns = aggregateRows(googleCampaigns || [], 'campaign_id', 'campaign_name', [])
+  const prevAggGoogleCampaignsMap = new Map((aggregateRows(prevGoogleCampaigns || [], 'campaign_id', 'campaign_name', [])).map(r => [r.campaign_id, r]))
   const aggKeywords = aggregateRows(googleKeywords || [], 'keyword_id', 'keyword', ['campaign_name', 'ad_group_name', 'match_type'])
   const prevAggKeywordsMap = new Map((aggregateRows(prevGoogleKeywords || [], 'keyword_id', 'keyword', ['campaign_name', 'ad_group_name', 'match_type'])).map(r => [r.keyword_id, r]))
   const aggSearchTerms = aggregateRows(googleSearchTerms || [], 'search_term', 'search_term', ['campaign_name', 'ad_group_name', 'match_type'])
@@ -557,59 +532,6 @@ export default function DataAnalytics() {
     })
   }, [settings.defaultDateRange])
 
-  // Creative image component
-  const CreativeThumb = ({ creative }: { creative: any }) => {
-    const isVideo = !!creative.video_id
-    const imgSrc = creative.image_url || creative.thumbnail_url
-    const videoUrl = creative.video_id ? `https://www.facebook.com/videos/${creative.video_id}` : null
-
-    const wrapLink = (content: React.ReactNode) =>
-      videoUrl ? (
-        <a href={videoUrl} target="_blank" rel="noopener noreferrer" title="View video" className="block">
-          {content}
-        </a>
-      ) : <>{content}</>
-
-    if (isVideo && !imgSrc) {
-      return wrapLink(
-        <div className="w-14 h-14 bg-gray-800 rounded-lg flex flex-col items-center justify-center gap-1 hover:opacity-80 transition-opacity cursor-pointer">
-          <Video size={18} className="text-white" />
-          <span className="text-white text-[9px]">VIDEO</span>
-        </div>
-      )
-    }
-
-    if (imgSrc) {
-      return wrapLink(
-        <div className="relative w-14 h-14">
-          <img
-            src={imgSrc}
-            alt={creative.ad_name}
-            className={`w-14 h-14 object-cover rounded-lg border border-gray-200 ${videoUrl ? 'hover:opacity-80 transition-opacity cursor-pointer' : ''}`}
-            onError={(e) => {
-              const target = e.target as HTMLImageElement
-              target.style.display = 'none'
-              const parent = target.parentElement
-              if (parent) {
-                parent.innerHTML = `<div class="w-14 h-14 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 text-[10px] text-center px-1">${isVideo ? '🎬' : '🖼️'}<br/>N/A</div>`
-              }
-            }}
-          />
-          {isVideo && (
-            <div className="absolute bottom-0.5 right-0.5 bg-black/60 rounded px-1">
-              <Video size={10} className="text-white" />
-            </div>
-          )}
-        </div>
-      )
-    }
-
-    return (
-      <div className="w-14 h-14 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center">
-        <Image size={18} className="text-gray-400" />
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-6">
@@ -861,56 +783,57 @@ export default function DataAnalytics() {
         )}
       </div>
 
-      {/* ── META AD SET PERFORMANCE (Aggregated) ── */}
-      {(selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && aggAdsets.length > 0 && (
+      {/* ── META CAMPAIGN PERFORMANCE ── */}
+      {(selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && aggMetaCampaigns.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <details>
+          <details open>
             <summary className="text-lg font-semibold text-gray-900 cursor-pointer flex items-center gap-2">
-              <span className="text-blue-600">📊</span>
-              Meta Ad Set Performance ({aggAdsets.length} ad sets)
+              <span className="text-blue-500">📘</span>
+              Meta Campaigns ({aggMetaCampaigns.length})
               <span className="ml-2 text-xs font-normal text-gray-400">vs previous period</span>
             </summary>
             <div className="overflow-x-auto mt-4">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <SortTh label="Campaign" field="campaign_name" sort={adsetSort} align="left" />
-                    <SortTh label="Ad Set" field="ad_set_name" sort={adsetSort} align="left" />
-                    <SortTh label="Spend" field="spend" sort={adsetSort} />
-                    <SortTh label="Impr." field="impressions" sort={adsetSort} />
-                    <SortTh label="Clicks" field="clicks" sort={adsetSort} />
-                    <SortTh label="CTR" field="_ctr" sort={adsetSort} />
-                    <SortTh label="Conv." field="conversions" sort={adsetSort} />
-                    <SortTh label={businessType === 'leadgen' ? 'CPA' : 'ROAS'} field={businessType === 'leadgen' ? '_cpa' : '_roas'} sort={adsetSort} />
+                    <SortTh label="Campaign" field="campaign_name" sort={metaCampaignSort} align="left" />
+                    <SortTh label="Spend" field="spend" sort={metaCampaignSort} />
+                    <SortTh label="Impr." field="impressions" sort={metaCampaignSort} />
+                    <SortTh label="Clicks" field="clicks" sort={metaCampaignSort} />
+                    <SortTh label="CTR" field="_ctr" sort={metaCampaignSort} />
+                    <SortTh label="Conv." field="conversions" sort={metaCampaignSort} />
+                    <SortTh label={businessType === 'leadgen' ? 'CPA' : 'ROAS'} field={businessType === 'leadgen' ? '_cpa' : '_roas'} sort={metaCampaignSort} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {adsetSort.sortRows(aggAdsets.map((a: any) => ({
-                    ...a,
-                    _ctr: a.impressions > 0 ? a.clicks / a.impressions * 100 : 0,
-                    _roas: a.spend > 0 ? a.revenue / a.spend : 0,
-                    _cpa: a.conversions > 0 ? a.spend / a.conversions : 0,
-                  }))).map((adset: any) => {
-                    const prev = prevAggAdsets.find((p: any) => p.ad_set_id === adset.ad_set_id)
-                    const ctr = adset.impressions > 0 ? adset.clicks / adset.impressions * 100 : 0
-                    const roas = adset.spend > 0 ? adset.revenue / adset.spend : 0
-                    const cpa = adset.conversions > 0 ? adset.spend / adset.conversions : 0
+                  {metaCampaignSort.sortRows(aggMetaCampaigns.map((c: any) => ({
+                    ...c,
+                    _ctr: c.impressions > 0 ? c.clicks / c.impressions * 100 : 0,
+                    _roas: c.spend > 0 ? c.revenue / c.spend : 0,
+                    _cpa: c.conversions > 0 ? c.spend / c.conversions : 0,
+                  }))).map((camp: any) => {
+                    const prev = prevAggMetaCampaignsMap.get(camp.campaign_id)
+                    const ctr = camp.impressions > 0 ? camp.clicks / camp.impressions * 100 : 0
+                    const roas = camp.spend > 0 ? camp.revenue / camp.spend : 0
+                    const cpa = camp.conversions > 0 ? camp.spend / camp.conversions : 0
                     return (
-                      <tr key={adset._key} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-gray-600 max-w-[180px] truncate">{adset.campaign_name}</td>
-                        <td className="px-4 py-3 font-medium max-w-[200px] truncate">{adset.ad_set_name}</td>
+                      <tr key={camp._key} className="hover:bg-blue-50">
+                        <td className="px-4 py-3 font-medium max-w-[280px] truncate">{camp.campaign_name}</td>
                         <td className="px-4 py-3 text-right font-medium">
-                          {selectedClientCurrencySym}{adset.spend.toFixed(2)}
-                          {prev && <PctBadge current={adset.spend} previous={prev.spend} />}
+                          {selectedClientCurrencySym}{camp.spend.toFixed(2)}
+                          {prev && <PctBadge current={camp.spend} previous={prev.spend} />}
                         </td>
-                        <td className="px-4 py-3 text-right">{adset.impressions.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right">{adset.clicks.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right">{ctr.toFixed(2)}%</td>
+                        <td className="px-4 py-3 text-right">{camp.impressions.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right">{camp.clicks.toLocaleString()}</td>
                         <td className="px-4 py-3 text-right">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${adset.conversions > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                            {adset.conversions}
+                          {ctr.toFixed(2)}%
+                          {prev && prev.impressions > 0 && <PctBadge current={ctr} previous={prev.clicks / prev.impressions * 100} />}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${camp.conversions > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {camp.conversions}
                           </span>
-                          {prev && <PctBadge current={adset.conversions} previous={prev.conversions} />}
+                          {prev && <PctBadge current={camp.conversions} previous={prev.conversions} />}
                         </td>
                         <td className="px-4 py-3 text-right font-semibold">
                           {businessType === 'leadgen'
@@ -933,72 +856,57 @@ export default function DataAnalytics() {
         </div>
       )}
 
-      {/* ── META CREATIVE PERFORMANCE (Aggregated) ── */}
-      {(selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && aggCreatives.length > 0 && (
+      {/* ── GOOGLE CAMPAIGN PERFORMANCE ── */}
+      {(selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggGoogleCampaigns.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <details open>
             <summary className="text-lg font-semibold text-gray-900 cursor-pointer flex items-center gap-2">
-              <span className="text-purple-600">🎨</span>
-              Meta Creative Performance ({aggCreatives.length} ads)
+              <span className="text-red-500">🔴</span>
+              Google Campaigns ({aggGoogleCampaigns.length})
               <span className="ml-2 text-xs font-normal text-gray-400">vs previous period</span>
             </summary>
             <div className="overflow-x-auto mt-4">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 w-20">Creative</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad / Copy</th>
-                    <SortTh label="Campaign" field="campaign_name" sort={creativeSort} align="left" />
-                    <SortTh label="Ad Set" field="ad_set_name" sort={creativeSort} align="left" />
-                    <SortTh label="Spend" field="spend" sort={creativeSort} />
-                    <SortTh label="Impr." field="impressions" sort={creativeSort} />
-                    <SortTh label="CTR" field="_ctr" sort={creativeSort} />
-                    <SortTh label="Conv." field="conversions" sort={creativeSort} />
-                    <SortTh label={businessType === 'leadgen' ? 'CPA' : 'ROAS'} field={businessType === 'leadgen' ? '_cpa' : '_roas'} sort={creativeSort} />
+                    <SortTh label="Campaign" field="campaign_name" sort={googleCampaignSort} align="left" />
+                    <SortTh label="Spend" field="spend" sort={googleCampaignSort} />
+                    <SortTh label="Impr." field="impressions" sort={googleCampaignSort} />
+                    <SortTh label="Clicks" field="clicks" sort={googleCampaignSort} />
+                    <SortTh label="CTR" field="_ctr" sort={googleCampaignSort} />
+                    <SortTh label="Conv." field="conversions" sort={googleCampaignSort} />
+                    <SortTh label={businessType === 'leadgen' ? 'CPA' : 'ROAS'} field={businessType === 'leadgen' ? '_cpa' : '_roas'} sort={googleCampaignSort} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {creativeSort.sortRows(aggCreatives.map((c: any) => ({
+                  {googleCampaignSort.sortRows(aggGoogleCampaigns.map((c: any) => ({
                     ...c,
                     _ctr: c.impressions > 0 ? c.clicks / c.impressions * 100 : 0,
                     _roas: c.spend > 0 ? c.revenue / c.spend : 0,
                     _cpa: c.conversions > 0 ? c.spend / c.conversions : 0,
-                  }))).map((creative: any) => {
-                    const prev = prevAggCreativesMap.get(creative.ad_id)
-                    const ctr = creative.impressions > 0 ? creative.clicks / creative.impressions * 100 : 0
-                    const roas = creative.spend > 0 ? creative.revenue / creative.spend : 0
-                    const cpa = creative.conversions > 0 ? creative.spend / creative.conversions : 0
+                  }))).map((camp: any) => {
+                    const prev = prevAggGoogleCampaignsMap.get(camp.campaign_id)
+                    const ctr = camp.impressions > 0 ? camp.clicks / camp.impressions * 100 : 0
+                    const roas = camp.spend > 0 ? camp.revenue / camp.spend : 0
+                    const cpa = camp.conversions > 0 ? camp.spend / camp.conversions : 0
                     return (
-                      <tr key={creative._key} className="hover:bg-purple-50 align-top">
-                        <td className="px-4 py-3">
-                          <CreativeThumb creative={creative} />
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-gray-900 max-w-[200px] truncate">{creative.ad_name}</div>
-                          {creative.headline && <div className="text-xs text-gray-500 mt-0.5 max-w-[200px] truncate">{creative.headline}</div>}
-                          {creative.primary_copy && <div className="text-xs text-gray-400 mt-0.5 max-w-[200px] truncate italic">"{creative.primary_copy}"</div>}
-                          {creative.call_to_action_type && (
-                            <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
-                              {creative.call_to_action_type.replace(/_/g, ' ')}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-gray-600 max-w-[160px] truncate">{creative.campaign_name}</td>
-                        <td className="px-4 py-3 text-gray-600 max-w-[160px] truncate">{creative.ad_set_name}</td>
+                      <tr key={camp._key} className="hover:bg-red-50">
+                        <td className="px-4 py-3 font-medium max-w-[280px] truncate">{camp.campaign_name}</td>
                         <td className="px-4 py-3 text-right font-medium">
-                          {selectedClientCurrencySym}{creative.spend.toFixed(2)}
-                          {prev && <PctBadge current={creative.spend} previous={prev.spend} />}
+                          {selectedClientCurrencySym}{camp.spend.toFixed(2)}
+                          {prev && <PctBadge current={camp.spend} previous={prev.spend} />}
                         </td>
-                        <td className="px-4 py-3 text-right">{creative.impressions.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right">{camp.impressions.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right">{camp.clicks.toLocaleString()}</td>
                         <td className="px-4 py-3 text-right">
                           {ctr.toFixed(2)}%
                           {prev && prev.impressions > 0 && <PctBadge current={ctr} previous={prev.clicks / prev.impressions * 100} />}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${creative.conversions > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                            {creative.conversions}
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${camp.conversions > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {camp.conversions}
                           </span>
-                          {prev && <PctBadge current={creative.conversions} previous={prev.conversions} />}
+                          {prev && <PctBadge current={camp.conversions} previous={prev.conversions} />}
                         </td>
                         <td className="px-4 py-3 text-right font-semibold">
                           {businessType === 'leadgen'
