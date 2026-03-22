@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Image, Video, DollarSign, TrendingUp, ShoppingCart, MousePointer2,
-  ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight, ExternalLink
+  ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight, ExternalLink,
+  X, ThumbsUp, MessageCircle, Share2, Globe
 } from 'lucide-react'
 import { db } from '../lib/api'
 
@@ -137,6 +138,167 @@ function CreativeThumb({ row }: { row: any }) {
   ) : img
 }
 
+// ── Ad Preview Modal ───────────────────────────────────────────────────────────
+function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
+  const imgSrc = row.thumbnail_url || row.image_url
+  const isVideo = !!row.video_id
+  const roas = row.spend > 0 ? row.revenue / row.spend : 0
+  const ctr = row.impressions > 0 ? row.clicks / row.impressions : 0
+
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const ctaLabel = row.call_to_action_type
+    ? row.call_to_action_type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+    : 'Shop Now'
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Modal header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-gray-800 truncate">{row.ad_name || row.ad_id}</p>
+            <p className="text-xs text-gray-400 truncate mt-0.5">{row.campaign_name}</p>
+          </div>
+          <button onClick={onClose} className="ml-3 p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto">
+          {/* FB Post Mockup */}
+          <div className="bg-white">
+            {/* Post header */}
+            <div className="flex items-center gap-2.5 px-4 pt-3 pb-2">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
+                <span className="text-white text-xs font-bold">Ad</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-gray-900 leading-tight">Sponsored Page</p>
+                <div className="flex items-center gap-1 text-gray-400">
+                  <span className="text-xs">Sponsored</span>
+                  <span className="text-xs">·</span>
+                  <Globe size={11} />
+                </div>
+              </div>
+              <div className="text-gray-400">···</div>
+            </div>
+
+            {/* Primary copy */}
+            {row.primary_copy && (
+              <div className="px-4 pb-2">
+                <p className="text-xs text-gray-800 leading-relaxed whitespace-pre-wrap line-clamp-4">
+                  {row.primary_copy}
+                </p>
+              </div>
+            )}
+
+            {/* Creative image/video */}
+            <div className="w-full bg-gray-100 relative" style={{ minHeight: 240 }}>
+              {imgSrc ? (
+                <img
+                  src={imgSrc}
+                  alt="creative"
+                  className="w-full object-cover"
+                  style={{ maxHeight: 320 }}
+                  onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                />
+              ) : (
+                <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: 240 }}>
+                  {isVideo
+                    ? <Video size={40} className="text-gray-300" />
+                    : <Image size={40} className="text-gray-300" />}
+                </div>
+              )}
+              {isVideo && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center">
+                    <div className="w-0 h-0 border-t-[8px] border-b-[8px] border-l-[14px] border-t-transparent border-b-transparent border-l-white ml-1" />
+                  </div>
+                </div>
+              )}
+              <div className={`absolute top-2 left-2 text-xs px-1.5 py-0.5 rounded font-medium ${isVideo ? 'bg-purple-600/80 text-white' : 'bg-blue-600/80 text-white'}`}>
+                {isVideo ? 'VID' : 'IMG'}
+              </div>
+            </div>
+
+            {/* Headline + CTA bar */}
+            <div className="border-t border-gray-100 bg-gray-50 px-4 py-2.5 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                {row.headline && (
+                  <p className="text-xs font-semibold text-gray-900 truncate">{row.headline}</p>
+                )}
+                <p className="text-xs text-gray-400 truncate">{row.ad_set_name || '—'}</p>
+              </div>
+              <button className="shrink-0 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md hover:bg-blue-700 transition-colors">
+                {ctaLabel}
+              </button>
+            </div>
+
+            {/* Engagement bar (decorative) */}
+            <div className="flex items-center border-t border-gray-100 px-4 py-2 gap-4">
+              <button className="flex items-center gap-1.5 text-gray-500 hover:text-blue-600 transition-colors">
+                <ThumbsUp size={14} />
+                <span className="text-xs">Like</span>
+              </button>
+              <button className="flex items-center gap-1.5 text-gray-500 hover:text-blue-600 transition-colors">
+                <MessageCircle size={14} />
+                <span className="text-xs">Comment</span>
+              </button>
+              <button className="flex items-center gap-1.5 text-gray-500 hover:text-blue-600 transition-colors">
+                <Share2 size={14} />
+                <span className="text-xs">Share</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Performance metrics */}
+          <div className="border-t border-gray-100 px-4 py-3 grid grid-cols-3 gap-3">
+            <div className="text-center">
+              <p className="text-xs text-gray-400">Spend</p>
+              <p className="text-sm font-bold text-gray-900">{row.spend >= 1000 ? `$${(row.spend/1000).toFixed(1)}k` : `$${row.spend.toFixed(0)}`}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-gray-400">ROAS</p>
+              <p className={`text-sm font-bold ${roas >= 3 ? 'text-green-600' : roas >= 1.5 ? 'text-yellow-600' : roas > 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                {roas > 0 ? `${roas.toFixed(2)}x` : '—'}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-gray-400">CTR</p>
+              <p className="text-sm font-bold text-gray-900">{ctr > 0 ? `${(ctr * 100).toFixed(2)}%` : '—'}</p>
+            </div>
+            {row.conversions > 0 && (
+              <div className="text-center">
+                <p className="text-xs text-gray-400">Conversions</p>
+                <p className="text-sm font-bold text-gray-900">{row.conversions}</p>
+              </div>
+            )}
+            {row.revenue > 0 && (
+              <div className="text-center">
+                <p className="text-xs text-gray-400">Revenue</p>
+                <p className="text-sm font-bold text-gray-900">{row.revenue >= 1000 ? `$${(row.revenue/1000).toFixed(1)}k` : `$${row.revenue.toFixed(0)}`}</p>
+              </div>
+            )}
+            <div className="text-center">
+              <p className="text-xs text-gray-400">Impressions</p>
+              <p className="text-sm font-bold text-gray-900">{row.impressions >= 1000 ? `${(row.impressions/1000).toFixed(1)}k` : row.impressions}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Date Presets ───────────────────────────────────────────────────────────────
 const DATE_PRESETS = [
   { label: '1D',  days: 1 },
@@ -191,6 +353,7 @@ export default function CreativePerformance() {
   const [creativePage, setCreativePage] = useState(0)
   const [expandedAdSets, setExpandedAdSets] = useState<Set<string>>(new Set())
   const [chartMode, setChartMode] = useState<'spend' | 'roas'>('spend')
+  const [selectedAd, setSelectedAd] = useState<any>(null)
   const PAGE_SIZE = 20
 
   const creativeSort = useTableSort('spend')
@@ -254,6 +417,9 @@ export default function CreativePerformance() {
 
   return (
     <div className="space-y-6">
+      {/* Ad Preview Modal */}
+      {selectedAd && <AdPreviewModal row={selectedAd} onClose={() => setSelectedAd(null)} />}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -345,6 +511,9 @@ export default function CreativePerformance() {
         const chartData = chartMode === 'spend'
           ? allCreatives.filter(r => r.spend > 0).slice(0, 8)
           : allCreatives.filter(r => r.spend > 0 && r.revenue > 0).sort((a, b) => (b.revenue / b.spend) - (a.revenue / a.spend)).slice(0, 8)
+        const maxBarValue = chartMode === 'spend'
+          ? (chartData[0]?.spend || 1)
+          : Math.max(...chartData.map(r => r.spend > 0 ? r.revenue / r.spend : 0), 1)
 
         return (
           <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -374,22 +543,28 @@ export default function CreativePerformance() {
                 const imgSrc = row.thumbnail_url || row.image_url
                 const isVideo = !!row.video_id
                 const roasColor = roas >= 3 ? 'text-green-600' : roas >= 1.5 ? 'text-yellow-600' : 'text-red-500'
+                const barValue = chartMode === 'spend' ? row.spend : roas
                 return (
                   <div key={row._key} className="flex flex-col gap-1.5">
-                    {/* Spend bar */}
+                    {/* Bar */}
                     <div className="flex items-end justify-center" style={{ height: 40 }}>
                       <div
                         className="rounded-t-sm w-full max-w-[40px] mx-auto transition-all"
                         style={{
-                          height: `${Math.max(6, (row.spend / (chartData[0].spend || 1)) * 40)}px`,
-                          background: chartMode === 'spend' ? CHART_COLORS[i % CHART_COLORS.length] : '#3b82f6',
+                          height: `${Math.max(6, (barValue / maxBarValue) * 40)}px`,
+                          background: chartMode === 'spend' ? CHART_COLORS[i % CHART_COLORS.length] : (roas >= 3 ? '#22c55e' : roas >= 1.5 ? '#eab308' : '#f97316'),
                           opacity: 0.85,
                         }}
                       />
                     </div>
 
-                    {/* Thumbnail — fixed 80px height */}
-                    <div className="relative overflow-hidden rounded-lg bg-gray-100" style={{ height: 80 }}>
+                    {/* Thumbnail — clickable */}
+                    <button
+                      onClick={() => setSelectedAd(row)}
+                      className="relative overflow-hidden rounded-lg bg-gray-100 w-full group cursor-pointer focus:outline-none"
+                      style={{ height: 80 }}
+                      title="Click to preview ad"
+                    >
                       {imgSrc ? (
                         <img src={imgSrc} alt="creative" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
                       ) : (
@@ -400,7 +575,10 @@ export default function CreativePerformance() {
                       <div className={`absolute top-1 left-1 text-xs px-1 py-0.5 rounded font-medium ${isVideo ? 'bg-purple-600/80 text-white' : 'bg-blue-600/80 text-white'}`}>
                         {isVideo ? 'VID' : 'IMG'}
                       </div>
-                    </div>
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100">
+                        <ExternalLink size={14} className="text-white drop-shadow" />
+                      </div>
+                    </button>
 
                     {/* Metrics */}
                     <div className="text-center space-y-0.5">
@@ -465,7 +643,12 @@ export default function CreativePerformance() {
                     return (
                       <tr key={row._key} className="hover:bg-gray-50/50 transition-colors">
                         <td className="px-3 py-2.5">
-                          <CreativeThumb row={row} />
+                          <button onClick={() => setSelectedAd(row)} className="group relative focus:outline-none">
+                            <CreativeThumb row={row} />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                              <ExternalLink size={12} className="text-white drop-shadow" />
+                            </div>
+                          </button>
                         </td>
                         <td className="px-3 py-2.5 max-w-[220px]">
                           <div className="flex items-start gap-2">
