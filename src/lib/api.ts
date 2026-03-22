@@ -134,7 +134,7 @@ export const db = {
             .from('meta_ads_ads')
             .select('id, client_id, date, campaign_id, campaign_name, ad_set_id, ad_set_name, ad_id, ad_name, spend, impressions, clicks, conversions, revenue, image_url, thumbnail_url, video_id, headline, primary_copy, description, call_to_action_type')
             .order('spend', { ascending: false })
-            .limit(100)
+            .limit(2000)
 
         if (clientId && clientId !== 'all') {
             query = query.eq('client_id', clientId)

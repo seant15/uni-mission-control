@@ -377,24 +377,24 @@ export default function CreativePerformance() {
                 return (
                   <div key={row._key} className="flex flex-col gap-1.5">
                     {/* Spend bar */}
-                    <div className="flex items-end justify-center" style={{ height: 48 }}>
+                    <div className="flex items-end justify-center" style={{ height: 40 }}>
                       <div
-                        className="rounded-t-sm w-full max-w-[48px] mx-auto transition-all"
+                        className="rounded-t-sm w-full max-w-[40px] mx-auto transition-all"
                         style={{
-                          height: `${Math.max(8, (row.spend / (chartData[0].spend || 1)) * 48)}px`,
+                          height: `${Math.max(6, (row.spend / (chartData[0].spend || 1)) * 40)}px`,
                           background: chartMode === 'spend' ? CHART_COLORS[i % CHART_COLORS.length] : '#3b82f6',
                           opacity: 0.85,
                         }}
                       />
                     </div>
 
-                    {/* Thumbnail */}
-                    <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-gray-100">
+                    {/* Thumbnail — fixed 80px height */}
+                    <div className="relative overflow-hidden rounded-lg bg-gray-100" style={{ height: 80 }}>
                       {imgSrc ? (
                         <img src={imgSrc} alt="creative" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                          {isVideo ? <Video size={20} className="text-gray-300" /> : <Image size={20} className="text-gray-300" />}
+                          {isVideo ? <Video size={18} className="text-gray-300" /> : <Image size={18} className="text-gray-300" />}
                         </div>
                       )}
                       <div className={`absolute top-1 left-1 text-xs px-1 py-0.5 rounded font-medium ${isVideo ? 'bg-purple-600/80 text-white' : 'bg-blue-600/80 text-white'}`}>
