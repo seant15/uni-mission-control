@@ -153,9 +153,9 @@ export const db = {
     async getGoogleKeywords(clientId?: string, startDate?: string, endDate?: string) {
         let query = supabase
             .from('google_ads_keywords')
-            .select('id, client_id, customer_id, date, campaign_id, campaign_name, ad_group_id, ad_group_name, keyword_id, keyword, match_type, status, impressions, clicks, cost_micros, conversions, ctr, cpc')
-            .order('cost_micros', { ascending: false })
-            .limit(50)
+            .select('id, client_id, customer_id, date, campaign_id, campaign_name, ad_group_id, ad_group_name, keyword_id, keyword, match_type, status, impressions, clicks, cost, conversions, ctr, cpc')
+            .order('cost', { ascending: false })
+            .limit(500)
 
         if (clientId && clientId !== 'all') {
             query = query.eq('client_id', clientId)
@@ -168,7 +168,7 @@ export const db = {
 
         return data?.map(item => ({
             ...item,
-            spend: item.cost_micros ? item.cost_micros / 1000000 : 0
+            spend: item.cost || 0
         }))
     },
 
@@ -179,9 +179,9 @@ export const db = {
         let query = supabase
             .from('google_ads_search_terms')
             // Note: campaign_name and ad_group_name are stored since sync fix; older rows may be null
-            .select('id, client_id, customer_id, date, campaign_id, campaign_name, ad_group_id, ad_group_name, search_term, match_type, impressions, clicks, cost_micros, ctr, cpc, conversions, cost_per_conversion')
-            .order('cost_micros', { ascending: false })
-            .limit(100)
+            .select('id, client_id, customer_id, date, campaign_id, campaign_name, ad_group_id, ad_group_name, search_term, match_type, impressions, clicks, cost, ctr, cpc, conversions, cost_per_conversion')
+            .order('cost', { ascending: false })
+            .limit(500)
 
         if (clientId && clientId !== 'all') {
             query = query.eq('client_id', clientId)
@@ -194,7 +194,7 @@ export const db = {
 
         return data?.map(item => ({
             ...item,
-            spend: item.cost_micros ? item.cost_micros / 1000000 : 0
+            spend: item.cost || 0
         }))
     },
 
