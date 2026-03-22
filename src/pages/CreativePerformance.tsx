@@ -5,9 +5,6 @@ import {
   ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight, ExternalLink
 } from 'lucide-react'
 import { db } from '../lib/api'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
-} from 'recharts'
 
 // ── Sort helpers ───────────────────────────────────────────────────────────────
 function useTableSort(defaultField: string, defaultDir: 'asc' | 'desc' = 'desc') {
@@ -142,10 +139,12 @@ function CreativeThumb({ row }: { row: any }) {
 
 // ── Date Presets ───────────────────────────────────────────────────────────────
 const DATE_PRESETS = [
-  { label: 'Last 7 Days', days: 7 },
-  { label: 'Last 14 Days', days: 14 },
-  { label: 'Last 30 Days', days: 30 },
-  { label: 'Last 90 Days', days: 90 },
+  { label: '1D',  days: 1 },
+  { label: '3D',  days: 3 },
+  { label: '7D',  days: 7 },
+  { label: '14D', days: 14 },
+  { label: '30D', days: 30 },
+  { label: '90D', days: 90 },
 ]
 
 function getPresetDates(days: number) {
@@ -191,6 +190,7 @@ export default function CreativePerformance() {
   const [showClientDrop, setShowClientDrop] = useState(false)
   const [creativePage, setCreativePage] = useState(0)
   const [expandedAdSets, setExpandedAdSets] = useState<Set<string>>(new Set())
+  const [chartMode, setChartMode] = useState<'spend' | 'roas'>('spend')
   const PAGE_SIZE = 20
 
   const creativeSort = useTableSort('spend')
@@ -245,12 +245,6 @@ export default function CreativePerformance() {
   const portfolioCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0
   const adsWithSpend = allCreatives.filter(r => r.spend > 0).length
 
-  // Top 10 for chart
-  const top10 = allCreatives.slice(0, 10).map(r => ({
-    name: (r.ad_name || r.ad_id || 'Unknown').slice(0, 22) + ((r.ad_name || '').length > 22 ? '…' : ''),
-    spend: parseFloat(r.spend.toFixed(2)),
-    revenue: parseFloat(r.revenue.toFixed(2)),
-  }))
 
   const selectedClientName = selectedClient === 'all'
     ? 'All Clients'
@@ -346,26 +340,83 @@ export default function CreativePerformance() {
         <KpiCard label="Portfolio CPA" value={portfolioCpa > 0 ? fmt$(portfolioCpa) : '—'} icon={ShoppingCart} color="bg-orange-500" />
       </div>
 
-      {/* Top 10 Creatives Chart */}
-      {top10.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Top 10 Ads by Spend</h2>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={top10} layout="vertical" margin={{ left: 16, right: 32, top: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-              <XAxis type="number" tickFormatter={v => `$${v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v}`} tick={{ fontSize: 11 }} />
-              <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 11 }} />
-              <Tooltip
-                formatter={(val: any, name: string) => [`$${Number(val).toFixed(2)}`, name === 'spend' ? 'Spend' : 'Revenue']}
-                contentStyle={{ fontSize: 12 }}
-              />
-              <Bar dataKey="spend" radius={[0, 4, 4, 0]}>
-                {top10.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      {/* Top Creatives Visual Chart */}
+      {allCreatives.length > 0 && (() => {
+        const chartData = chartMode === 'spend'
+          ? allCreatives.filter(r => r.spend > 0).slice(0, 8)
+          : allCreatives.filter(r => r.spend > 0 && r.revenue > 0).sort((a, b) => (b.revenue / b.spend) - (a.revenue / a.spend)).slice(0, 8)
+
+        return (
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            {/* Header + toggle */}
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-sm font-semibold text-gray-700">Top Creatives</h2>
+              <div className="flex gap-1 bg-gray-100 p-0.5 rounded-lg">
+                <button
+                  onClick={() => setChartMode('spend')}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${chartMode === 'spend' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Top Spend
+                </button>
+                <button
+                  onClick={() => setChartMode('roas')}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${chartMode === 'roas' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Top Performing
+                </button>
+              </div>
+            </div>
+
+            {/* Thumbnail cards grid */}
+            <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${chartData.length}, minmax(0, 1fr))` }}>
+              {chartData.map((row, i) => {
+                const roas = row.spend > 0 ? row.revenue / row.spend : 0
+                const imgSrc = row.thumbnail_url || row.image_url
+                const isVideo = !!row.video_id
+                const roasColor = roas >= 3 ? 'text-green-600' : roas >= 1.5 ? 'text-yellow-600' : 'text-red-500'
+                return (
+                  <div key={row._key} className="flex flex-col gap-1.5">
+                    {/* Spend bar */}
+                    <div className="flex items-end justify-center" style={{ height: 48 }}>
+                      <div
+                        className="rounded-t-sm w-full max-w-[48px] mx-auto transition-all"
+                        style={{
+                          height: `${Math.max(8, (row.spend / (chartData[0].spend || 1)) * 48)}px`,
+                          background: chartMode === 'spend' ? CHART_COLORS[i % CHART_COLORS.length] : '#3b82f6',
+                          opacity: 0.85,
+                        }}
+                      />
+                    </div>
+
+                    {/* Thumbnail */}
+                    <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-gray-100">
+                      {imgSrc ? (
+                        <img src={imgSrc} alt="creative" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          {isVideo ? <Video size={20} className="text-gray-300" /> : <Image size={20} className="text-gray-300" />}
+                        </div>
+                      )}
+                      <div className={`absolute top-1 left-1 text-xs px-1 py-0.5 rounded font-medium ${isVideo ? 'bg-purple-600/80 text-white' : 'bg-blue-600/80 text-white'}`}>
+                        {isVideo ? 'VID' : 'IMG'}
+                      </div>
+                    </div>
+
+                    {/* Metrics */}
+                    <div className="text-center space-y-0.5">
+                      <p className="text-xs font-bold text-gray-900">{fmt$(row.spend)}</p>
+                      {roas > 0 && <p className={`text-xs font-semibold ${roasColor}`}>{fmtRoas(roas)}</p>}
+                      <p className="text-xs text-gray-400 truncate leading-tight px-1" title={row.ad_name}>
+                        {(row.ad_name || '').slice(0, 18)}{(row.ad_name || '').length > 18 ? '…' : ''}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Creative Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
