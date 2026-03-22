@@ -1,5 +1,12 @@
 import { supabase } from './supabase'
 import type { AgentTask, AgentHealth } from '../types'
+import type {
+  FeedbackRow,
+  FeedbackInsert,
+  FeedbackUpdate,
+  FeedbackFilters,
+  AttachmentMeta,
+} from '../types/feedback'
 import { mockTasks } from './mock-data'
 
 const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
@@ -532,5 +539,149 @@ export const db = {
 
         if (error) throw error
         return true
-    }
+    },
+
+    // ============================================================
+    // Feedback System
+    // ============================================================
+
+    /**
+     * Insert a new feedback row. Returns the new row id.
+     */
+    async submitFeedback(payload: FeedbackInsert): Promise<{ id: string }> {
+        const { data, error } = await supabase
+            .from('feedback')
+            .insert(payload)
+            .select('id')
+            .single()
+        if (error) throw error
+        return data
+    },
+
+    /**
+     * User-override of AI-assigned category after submission.
+     */
+    async updateFeedbackCategory(id: string, category: FeedbackRow['category']): Promise<void> {
+        const { error } = await supabase
+            .from('feedback')
+            .update({ category, category_confidence: null })
+            .eq('id', id)
+        if (error) throw error
+    },
+
+    /**
+     * Upload a file attachment to Supabase Storage.
+     * Path: feedback-attachments/{feedbackId}/{filename}
+     * Returns the AttachmentMeta object to be stored in the feedback row.
+     */
+    async uploadFeedbackAttachment(feedbackId: string, file: File): Promise<AttachmentMeta> {
+        const path = `${feedbackId}/${file.name}`
+        const { error } = await supabase.storage
+            .from('feedback-attachments')
+            .upload(path, file, { upsert: false })
+        if (error) throw error
+        return {
+            url: path,
+            name: file.name,
+            type: file.type,
+            size_bytes: file.size,
+        }
+    },
+
+    /**
+     * Delete a file from Supabase Storage.
+     * Call this when a user closes the widget without submitting.
+     */
+    async deleteFeedbackAttachment(path: string): Promise<void> {
+        const { error } = await supabase.storage
+            .from('feedback-attachments')
+            .remove([path])
+        if (error) throw error
+    },
+
+    /**
+     * Generate a signed URL for a stored attachment (TTL 3600s).
+     */
+    async getFeedbackAttachmentUrl(path: string): Promise<string> {
+        const { data, error } = await supabase.storage
+            .from('feedback-attachments')
+            .createSignedUrl(path, 3600)
+        if (error) throw error
+        return data.signedUrl
+    },
+
+    /**
+     * [Admin] Fetch all feedback with optional filters.
+     */
+    async getFeedback(filters?: FeedbackFilters): Promise<FeedbackRow[]> {
+        let query = supabase
+            .from('feedback')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(500)
+
+        if (filters?.status && filters.status.length > 0) {
+            query = query.in('status', filters.status)
+        }
+        if (filters?.category) {
+            query = query.eq('category', filters.category)
+        }
+        if (filters?.severity) {
+            query = query.eq('severity', filters.severity)
+        }
+        if (filters?.priority) {
+            query = query.eq('priority', filters.priority)
+        }
+        if (filters?.dateFrom) {
+            query = query.gte('created_at', filters.dateFrom)
+        }
+        if (filters?.dateTo) {
+            query = query.lte('created_at', filters.dateTo)
+        }
+        if (filters?.search) {
+            query = query.or(
+                `message.ilike.%${filters.search}%,display_name.ilike.%${filters.search}%`
+            )
+        }
+
+        const { data, error } = await query
+        if (error) throw error
+        return (data ?? []) as FeedbackRow[]
+    },
+
+    /**
+     * [Admin] Inline update for status, priority, category, handled_by, admin_notes, etc.
+     */
+    async updateFeedback(id: string, updates: FeedbackUpdate): Promise<void> {
+        const { error } = await supabase
+            .from('feedback')
+            .update(updates)
+            .eq('id', id)
+        if (error) throw error
+    },
+
+    /**
+     * [Admin] Hard delete a feedback row (super_admin only — enforced by RLS).
+     */
+    async deleteFeedback(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('feedback')
+            .delete()
+            .eq('id', id)
+        if (error) throw error
+    },
+
+    /**
+     * [Admin] Fetch all super_admin users for the "Owner" dropdown.
+     */
+    async getAdminUsers(): Promise<{ id: string; display_name: string }[]> {
+        const { data, error } = await supabase
+            .from('app_users')
+            .select('id, display_name')
+            .eq('role', 'super_admin')
+            .eq('is_active', true)
+            .order('display_name')
+        if (error) throw error
+        return data ?? []
+    },
 }

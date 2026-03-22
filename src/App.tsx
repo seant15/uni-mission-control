@@ -1,7 +1,7 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { LayoutDashboard, AlertTriangle, Users, Bell, Database, Settings, Activity, Layers, Megaphone, X, LogOut } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, Users, Bell, Database, Settings, Activity, Layers, Megaphone, X, LogOut, MessageSquarePlus } from 'lucide-react'
 import MarketingOverview from './pages/MarketingOverview'
 import Alerts from './pages/Alerts'
 import ClientsOverview from './pages/ClientsOverview'
@@ -9,7 +9,9 @@ import DataAnalytics from './pages/DataAnalytics'
 import DashboardSettings from './pages/DashboardSettings'
 import RealtimePerformance from './pages/RealtimePerformance'
 import CreativePerformance from './pages/CreativePerformance'
+import FeedbackAdmin from './pages/FeedbackAdmin'
 import Login from './pages/Login'
+import FeedbackWidget from './components/FeedbackWidget'
 import { getDashboardSettings } from './lib/settings'
 import { useAuth } from './contexts/AuthContext'
 
@@ -118,6 +120,9 @@ function AppShell() {
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-6 px-4">
               System
             </div>
+            {appUser?.role === 'super_admin' && (
+              <NavLink to="/feedback" icon={MessageSquarePlus} label="Feedback" />
+            )}
             <NavLink to="/dashboard/settings" icon={Settings} label="Settings" />
           </nav>
 
@@ -168,9 +173,13 @@ function AppShell() {
               <Route path="/data-analytics" element={<DataAnalytics />} />
               <Route path="/creative-performance" element={<CreativePerformance />} />
               <Route path="/dashboard/settings" element={<DashboardSettings />} />
+              <Route path="/feedback" element={<FeedbackAdmin />} />
             </Routes>
           </main>
         </div>
+
+        {/* Feedback FAB — persists on every authenticated page */}
+        <FeedbackWidget />
       </div>
   )
 }
