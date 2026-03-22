@@ -138,9 +138,21 @@ function CreativeThumb({ row }: { row: any }) {
   ) : img
 }
 
+// Strip Meta CDN compression params and upgrade to high-res
+function hiResUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  // Remove stp= compression parameter to get original quality
+  return url.replace(/[?&]stp=[^&]*/g, (match, offset, str) => {
+    return match.startsWith('?') ? (str.includes('&') ? '?' : '') : ''
+  }).replace(/\?&/, '?').replace(/[?&]$/, '') || url
+}
+
 // ── Ad Preview Modal ───────────────────────────────────────────────────────────
 function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
-  const imgSrc = row.thumbnail_url || row.image_url
+  // Use image_url (not thumbnail_url) for popup — higher res source
+  // For videos, fall back to thumbnail_url
+  const rawSrc = row.image_url || row.thumbnail_url
+  const imgSrc = hiResUrl(rawSrc)
   const isVideo = !!row.video_id
   const roas = row.spend > 0 ? row.revenue / row.spend : 0
   const ctr = row.impressions > 0 ? row.clicks / row.impressions : 0
@@ -238,9 +250,20 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
                 )}
                 <p className="text-xs text-gray-400 truncate">{row.ad_set_name || '—'}</p>
               </div>
-              <button className="shrink-0 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md hover:bg-blue-700 transition-colors">
-                {ctaLabel}
-              </button>
+              {row.destination_url ? (
+                <a
+                  href={row.destination_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  {ctaLabel}
+                </a>
+              ) : (
+                <button className="shrink-0 px-3 py-1.5 bg-gray-200 text-gray-500 text-xs font-semibold rounded-md cursor-default">
+                  {ctaLabel}
+                </button>
+              )}
             </div>
 
             {/* Engagement bar (decorative) */}
