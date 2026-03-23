@@ -140,12 +140,15 @@ function CreativeThumb({ row }: { row: any }) {
   ) : img
 }
 
-// Strip Meta CDN compression params and upgrade to high-res
+// Strip Meta CDN thumbnail resize params (e.g. stp=p64x64, stp=c0.5000x0.5000f_p64x64)
+// Only strip when stp contains a resize spec (p\d+x\d+) — NOT format params like dst-jpg_tt6
+// which are part of the signed request and cause 403 if removed
 function hiResUrl(url: string | null | undefined): string | null {
   if (!url) return null
-  // Remove stp= compression parameter to get original quality
-  return url.replace(/[?&]stp=[^&]*/g, (match, _offset, str) => {
-    return match.startsWith('?') ? (str.includes('&') ? '?' : '') : ''
+  return url.replace(/([?&])stp=[^&]*p\d+x\d+[^&]*/g, (_match, sep, _offset, str) => {
+    // If this was the first param (?stp=...) and there are more params, keep the ?
+    if (sep === '?' && str.includes('&')) return '?'
+    return ''
   }).replace(/\?&/, '?').replace(/[?&]$/, '') || url
 }
 
