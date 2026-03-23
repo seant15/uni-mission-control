@@ -65,6 +65,7 @@ function aggregateCreatives(rows: any[]): any[] {
         headline: row.headline,
         primary_copy: row.primary_copy,
         call_to_action_type: row.call_to_action_type,
+        destination_url: row.destination_url,
         spend: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0,
       })
     }
@@ -78,6 +79,7 @@ function aggregateCreatives(rows: any[]): any[] {
     if (!entry.thumbnail_url && row.thumbnail_url) entry.thumbnail_url = row.thumbnail_url
     if (!entry.video_id && row.video_id) entry.video_id = row.video_id
     if (!entry.headline && row.headline) entry.headline = row.headline
+    if (!entry.destination_url && row.destination_url) entry.destination_url = row.destination_url
   }
   return Array.from(map.values()).sort((a, b) => b.spend - a.spend)
 }
