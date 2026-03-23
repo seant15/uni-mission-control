@@ -142,7 +142,7 @@ function CreativeThumb({ row }: { row: any }) {
 function hiResUrl(url: string | null | undefined): string | null {
   if (!url) return null
   // Remove stp= compression parameter to get original quality
-  return url.replace(/[?&]stp=[^&]*/g, (match, offset, str) => {
+  return url.replace(/[?&]stp=[^&]*/g, (match, _offset, str) => {
     return match.startsWith('?') ? (str.includes('&') ? '?' : '') : ''
   }).replace(/\?&/, '?').replace(/[?&]$/, '') || url
 }
