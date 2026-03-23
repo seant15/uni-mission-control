@@ -17,7 +17,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Plus, GripVertical, Edit2, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Plus, GripVertical, Edit2, Trash2, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, BookOpen } from 'lucide-react'
 import { db } from '../../lib/api'
 import RuleBuilderModal from './RuleBuilderModal'
 import type { AlertRule, AlertTemplateType, AlertSeverity } from '../../types/alerts'
@@ -120,6 +120,152 @@ function SortableRuleCard({ rule, onEdit, onDelete, onToggle }: RuleCardProps) {
   )
 }
 
+// ─── Template reference data ─────────────────────────────────────────────────
+
+const TEMPLATE_REFERENCE = [
+  {
+    category: 'Daily Rules',
+    color: 'blue',
+    templates: [
+      {
+        name: 'Zero Spend',
+        severity: 'critical',
+        when: 'Cumulative daily spend = $0 past a threshold hour',
+        bestFor: 'Catching billing issues, paused campaigns, or budget exhaustion early in the day.',
+        recommended: 'Apply to every active client. Use default thresholds.',
+      },
+      {
+        name: 'Budget Pacing',
+        severity: 'medium',
+        when: 'Today\'s spend is > 30% over or < 40% under the expected pace (30-day avg × time weight)',
+        bestFor: 'Clients on fixed monthly budgets or tight daily caps.',
+        recommended: 'Set overpacing threshold to 1.30 for standard clients, 1.20 for budget-sensitive ones.',
+      },
+      {
+        name: 'CTR Anomaly',
+        severity: 'medium',
+        when: 'Today\'s overall CTR drops below 65% of the 30-day daily baseline',
+        bestFor: 'Detecting creative fatigue, audience exhaustion, or landing page issues.',
+        recommended: 'Set min_impressions ≥ 500 to avoid noise on low-traffic days.',
+      },
+      {
+        name: 'Zero Conversions with Spend',
+        severity: 'high',
+        when: 'Spend is above threshold and 0 conversions past the safe hour (default: 2pm local)',
+        bestFor: 'E-commerce and lead gen clients where daily conversions are expected.',
+        recommended: 'Set min_spend to 30–50% of the client\'s typical daily spend. Set min_hour to 14.',
+      },
+    ],
+  },
+  {
+    category: '6-Hour Sliding Window',
+    color: 'purple',
+    templates: [
+      {
+        name: 'Spend Spike',
+        severity: 'high',
+        when: 'Last 6h spend is 2× higher than the same 6h window over the prior 7 days',
+        bestFor: 'Catching runaway bids, audience size changes, or accidental campaign duplicates.',
+        recommended: 'ratio: 2.0 — increase to 2.5 for high-variance clients (e.g. flash sale accounts).',
+      },
+      {
+        name: 'Spend Dead Zone',
+        severity: 'high',
+        when: '3+ consecutive hours with $0 spend during active hours',
+        bestFor: 'Catching mid-day delivery stops due to budget exhaustion, bid limits, or disapprovals.',
+        recommended: 'consecutive_zero_hours: 3. Don\'t apply between midnight–6am.',
+      },
+      {
+        name: 'CTR Cliff',
+        severity: 'medium',
+        when: 'CTR in the last 6h is <60% of the 7-day same-window average',
+        bestFor: 'Intraday creative performance monitoring. Useful for video/image-heavy accounts.',
+        recommended: 'min_prior_impressions: 200 to avoid firing during low-traffic hours.',
+      },
+      {
+        name: 'Impression Collapse',
+        severity: 'high',
+        when: 'Hourly impressions drop to <60% of the 7-day per-hour baseline',
+        bestFor: 'Auction competition changes, audience targeting issues, or policy holds.',
+        recommended: 'min_baseline_impressions: 100. Pair with Spend Dead Zone for full coverage.',
+      },
+      {
+        name: 'Conversion Velocity Drop',
+        severity: 'high',
+        when: 'Conversions per dollar in the 6h window drop to <50% of the 7-day same-window avg',
+        bestFor: 'Performance max and smart bidding campaigns where conv. rate dips signal issues.',
+        recommended: 'min_spend: 20. ratio: 0.50. Increase threshold for clients with conversion delay.',
+      },
+      {
+        name: 'Zero Impressions Sustained',
+        severity: 'critical',
+        when: '6+ consecutive hours with 0 impressions',
+        bestFor: 'Full account delivery stops — billing issues, account suspension, or all campaigns paused.',
+        recommended: 'consecutive_zero_hours: 6. Apply globally across all clients.',
+      },
+    ],
+  },
+]
+
+const SEVERITY_DOT: Record<string, string> = {
+  critical: 'bg-red-500',
+  high:     'bg-orange-400',
+  medium:   'bg-yellow-400',
+  low:      'bg-blue-400',
+}
+
+function TemplateReferencePanel() {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="border border-gray-200 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+      >
+        <div className="flex items-center gap-2">
+          <BookOpen size={15} className="text-gray-500" />
+          <span className="text-sm font-medium text-gray-700">Template Reference & Best Practices</span>
+          <span className="text-xs text-gray-400">— what each rule does and when to use it</span>
+        </div>
+        {open ? <ChevronUp size={15} className="text-gray-400" /> : <ChevronDown size={15} className="text-gray-400" />}
+      </button>
+
+      {open && (
+        <div className="p-4 space-y-6 bg-white">
+          {TEMPLATE_REFERENCE.map(cat => (
+            <div key={cat.category}>
+              <h3 className={`text-xs font-bold uppercase tracking-wider mb-3 ${
+                cat.color === 'blue' ? 'text-blue-600' : 'text-purple-600'
+              }`}>{cat.category}</h3>
+              <div className="space-y-3">
+                {cat.templates.map(t => (
+                  <div key={t.name} className="border border-gray-100 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${SEVERITY_DOT[t.severity]}`} />
+                      <span className="text-sm font-semibold text-gray-800">{t.name}</span>
+                      <span className="text-xs text-gray-400 capitalize">({t.severity})</span>
+                    </div>
+                    <div className="space-y-1 text-xs text-gray-600 leading-relaxed">
+                      <p><span className="font-medium text-gray-700">Fires when: </span>{t.when}</p>
+                      <p><span className="font-medium text-gray-700">Best for: </span>{t.bestFor}</p>
+                      <p><span className="font-medium text-green-700">Recommended: </span>{t.recommended}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 leading-relaxed">
+            <strong>Dedup note:</strong> All daily rules fire at most once per client per day. All 6-hour window rules fire at most once per client per rule per day. Snoozed alerts auto-reopen the next day via pg_cron.
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface Props {
   currentUserId: string
 }
@@ -199,6 +345,9 @@ export default function AlertRulesTab({ currentUserId }: Props) {
           <Plus size={15} /> New Rule
         </button>
       </div>
+
+      {/* Template reference */}
+      <TemplateReferencePanel />
 
       {/* Rule cards grid with drag-and-drop */}
       {sorted.length === 0 ? (
