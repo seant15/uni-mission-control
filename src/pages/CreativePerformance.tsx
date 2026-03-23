@@ -66,6 +66,8 @@ function aggregateCreatives(rows: any[]): any[] {
         primary_copy: row.primary_copy,
         call_to_action_type: row.call_to_action_type,
         destination_url: row.destination_url,
+        instagram_permalink_url: row.instagram_permalink_url,
+        facebook_post_url: row.facebook_post_url,
         spend: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0,
       })
     }
@@ -80,6 +82,8 @@ function aggregateCreatives(rows: any[]): any[] {
     if (!entry.video_id && row.video_id) entry.video_id = row.video_id
     if (!entry.headline && row.headline) entry.headline = row.headline
     if (!entry.destination_url && row.destination_url) entry.destination_url = row.destination_url
+    if (!entry.instagram_permalink_url && row.instagram_permalink_url) entry.instagram_permalink_url = row.instagram_permalink_url
+    if (!entry.facebook_post_url && row.facebook_post_url) entry.facebook_post_url = row.facebook_post_url
   }
   return Array.from(map.values()).sort((a, b) => b.spend - a.spend)
 }
@@ -159,6 +163,7 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
   const rawSrc = row.image_url || row.thumbnail_url
   const imgSrc = hiResUrl(rawSrc)
   const isVideo = !!row.video_id
+  const videoPostUrl = row.instagram_permalink_url || row.facebook_post_url || null
   const roas = row.spend > 0 ? row.revenue / row.spend : 0
   const ctr = row.impressions > 0 ? row.clicks / row.impressions : 0
 
@@ -236,17 +241,25 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
                 </div>
               )}
               {isVideo && (
-                <a
-                  href={`https://www.facebook.com/ads/library/?id=${row.ad_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="absolute inset-0 flex items-center justify-center group"
-                  title="View in Ad Library"
-                >
-                  <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center group-hover:bg-black/70 transition-colors">
-                    <div className="w-0 h-0 border-t-[8px] border-b-[8px] border-l-[14px] border-t-transparent border-b-transparent border-l-white ml-1" />
+                videoPostUrl ? (
+                  <a
+                    href={videoPostUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="absolute inset-0 flex items-center justify-center group"
+                    title={row.instagram_permalink_url ? 'View on Instagram' : 'View on Facebook'}
+                  >
+                    <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center group-hover:bg-black/70 transition-colors">
+                      <div className="w-0 h-0 border-t-[8px] border-b-[8px] border-l-[14px] border-t-transparent border-b-transparent border-l-white ml-1" />
+                    </div>
+                  </a>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center">
+                      <div className="w-0 h-0 border-t-[8px] border-b-[8px] border-l-[14px] border-t-transparent border-b-transparent border-l-white ml-1" />
+                    </div>
                   </div>
-                </a>
+                )
               )}
               <div className={`absolute top-2 left-2 text-xs px-1.5 py-0.5 rounded font-medium ${isVideo ? 'bg-purple-600/80 text-white' : 'bg-blue-600/80 text-white'}`}>
                 {isVideo ? 'VID' : 'IMG'}

@@ -132,7 +132,7 @@ export const db = {
     async getMetaCreatives(clientId?: string, startDate?: string, endDate?: string) {
         let query = supabase
             .from('meta_ads_ads')
-            .select('id, client_id, date, campaign_id, campaign_name, ad_set_id, ad_set_name, ad_id, ad_name, spend, impressions, clicks, conversions, revenue, image_url, thumbnail_url, video_id, headline, primary_copy, description, call_to_action_type, destination_url')
+            .select('id, client_id, date, campaign_id, campaign_name, ad_set_id, ad_set_name, ad_id, ad_name, spend, impressions, clicks, conversions, revenue, image_url, thumbnail_url, video_id, headline, primary_copy, description, call_to_action_type, destination_url, instagram_permalink_url, facebook_post_url')
             .order('spend', { ascending: false })
             .limit(2000)
 
