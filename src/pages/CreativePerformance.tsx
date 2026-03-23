@@ -236,17 +236,11 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
                 </div>
               )}
               {isVideo && (
-                <a
-                  href={`https://www.facebook.com/videos/${row.video_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="absolute inset-0 flex items-center justify-center group"
-                  title="Watch on Facebook"
-                >
-                  <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center group-hover:bg-black/70 transition-colors">
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center">
                     <div className="w-0 h-0 border-t-[8px] border-b-[8px] border-l-[14px] border-t-transparent border-b-transparent border-l-white ml-1" />
                   </div>
-                </a>
+                </div>
               )}
               <div className={`absolute top-2 left-2 text-xs px-1.5 py-0.5 rounded font-medium ${isVideo ? 'bg-purple-600/80 text-white' : 'bg-blue-600/80 text-white'}`}>
                 {isVideo ? 'VID' : 'IMG'}
