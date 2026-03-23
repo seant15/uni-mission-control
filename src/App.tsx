@@ -164,9 +164,15 @@ function AppShell() {
               <span className="text-xs text-gray-400 font-medium tracking-wide uppercase select-none">
                 UNI Mission Control
               </span>
-              <button className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
+              <button
+                onClick={() => navigate('/alerts')}
+                className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                title="View alerts"
+              >
                 <Bell size={18} />
-                <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full" />
+                {(openAlertCount ?? 0) > 0 && (
+                  <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full" />
+                )}
               </button>
             </div>
           </header>
