@@ -33,15 +33,37 @@ export default function DashboardSettingsPage() {
     const loadSettings = async () => {
       const userId = user?.id || 'default_user'
       const loaded = await getDashboardSettings(userId)
+      // Load global announcement state into the form for super_admin
+      if (appUser?.role === 'super_admin' && userId !== 'default_user') {
+        const global = await getDashboardSettings('default_user')
+        loaded.announcementEnabled = global.announcementEnabled
+        loaded.announcementText = global.announcementText
+        loaded.announcementStyle = global.announcementStyle
+      }
       setSettings(loaded)
       setLoading(false)
     }
     loadSettings()
-  }, [user])
+  }, [user, appUser])
 
   const handleSave = async () => {
     const userId = user?.id || 'default_user'
+    const isSuperAdmin = appUser?.role === 'super_admin'
+
+    // Personal settings saved to own user ID
     const success = await saveDashboardSettings(userId, settings)
+
+    // Announcement is global — super_admin saves it to default_user so all users see it
+    if (isSuperAdmin && userId !== 'default_user') {
+      const globalSettings = await getDashboardSettings('default_user')
+      await saveDashboardSettings('default_user', {
+        ...globalSettings,
+        announcementEnabled: settings.announcementEnabled,
+        announcementText: settings.announcementText,
+        announcementStyle: settings.announcementStyle,
+      })
+    }
+
     if (success) {
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
@@ -417,8 +439,8 @@ export default function DashboardSettingsPage() {
             </div>
           </div>
 
-          {/* Announcement Banner */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          {/* Announcement Banner — admin only */}
+          {appUser?.role === 'super_admin' && <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">📢 Announcement Banner</h2>
             <p className="text-sm text-gray-500 mb-4">
               Display a banner at the top of every page. Supports basic HTML (e.g.{' '}
@@ -492,7 +514,7 @@ export default function DashboardSettingsPage() {
                 </div>
               )}
             </div>
-          </div>
+          </div>}
 
           {/* Reset to Defaults */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

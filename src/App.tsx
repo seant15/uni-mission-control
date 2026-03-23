@@ -25,14 +25,13 @@ const ANNOUNCEMENT_STYLES = {
 function AnnouncementBanner() {
   const [ann, setAnn] = useState<{ enabled: boolean; text: string; style: string } | null>(null)
   const [dismissed, setDismissed] = useState(false)
-  const { user } = useAuth()
 
   useEffect(() => {
-    const userId = user?.id || 'default_user'
-    getDashboardSettings(userId).then(s => {
+    // Announcements are global — always read from the admin/default settings
+    getDashboardSettings('default_user').then(s => {
       setAnn({ enabled: s.announcementEnabled, text: s.announcementText, style: s.announcementStyle })
     })
-  }, [user])
+  }, [])
 
   if (!ann || !ann.enabled || !ann.text || dismissed) return null
 
