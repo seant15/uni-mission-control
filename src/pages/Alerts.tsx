@@ -1,462 +1,216 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  AlertTriangle, CheckCircle, Clock, Filter,
-  Edit2, X, AlertCircle, Info, RotateCcw
-} from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import type { Alert, AlertSeverity, AlertStatus } from '../types'
+import { db } from '../lib/api'
+import { useAuth } from '../contexts/AuthContext'
+import AlertSummaryBar from './Alerts/AlertSummaryBar'
+import AlertFilterBar from './Alerts/AlertFilterBar'
+import AlertGroupList from './Alerts/AlertGroupList'
+import AlertColumnCustomizer from './Alerts/AlertColumnCustomizer'
+import AlertRulesTab from './Alerts/AlertRulesTab'
+import type {
+  Alert,
+  AlertGroup,
+  AlertFilterState,
+  AlertColumnDef,
+} from '../types/alerts'
+import { DEFAULT_ALERT_COLUMNS as DEFAULT_COLS } from '../types/alerts'
 
-const PLATFORM_LABEL: Record<string, string> = {
-  google_ads: 'Google',
-  meta_ads: 'Meta',
-  tiktok_ads: 'TikTok',
-  all: 'All',
-}
+const PAGE_SIZE = 25
+const TABS = ['Alerts', 'Alert Rules'] as const
+type Tab = typeof TABS[number]
 
-const PLATFORM_COLOR: Record<string, string> = {
-  google_ads: 'bg-blue-100 text-blue-700',
-  meta_ads: 'bg-indigo-100 text-indigo-700',
-  tiktok_ads: 'bg-pink-100 text-pink-700',
-  all: 'bg-gray-100 text-gray-700',
+// Group alerts by group_key (client-side)
+function groupAlerts(alerts: Alert[]): AlertGroup[] {
+  const map = new Map<string, Alert[]>()
+
+  for (const alert of alerts) {
+    const key = alert.group_key || `__ungrouped_${alert.id}`
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(alert)
+  }
+
+  return Array.from(map.entries()).map(([group_key, all_alerts]) => {
+    // Sort within group: critical first, then by created_at desc
+    const sorted = [...all_alerts].sort((a, b) => {
+      const sev = { critical: 0, high: 1, medium: 2, low: 3 }
+      const diff = (sev[a.severity] ?? 4) - (sev[b.severity] ?? 4)
+      if (diff !== 0) return diff
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+    return {
+      group_key,
+      representative: sorted[0],
+      all_alerts: sorted,
+      count: sorted.length,
+    }
+  })
 }
 
 export default function Alerts() {
-  const [selectedSeverity, setSelectedSeverity] = useState<AlertSeverity[]>([])
-  const [selectedStatus, setSelectedStatus] = useState<AlertStatus[]>([])
-  const [selectedPlatform, setSelectedPlatform] = useState<string[]>([])
-  const [editingNote, setEditingNote] = useState<string | null>(null)
-  const [noteText, setNoteText] = useState('')
+  const { appUser } = useAuth()
   const queryClient = useQueryClient()
 
-  // Fetch alerts
-  const { data: alerts, isLoading, error } = useQuery({
-    queryKey: ['alerts', selectedSeverity, selectedStatus, selectedPlatform],
-    queryFn: async () => {
-      let query = supabase
-        .from('alerts')
-        .select('*')
-        .order('created_at', { ascending: false })
+  const [activeTab,    setActiveTab]    = useState<Tab>('Alerts')
+  const [filters,      setFilters]      = useState<AlertFilterState>({
+    severity: [], status: [], platform: [], clientId: [],
+    search: '', dateRange: null, assignedToMe: false,
+  })
+  const [page,         setPage]         = useState(1)
+  const [columns,      setColumns]      = useState<AlertColumnDef[]>(DEFAULT_COLS)
 
-      if (selectedSeverity.length > 0) {
-        query = query.in('severity', selectedSeverity)
-      }
+  const isAdmin = ['super_admin', 'team_member'].includes(appUser?.role ?? '')
 
-      if (selectedStatus.length > 0) {
-        query = query.in('status', selectedStatus)
-      }
+  // Load saved column preferences on mount
+  useEffect(() => {
+    if (!appUser?.id) return
+    db.getAlertColumnPreferences(appUser.id).then(saved => {
+      if (saved && saved.length > 0) setColumns(saved)
+    }).catch(() => {/* use defaults */})
+  }, [appUser?.id])
 
-      if (selectedPlatform.length > 0) {
-        query = query.in('platform', selectedPlatform)
-      }
+  // Save column preferences (debounced)
+  const saveColTimeout = useRef<ReturnType<typeof setTimeout>>()
+  function handleColumnsChange(next: AlertColumnDef[]) {
+    setColumns(next)
+    if (!appUser?.id) return
+    clearTimeout(saveColTimeout.current)
+    saveColTimeout.current = setTimeout(() => {
+      db.saveAlertColumnPreferences(appUser.id, next)
+    }, 500)
+  }
 
-      const { data, error } = await query
-
-      if (error) throw new Error(error.message)
-      return data as Alert[]
-    },
+  // Fetch paginated alerts
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['alerts', filters, page],
+    queryFn:  () => db.getAlerts(filters, page, PAGE_SIZE),
+    placeholderData: prev => prev,
   })
 
-  // Update alert status
-  const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: AlertStatus }) => {
-      const updates: any = {
-        status,
-        updated_at: new Date().toISOString(),
-      }
+  const alerts = data?.data ?? []
+  const totalCount = data?.count ?? 0
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
-      if (status === 'resolved') {
-        updates.resolved_at = new Date().toISOString()
-      }
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1) }, [filters])
 
-      const { error } = await supabase
-        .from('alerts')
-        .update(updates)
-        .eq('id', id)
+  // Supabase Realtime: refresh when new alerts come in
+  useEffect(() => {
+    const channel = supabase
+      .channel('alerts-realtime')
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'alerts' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['alerts'] })
+          queryClient.invalidateQueries({ queryKey: ['alert-counts'] })
+          queryClient.invalidateQueries({ queryKey: ['alert-open-count'] })
+        }
+      )
+      .subscribe()
 
-      if (error) throw new Error(error.message)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['alerts'] })
-    },
-  })
+    return () => { supabase.removeChannel(channel) }
+  }, [queryClient])
 
-  // Update alert notes
-  const updateNotesMutation = useMutation({
-    mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
-      const { error } = await supabase
-        .from('alerts')
-        .update({ notes, updated_at: new Date().toISOString() })
-        .eq('id', id)
-
-      if (error) throw new Error(error.message)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['alerts'] })
-      setEditingNote(null)
-      setNoteText('')
-    },
-  })
-
-  const handleSaveNote = (id: string) => {
-    updateNotesMutation.mutate({ id, notes: noteText })
-  }
-
-  // Calculate summary stats
-  const summary = alerts?.reduce(
-    (acc, alert) => {
-      acc.total++
-      if (alert.status === 'new') acc.new++
-      if (alert.status === 'in_progress') acc.inProgress++
-      if (alert.severity === 'critical') acc.critical++
-      if (alert.severity === 'high') acc.high++
-      return acc
-    },
-    { total: 0, new: 0, inProgress: 0, critical: 0, high: 0 }
-  ) || { total: 0, new: 0, inProgress: 0, critical: 0, high: 0 }
-
-  const getSeverityColor = (severity: AlertSeverity) => {
-    switch (severity) {
-      case 'critical': return 'text-red-700 bg-red-100'
-      case 'high': return 'text-orange-700 bg-orange-100'
-      case 'medium': return 'text-yellow-700 bg-yellow-100'
-      case 'low': return 'text-blue-700 bg-blue-100'
-    }
-  }
-
-  const getStatusColor = (status: AlertStatus) => {
-    switch (status) {
-      case 'new': return 'text-red-700 bg-red-50'
-      case 'in_progress': return 'text-blue-700 bg-blue-50'
-      case 'resolved': return 'text-green-700 bg-green-50'
-      case 'ignored': return 'text-gray-700 bg-gray-50'
-    }
-  }
-
-  const getStatusIcon = (status: AlertStatus) => {
-    switch (status) {
-      case 'new': return <AlertCircle size={16} />
-      case 'in_progress': return <Clock size={16} />
-      case 'resolved': return <CheckCircle size={16} />
-      case 'ignored': return <X size={16} />
-    }
-  }
+  const groups = groupAlerts(alerts)
+  const visibleColumns = columns.filter(c => c.visible).map(c => c.key)
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">Performance Alerts</h1>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-5 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm text-gray-600">Total Alerts</div>
-          <div className="text-2xl font-bold mt-1">{summary.total}</div>
+    <div className="space-y-5">
+      {/* Page header + tabs */}
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Alerts</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Performance monitoring across all clients</p>
         </div>
-        <div className="bg-red-50 rounded-lg shadow p-4">
-          <div className="text-sm text-red-700">New Alerts</div>
-          <div className="text-2xl font-bold text-red-700 mt-1">{summary.new}</div>
-        </div>
-        <div className="bg-blue-50 rounded-lg shadow p-4">
-          <div className="text-sm text-blue-700">In Progress</div>
-          <div className="text-2xl font-bold text-blue-700 mt-1">{summary.inProgress}</div>
-        </div>
-        <div className="bg-orange-50 rounded-lg shadow p-4">
-          <div className="text-sm text-orange-700">Critical</div>
-          <div className="text-2xl font-bold text-orange-700 mt-1">{summary.critical}</div>
-        </div>
-        <div className="bg-yellow-50 rounded-lg shadow p-4">
-          <div className="text-sm text-yellow-700">High Priority</div>
-          <div className="text-2xl font-bold text-yellow-700 mt-1">{summary.high}</div>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <Filter size={16} className="text-gray-500" />
-            <span className="text-sm font-medium">Filters:</span>
-          </div>
-
-          {/* Severity Filter */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Severity:</span>
-            {(['critical', 'high', 'medium', 'low'] as AlertSeverity[]).map(severity => (
-              <button
-                key={severity}
-                onClick={() => {
-                  setSelectedSeverity(prev =>
-                    prev.includes(severity)
-                      ? prev.filter(s => s !== severity)
-                      : [...prev, severity]
-                  )
-                }}
-                className={`px-3 py-1 rounded-full text-xs font-medium capitalize transition-colors ${
-                  selectedSeverity.includes(severity)
-                    ? getSeverityColor(severity)
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {severity}
-              </button>
-            ))}
-          </div>
-
-          {/* Status Filter */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Status:</span>
-            {(['new', 'in_progress', 'resolved', 'ignored'] as AlertStatus[]).map(status => (
-              <button
-                key={status}
-                onClick={() => {
-                  setSelectedStatus(prev =>
-                    prev.includes(status)
-                      ? prev.filter(s => s !== status)
-                      : [...prev, status]
-                  )
-                }}
-                className={`px-3 py-1 rounded-full text-xs font-medium capitalize transition-colors ${
-                  selectedStatus.includes(status)
-                    ? getStatusColor(status)
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {status.replace('_', ' ')}
-              </button>
-            ))}
-          </div>
-
-          {/* Platform Filter */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Platform:</span>
-            {(['google_ads', 'meta_ads'] as const).map(p => (
-              <button
-                key={p}
-                onClick={() => setSelectedPlatform(prev =>
-                  prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
-                )}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  selectedPlatform.includes(p)
-                    ? PLATFORM_COLOR[p]
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {PLATFORM_LABEL[p]}
-              </button>
-            ))}
-          </div>
-
-          {(selectedSeverity.length > 0 || selectedStatus.length > 0 || selectedPlatform.length > 0) && (
+        <div className="flex border-b border-gray-200">
+          {TABS.filter(t => t === 'Alerts' || isAdmin).map(tab => (
             <button
-              onClick={() => {
-                setSelectedSeverity([])
-                setSelectedStatus([])
-                setSelectedPlatform([])
-              }}
-              className="text-sm text-blue-600 hover:text-blue-700"
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-5 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                activeTab === tab
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
             >
-              Clear all
+              {tab}
             </button>
-          )}
+          ))}
         </div>
       </div>
 
-      {/* Error State */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center gap-2 text-red-700">
-            <AlertTriangle size={20} />
-            <div>
-              <div className="font-medium">Failed to load alerts</div>
-              <div className="text-sm">{error.message}</div>
-              <div className="text-xs mt-1 text-red-600">
-                Please check your Supabase configuration in environment variables
-              </div>
-            </div>
+      {activeTab === 'Alerts' ? (
+        <>
+          {/* Summary stats */}
+          <AlertSummaryBar />
+
+          {/* Filter bar */}
+          <AlertFilterBar filters={filters} onChange={setFilters} />
+
+          {/* Table header: count + column customizer */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-500">
+              {isLoading ? 'Loading…' : `${totalCount} alert${totalCount !== 1 ? 's' : ''}`}
+              {totalCount > 0 && ` · Page ${page} of ${totalPages}`}
+            </span>
+            <AlertColumnCustomizer columns={columns} onChange={handleColumnsChange} />
           </div>
-        </div>
-      )}
 
-      {/* Loading State */}
-      {isLoading && (
-        <div className="text-center py-12">
-          <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          <div className="mt-2 text-gray-600">Loading alerts...</div>
-        </div>
-      )}
+          {/* Error state */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+              Failed to load alerts: {(error as Error).message}
+            </div>
+          )}
 
-      {/* Alerts Table */}
-      {!isLoading && alerts && alerts.length > 0 && (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Severity</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Account</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Alert</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Type</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Detected</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Notes</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {alerts.map(alert => (
-                <tr key={alert.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${getSeverityColor(alert.severity)}`}>
-                      {alert.severity}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <div className="font-medium">{alert.account_name || '—'}</div>
-                    {alert.platform && (
-                      <span className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium ${PLATFORM_COLOR[alert.platform] || 'bg-gray-100 text-gray-600'}`}>
-                        {PLATFORM_LABEL[alert.platform] || alert.platform}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <div>{alert.message}</div>
-                    {(alert.metric_name || alert.metric_value != null) && (
-                      <div className="flex items-center gap-2 mt-1">
-                        {alert.metric_name && (
-                          <span className="text-xs text-gray-500">{alert.metric_name}:</span>
-                        )}
-                        {alert.metric_value != null && (
-                          <span className="text-xs font-medium text-gray-700">
-                            {typeof alert.metric_value === 'number' && alert.metric_value > 1
-                              ? `$${alert.metric_value.toFixed(0)}`
-                              : `${(Number(alert.metric_value) * 100).toFixed(2)}%`}
-                          </span>
-                        )}
-                        {alert.threshold != null && (
-                          <span className="text-xs text-gray-400">
-                            vs ${typeof alert.threshold === 'number' ? alert.threshold.toFixed(0) : alert.threshold} expected
-                          </span>
-                        )}
-                        {alert.metric_change && (
-                          <span className="text-xs text-red-600">{alert.metric_change}</span>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 capitalize">
-                    {(alert.alert_type || '-').replace(/_/g, ' ')}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {alert.triggered_date
-                      ? `${alert.triggered_date}${alert.triggered_hour != null ? ` h${alert.triggered_hour}` : ''}`
-                      : new Date(alert.created_at).toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(alert.status)}`}>
-                      {getStatusIcon(alert.status)}
-                      {alert.status.replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {editingNote === alert.id ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={noteText}
-                          onChange={(e) => setNoteText(e.target.value)}
-                          className="border rounded px-2 py-1 text-sm flex-1"
-                          placeholder="Add note..."
-                        />
-                        <button
-                          onClick={() => handleSaveNote(alert.id)}
-                          className="text-green-600 hover:text-green-700"
-                        >
-                          <CheckCircle size={16} />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingNote(null)
-                            setNoteText('')
-                          }}
-                          className="text-gray-600 hover:text-gray-700"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-600">{alert.notes || '-'}</span>
-                        <button
-                          onClick={() => {
-                            setEditingNote(alert.id)
-                            setNoteText(alert.notes || '')
-                          }}
-                          className="text-blue-600 hover:text-blue-700"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      {alert.status !== 'resolved' && (
-                        <button
-                          onClick={() => updateStatusMutation.mutate({ id: alert.id, status: 'resolved' })}
-                          className="text-green-600 hover:text-green-700 text-sm"
-                          title="Mark as resolved"
-                        >
-                          <CheckCircle size={16} />
-                        </button>
-                      )}
-                      {alert.status === 'new' && (
-                        <button
-                          onClick={() => updateStatusMutation.mutate({ id: alert.id, status: 'in_progress' })}
-                          className="text-blue-600 hover:text-blue-700 text-sm"
-                          title="Mark in progress"
-                        >
-                          <Clock size={16} />
-                        </button>
-                      )}
-                      {(alert.status === 'resolved' || alert.status === 'ignored') && (
-                        <button
-                          onClick={() => updateStatusMutation.mutate({ id: alert.id, status: 'new' })}
-                          className="text-orange-500 hover:text-orange-600 text-sm"
-                          title="Reopen"
-                        >
-                          <RotateCcw size={16} />
-                        </button>
-                      )}
-                      {alert.status !== 'ignored' && (
-                        <button
-                          onClick={() => updateStatusMutation.mutate({ id: alert.id, status: 'ignored' })}
-                          className="text-gray-600 hover:text-gray-700 text-sm"
-                          title="Ignore"
-                        >
-                          <X size={16} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+          {/* Loading skeleton */}
+          {isLoading && (
+            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-4 py-4 border-b border-gray-50">
+                  <div className="h-5 w-16 bg-gray-100 rounded-full" />
+                  <div className="h-4 w-28 bg-gray-100 rounded" />
+                  <div className="h-4 flex-1 bg-gray-100 rounded" />
+                  <div className="h-5 w-14 bg-gray-100 rounded-full" />
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </div>
+          )}
 
-      {/* Empty State */}
-      {!isLoading && !error && alerts && alerts.length === 0 && (
-        <div className="bg-white rounded-lg shadow p-12 text-center">
-          <Info className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No alerts found</h3>
-          <p className="text-gray-600">
-            {selectedSeverity.length > 0 || selectedStatus.length > 0
-              ? 'Try adjusting your filters to see more alerts.'
-              : 'All clear! No performance alerts at this time.'}
-          </p>
-        </div>
+          {/* Alert group list */}
+          {!isLoading && (
+            <AlertGroupList
+              groups={groups}
+              currentUserId={appUser?.id ?? ''}
+              currentUserRole={appUser?.role ?? 'client_user'}
+              visibleColumns={visibleColumns}
+            />
+          )}
+
+          {/* Pagination */}
+          {!isLoading && totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
+              >
+                ← Prev
+              </button>
+              <span className="text-sm text-gray-500">Page {page} of {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
+              >
+                Next →
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        /* Alert Rules tab */
+        <AlertRulesTab currentUserId={appUser?.id ?? ''} />
       )}
     </div>
   )

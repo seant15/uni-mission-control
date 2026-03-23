@@ -1,7 +1,9 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { LayoutDashboard, AlertTriangle, Users, Bell, Database, Settings, Activity, Layers, Megaphone, X, LogOut, MessageSquarePlus } from 'lucide-react'
+import { db } from './lib/api'
 import MarketingOverview from './pages/MarketingOverview'
 import Alerts from './pages/Alerts'
 import ClientsOverview from './pages/ClientsOverview'
@@ -76,6 +78,13 @@ function AppShell() {
   const { appUser, signOut } = useAuth()
   const navigate = useNavigate()
 
+  const { data: openAlertCount } = useQuery({
+    queryKey: ['alert-open-count'],
+    queryFn:  db.getOpenAlertCount.bind(db),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  })
+
   async function handleSignOut() {
     try {
       await signOut()
@@ -110,7 +119,7 @@ function AppShell() {
               Main
             </div>
             <NavLink to="/" icon={LayoutDashboard} label="UNI Overview" />
-            <NavLink to="/alerts" icon={AlertTriangle} label="Alerts" />
+            <NavLink to="/alerts" icon={AlertTriangle} label="Alerts" badge={openAlertCount ?? 0} />
             <NavLink to="/clients-overview" icon={Users} label="Clients Overview" />
             <NavLink to="/realtime-performance" icon={Activity} label="Real-time Performance" />
             <NavLink to="/data-analytics" icon={Database} label="Account Performance" />
@@ -183,7 +192,7 @@ function AppShell() {
   )
 }
 
-function NavLink({ to, icon: Icon, label }: { to: string; icon: any; label: string }) {
+function NavLink({ to, icon: Icon, label, badge }: { to: string; icon: any; label: string; badge?: number }) {
   const location = useLocation()
   const isActive = location.pathname === to
 
@@ -198,7 +207,15 @@ function NavLink({ to, icon: Icon, label }: { to: string; icon: any; label: stri
     >
       <Icon size={20} />
       <span className="font-medium">{label}</span>
-      {isActive && <div className="ml-auto w-1.5 h-1.5 bg-white rounded-full" />}
+      {badge && badge > 0 ? (
+        <span className={`ml-auto px-1.5 py-0.5 rounded-full text-xs font-bold min-w-[20px] text-center ${
+          isActive ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {badge > 99 ? '99+' : badge}
+        </span>
+      ) : (
+        isActive && <div className="ml-auto w-1.5 h-1.5 bg-white rounded-full" />
+      )}
     </Link>
   )
 }

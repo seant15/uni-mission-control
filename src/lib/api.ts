@@ -7,6 +7,14 @@ import type {
   FeedbackFilters,
   AttachmentMeta,
 } from '../types/feedback'
+import type {
+  Alert,
+  AlertNote,
+  AlertRule,
+  AlertColumnDef,
+  AlertCounts,
+  AlertFilterState,
+} from '../types/alerts'
 import { mockTasks } from './mock-data'
 
 const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
@@ -679,6 +687,437 @@ export const db = {
             .from('app_users')
             .select('id, display_name')
             .eq('role', 'super_admin')
+            .eq('is_active', true)
+            .order('display_name')
+        if (error) throw error
+        return data ?? []
+    },
+
+    // ============================================================
+    // Alerts System
+    // ============================================================
+
+    /**
+     * Paginated alerts with full filter support.
+     * Returns { data, count } for pagination.
+     */
+    async getAlerts(
+        filters: Partial<AlertFilterState>,
+        page = 1,
+        pageSize = 25,
+    ): Promise<{ data: Alert[]; count: number }> {
+        const from = (page - 1) * pageSize
+        const to   = from + pageSize - 1
+
+        let query = supabase
+            .from('alerts')
+            .select('*', { count: 'exact' })
+            .order('created_at', { ascending: false })
+            .range(from, to)
+
+        if (filters.severity && filters.severity.length > 0) {
+            query = query.in('severity', filters.severity)
+        }
+        if (filters.status && filters.status.length > 0) {
+            query = query.in('status', filters.status)
+        }
+        if (filters.platform && filters.platform.length > 0) {
+            query = query.in('platform', filters.platform)
+        }
+        if (filters.clientId && filters.clientId.length > 0) {
+            query = query.in('client_id', filters.clientId)
+        }
+        if (filters.search) {
+            query = query.or(
+                `message.ilike.%${filters.search}%,account_name.ilike.%${filters.search}%`
+            )
+        }
+        if (filters.dateRange?.from) {
+            query = query.gte('triggered_date', filters.dateRange.from)
+        }
+        if (filters.dateRange?.to) {
+            query = query.lte('triggered_date', filters.dateRange.to)
+        }
+        if (filters.assignedToMe) {
+            const { data: me } = await supabase.auth.getUser()
+            if (me?.user) {
+                const { data: appUser } = await supabase
+                    .from('app_users')
+                    .select('id')
+                    .eq('auth_user_id', me.user.id)
+                    .single()
+                if (appUser) {
+                    query = query.eq('assigned_to', appUser.id)
+                }
+            }
+        }
+
+        const { data, error, count } = await query
+        if (error) throw error
+        return { data: (data ?? []) as Alert[], count: count ?? 0 }
+    },
+
+    /**
+     * All alerts sharing a group_key, for expanding a stacked card.
+     */
+    async getAlertsByGroup(groupKey: string): Promise<Alert[]> {
+        const { data, error } = await supabase
+            .from('alerts')
+            .select('*')
+            .eq('group_key', groupKey)
+            .order('severity', { ascending: true })
+            .order('created_at', { ascending: false })
+        if (error) throw error
+        return (data ?? []) as Alert[]
+    },
+
+    /**
+     * Summary counts for the stats bar: open, critical, assigned to me, resolved today.
+     */
+    async getAlertCounts(): Promise<AlertCounts> {
+        const today = new Date().toISOString().split('T')[0]
+
+        const [openRes, criticalRes, resolvedTodayRes] = await Promise.all([
+            supabase
+                .from('alerts')
+                .select('*', { count: 'exact', head: true })
+                .in('status', ['new', 'in_progress', 'snoozed']),
+            supabase
+                .from('alerts')
+                .select('*', { count: 'exact', head: true })
+                .eq('severity', 'critical')
+                .in('status', ['new', 'in_progress', 'snoozed']),
+            supabase
+                .from('alerts')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'resolved')
+                .gte('resolved_at', today),
+        ])
+
+        // assigned_to_me requires current user ID
+        let assignedToMe = 0
+        try {
+            const { data: me } = await supabase.auth.getUser()
+            if (me?.user) {
+                const { data: appUser } = await supabase
+                    .from('app_users')
+                    .select('id')
+                    .eq('auth_user_id', me.user.id)
+                    .single()
+                if (appUser) {
+                    const { count } = await supabase
+                        .from('alerts')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('assigned_to', appUser.id)
+                        .in('status', ['new', 'in_progress'])
+                    assignedToMe = count ?? 0
+                }
+            }
+        } catch (_) { /* non-critical */ }
+
+        return {
+            total_open:     openRes.count ?? 0,
+            critical:       criticalRes.count ?? 0,
+            assigned_to_me: assignedToMe,
+            resolved_today: resolvedTodayRes.count ?? 0,
+        }
+    },
+
+    /**
+     * Open alert count for sidebar badge.
+     */
+    async getOpenAlertCount(): Promise<number> {
+        const { count, error } = await supabase
+            .from('alerts')
+            .select('*', { count: 'exact', head: true })
+            .in('status', ['new', 'in_progress'])
+        if (error) throw error
+        return count ?? 0
+    },
+
+    /**
+     * Resolve an alert: sets status=resolved, records who resolved it.
+     */
+    async resolveAlert(id: string, userId: string): Promise<void> {
+        const { error } = await supabase
+            .from('alerts')
+            .update({
+                status:               'resolved',
+                resolved_at:          new Date().toISOString(),
+                resolved_by_user_id:  userId,
+                updated_at:           new Date().toISOString(),
+            })
+            .eq('id', id)
+        if (error) throw error
+    },
+
+    /**
+     * Snooze an alert until a specific datetime.
+     */
+    async snoozeAlert(id: string, snoozedUntil: string): Promise<void> {
+        const { error } = await supabase
+            .from('alerts')
+            .update({
+                status:        'snoozed',
+                snoozed_until: snoozedUntil,
+                updated_at:    new Date().toISOString(),
+            })
+            .eq('id', id)
+        if (error) throw error
+    },
+
+    /**
+     * Dismiss an alert (manager/admin action).
+     */
+    async dismissAlert(id: string, userId: string): Promise<void> {
+        const { error } = await supabase
+            .from('alerts')
+            .update({
+                status:       'dismissed',
+                dismissed_at: new Date().toISOString(),
+                dismissed_by: userId,
+                updated_at:   new Date().toISOString(),
+            })
+            .eq('id', id)
+        if (error) throw error
+    },
+
+    /**
+     * Assign an alert to a team member.
+     */
+    async assignAlert(id: string, assignedTo: string): Promise<void> {
+        const { error } = await supabase
+            .from('alerts')
+            .update({
+                assigned_to: assignedTo,
+                status:      'in_progress',
+                updated_at:  new Date().toISOString(),
+            })
+            .eq('id', id)
+        if (error) throw error
+    },
+
+    /**
+     * Reopen a resolved/dismissed/ignored alert.
+     */
+    async reopenAlert(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('alerts')
+            .update({
+                status:       'new',
+                resolved_at:  null,
+                dismissed_at: null,
+                updated_at:   new Date().toISOString(),
+            })
+            .eq('id', id)
+        if (error) throw error
+    },
+
+    // ── Alert Notes ──────────────────────────────────────────────
+
+    /**
+     * Get all notes for an alert (chronological), joined with user display names.
+     */
+    async getAlertNotes(alertId: string): Promise<AlertNote[]> {
+        const { data, error } = await supabase
+            .from('alert_notes')
+            .select('id, alert_id, user_id, content, action_taken, created_at, app_users(display_name)')
+            .eq('alert_id', alertId)
+            .order('created_at', { ascending: true })
+        if (error) throw error
+        return (data ?? []).map((row: any) => ({
+            ...row,
+            user_display_name: row.app_users?.display_name ?? 'Unknown',
+            app_users: undefined,
+        })) as AlertNote[]
+    },
+
+    /**
+     * Add a note to an alert.
+     */
+    async addAlertNote(
+        alertId: string,
+        userId: string,
+        content: string,
+        actionTaken?: string,
+    ): Promise<void> {
+        const { error } = await supabase
+            .from('alert_notes')
+            .insert({
+                alert_id:     alertId,
+                user_id:      userId,
+                content,
+                action_taken: actionTaken ?? null,
+            })
+        if (error) throw error
+    },
+
+    /**
+     * Delete own note (RLS enforces ownership).
+     */
+    async deleteAlertNote(noteId: string): Promise<void> {
+        const { error } = await supabase
+            .from('alert_notes')
+            .delete()
+            .eq('id', noteId)
+        if (error) throw error
+    },
+
+    // ── Alert Rules ──────────────────────────────────────────────
+
+    /**
+     * Fetch all alert rules, optionally filtered by client.
+     */
+    async getAlertRules(clientId?: string): Promise<AlertRule[]> {
+        let query = supabase
+            .from('alert_rules')
+            .select('*')
+            .order('display_order', { ascending: true })
+
+        if (clientId && clientId !== 'all') {
+            query = query.eq('client_id', clientId)
+        }
+
+        const { data, error } = await query
+        if (error) throw error
+        return (data ?? []) as AlertRule[]
+    },
+
+    /**
+     * Create a new alert rule.
+     */
+    async createAlertRule(rule: Omit<AlertRule, 'id' | 'created_at' | 'updated_at'>): Promise<AlertRule> {
+        const { data, error } = await supabase
+            .from('alert_rules')
+            .insert(rule)
+            .select()
+            .single()
+        if (error) throw error
+        return data as AlertRule
+    },
+
+    /**
+     * Update an alert rule (full or partial).
+     */
+    async updateAlertRule(id: string, updates: Partial<AlertRule>): Promise<void> {
+        const { error } = await supabase
+            .from('alert_rules')
+            .update(updates)
+            .eq('id', id)
+        if (error) throw error
+    },
+
+    /**
+     * Soft-delete an alert rule (set is_active=false).
+     */
+    async deleteAlertRule(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('alert_rules')
+            .update({ is_active: false })
+            .eq('id', id)
+        if (error) throw error
+    },
+
+    /**
+     * Batch-update display_order for drag-and-drop reordering.
+     * orderedIds: array of rule IDs in the desired order.
+     */
+    async reorderAlertRules(orderedIds: string[]): Promise<void> {
+        await Promise.all(
+            orderedIds.map((id, index) =>
+                supabase
+                    .from('alert_rules')
+                    .update({ display_order: index })
+                    .eq('id', id)
+            )
+        )
+    },
+
+    /**
+     * Fetch available campaigns/adsets for the Rule Builder entity selector.
+     * Returns distinct entity_id + entity_name pairs for the given client + platform.
+     */
+    async getRuleEntityOptions(
+        clientId: string,
+        platform: 'google_ads' | 'meta_ads',
+        entityType: 'campaign' | 'ad_set',
+    ): Promise<{ entity_id: string; entity_name: string }[]> {
+        const table = platform === 'google_ads'
+            ? (entityType === 'campaign' ? 'google_ads' : 'google_ads_ad_groups')
+            : (entityType === 'campaign' ? 'meta_ads' : 'meta_ads_ad_sets')
+
+        const idCol   = platform === 'google_ads'
+            ? (entityType === 'campaign' ? 'campaign_id' : 'ad_group_id')
+            : (entityType === 'campaign' ? 'campaign_id' : 'ad_set_id')
+        const nameCol = platform === 'google_ads'
+            ? (entityType === 'campaign' ? 'campaign_name' : 'ad_group_name')
+            : (entityType === 'campaign' ? 'campaign_name' : 'ad_set_name')
+
+        const { data, error } = await supabase
+            .from(table)
+            .select(`${idCol}, ${nameCol}`)
+            .eq('client_id', clientId)
+            .order(nameCol, { ascending: true })
+            .limit(200)
+
+        if (error) throw error
+
+        // Deduplicate by entity_id
+        const seen = new Set<string>()
+        return (data ?? [])
+            .filter((row: any) => {
+                const id = row[idCol]
+                if (!id || seen.has(id)) return false
+                seen.add(id)
+                return true
+            })
+            .map((row: any) => ({
+                entity_id:   row[idCol],
+                entity_name: row[nameCol] ?? row[idCol],
+            }))
+    },
+
+    // ── Column Preferences ────────────────────────────────────────
+
+    /**
+     * Fetch saved column preferences for current user.
+     * Falls back to DEFAULT_ALERT_COLUMNS if no preferences saved.
+     */
+    async getAlertColumnPreferences(userId: string): Promise<AlertColumnDef[]> {
+        const { data, error } = await supabase
+            .from('user_alert_preferences')
+            .select('visible_columns')
+            .eq('user_id', userId)
+            .single()
+
+        if (error && error.code !== 'PGRST116') throw error  // PGRST116 = row not found
+
+        if (!data) return [] // caller should fall back to DEFAULT_ALERT_COLUMNS
+
+        return data.visible_columns as AlertColumnDef[]
+    },
+
+    /**
+     * Save (upsert) column preferences for current user.
+     */
+    async saveAlertColumnPreferences(userId: string, columns: AlertColumnDef[]): Promise<void> {
+        const { error } = await supabase
+            .from('user_alert_preferences')
+            .upsert(
+                { user_id: userId, visible_columns: columns, updated_at: new Date().toISOString() },
+                { onConflict: 'user_id' }
+            )
+        if (error) throw error
+    },
+
+    /**
+     * All team members for the "Assign to" picker.
+     */
+    async getTeamMembers(): Promise<{ id: string; display_name: string }[]> {
+        const { data, error } = await supabase
+            .from('app_users')
+            .select('id, display_name')
+            .in('role', ['super_admin', 'team_member'])
             .eq('is_active', true)
             .order('display_name')
         if (error) throw error
