@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import {
   DollarSign, TrendingUp, Target, MousePointer, Eye,
   AlertTriangle, ArrowUpRight, ArrowDownRight, AlertCircle,
-  Clock, CheckCircle, X, Users, BarChart3
+  Clock, CheckCircle, X, BarChart3
 } from 'lucide-react'
 import { db } from '../lib/api'
 
@@ -43,10 +43,17 @@ function pctChange(cur: number, prev: number) {
   return ((cur - prev) / prev) * 100
 }
 
+/** Currency — always 2 decimals for comparable portfolio metrics */
 const fmt$ = (v: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
-const fmtN = (v: number) =>
-  v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toFixed(0)
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(v)
+/** Counts / volumes on KPI cards — 2 decimal places, grouped (no K/M shorthand on overview cards) */
+const fmtMetric = (v: number) =>
+  new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
 const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 
 function MetricCard({ title, value, change, icon: Icon, color, invertTrend = false }: {
@@ -97,14 +104,6 @@ export default function MarketingOverview() {
     refetchOnMount: 'always',
   })
 
-  // Client spend breakdown
-  const { data: clientSpend } = useQuery({
-    queryKey: ['client_spend', period],
-    queryFn: () => db.getClientSpendSummary({ startDate: ranges.current.start, endDate: ranges.current.end }),
-    refetchOnMount: 'always',
-    staleTime: 5 * 60 * 1000,
-  })
-
   const cur = curRows ? aggregate(curRows) : null
   const prev = prevRows ? aggregate(prevRows) : null
 
@@ -139,9 +138,6 @@ export default function MarketingOverview() {
   ) || { total: 0, new: 0, critical: 0, high: 0 }
 
   const recentAlerts = alertsData?.slice(0, 5) || []
-
-  // Client spend max for bar scaling
-  const maxSpend = clientSpend?.[0]?.spend || 1
 
   const periodLabel = period === '7d' ? '7 Days' : period === '30d' ? '30 Days' : '90 Days'
 
@@ -199,13 +195,13 @@ export default function MarketingOverview() {
             <MetricCard title="Total Spend" value={fmt$(cur.spend)} change={prev ? pctChange(cur.spend, prev.spend) : undefined} icon={DollarSign} color="bg-blue-600" />
             <MetricCard title="Total Revenue" value={fmt$(cur.revenue)} change={prev ? pctChange(cur.revenue, prev.revenue) : undefined} icon={TrendingUp} color="bg-green-600" />
             <MetricCard title="ROAS" value={`${cur.roas.toFixed(2)}x`} change={prev ? pctChange(cur.roas, prev.roas) : undefined} icon={Target} color="bg-purple-600" />
-            <MetricCard title="Conversions" value={fmtN(cur.conversions)} change={prev ? pctChange(cur.conversions, prev.conversions) : undefined} icon={TrendingUp} color="bg-orange-600" />
+            <MetricCard title="Conversions" value={fmtMetric(cur.conversions)} change={prev ? pctChange(cur.conversions, prev.conversions) : undefined} icon={TrendingUp} color="bg-orange-600" />
           </div>
 
           {/* Secondary KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <MetricCard title="Impressions" value={fmtN(cur.impressions)} change={prev ? pctChange(cur.impressions, prev.impressions) : undefined} icon={Eye} color="bg-indigo-600" />
-            <MetricCard title="Clicks" value={fmtN(cur.clicks)} change={prev ? pctChange(cur.clicks, prev.clicks) : undefined} icon={MousePointer} color="bg-cyan-600" />
+            <MetricCard title="Impressions" value={fmtMetric(cur.impressions)} change={prev ? pctChange(cur.impressions, prev.impressions) : undefined} icon={Eye} color="bg-indigo-600" />
+            <MetricCard title="Clicks" value={fmtMetric(cur.clicks)} change={prev ? pctChange(cur.clicks, prev.clicks) : undefined} icon={MousePointer} color="bg-cyan-600" />
             <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={prev ? pctChange(cur.ctr, prev.ctr) : undefined} icon={Target} color="bg-teal-600" />
             <MetricCard title="CPC" value={fmt$(cur.cpc)} change={prev ? pctChange(cur.cpc, prev.cpc) : undefined} icon={DollarSign} color="bg-pink-600" invertTrend />
           </div>
@@ -245,44 +241,17 @@ export default function MarketingOverview() {
                             {p.roas.toFixed(2)}x
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-right">{fmtN(p.conversions)}</td>
+                        <td className="px-4 py-3 text-sm text-right">{fmtMetric(p.conversions)}</td>
                         <td className="px-4 py-3 text-sm text-right text-gray-600">
                           {p.conversions > 0 ? fmt$(p.cpa) : '—'}
                         </td>
                         <td className="px-4 py-3 text-sm text-right text-gray-500">
-                          {cur.spend > 0 ? ((p.spend / cur.spend) * 100).toFixed(1) : '0'}%
+                          {cur.spend > 0 ? ((p.spend / cur.spend) * 100).toFixed(2) : '0.00'}%
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
-            </div>
-          )}
-
-          {/* Clients Ad Spend */}
-          {clientSpend && clientSpend.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Users size={20} className="text-blue-600" />
-                Client Ad Spend — Last {periodLabel}
-              </h2>
-              <div className="space-y-3">
-                {clientSpend.map((client, i) => (
-                  <div key={client.client_id} className="flex items-center gap-4">
-                    <div className="w-5 text-xs text-gray-400 text-right">{i + 1}</div>
-                    <div className="w-40 text-sm font-medium text-gray-800 truncate">{client.client_name}</div>
-                    <div className="flex-1">
-                      <div className="w-full bg-gray-100 rounded-full h-2.5">
-                        <div
-                          className="bg-blue-500 h-2.5 rounded-full transition-all"
-                          style={{ width: `${Math.max((client.spend / maxSpend) * 100, 2)}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div className="w-24 text-sm font-semibold text-gray-900 text-right">{fmt$(client.spend)}</div>
-                  </div>
-                ))}
               </div>
             </div>
           )}
