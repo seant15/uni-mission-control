@@ -76,10 +76,19 @@ export async function getDashboardSettings(userId: string): Promise<DashboardSet
   }
 }
 
+export type SaveDashboardSettingsResult = { ok: true } | { ok: false; error: string }
+
+function errMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as { message: unknown }).message === 'string') {
+    return (error as { message: string }).message
+  }
+  return String(error)
+}
+
 export async function saveDashboardSettings(
   userId: string,
   settings: DashboardSettings
-): Promise<boolean> {
+): Promise<SaveDashboardSettingsResult> {
   try {
     const dbSettings = {
       default_business_type: settings.defaultBusinessType,
@@ -99,9 +108,9 @@ export async function saveDashboardSettings(
     }
 
     await db.saveSettings(userId, dbSettings)
-    return true
+    return { ok: true }
   } catch (error) {
     console.error('Error saving dashboard settings:', error)
-    return false
+    return { ok: false, error: errMessage(error) }
   }
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Settings as SettingsIcon, Save, ArrowLeft, Check, Users, UserCircle } from 'lucide-react'
@@ -14,11 +14,18 @@ export default function DashboardSettingsPage() {
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const { user, appUser } = useAuth()
-  const [activeTab, setActiveTab] = useState<SettingsTab>(
-    (searchParams.get('tab') as SettingsTab) || 'profile'
-  )
+  const tabParam = searchParams.get('tab') as SettingsTab | null
+  const initialTab: SettingsTab =
+    tabParam === 'dashboard' || tabParam === 'users' || tabParam === 'profile'
+      ? tabParam
+      : 'profile'
+
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab)
+  const didApplySuperAdminDefaultTab = useRef(false)
   const [settings, setSettings] = useState<DashboardSettings>(DEFAULT_SETTINGS)
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   // Profile tab state
@@ -30,6 +37,16 @@ export default function DashboardSettingsPage() {
   useEffect(() => {
     if (appUser) setProfileName(appUser.display_name)
   }, [appUser])
+
+  // Super admins land on Performance Dashboard so the announcement + Save control are visible (URL ?tab= still wins).
+  useEffect(() => {
+    if (didApplySuperAdminDefaultTab.current) return
+    if (searchParams.get('tab')) return
+    if (appUser?.role === 'super_admin') {
+      setActiveTab('dashboard')
+      didApplySuperAdminDefaultTab.current = true
+    }
+  }, [appUser?.role, searchParams])
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -49,42 +66,60 @@ export default function DashboardSettingsPage() {
   }, [user, appUser])
 
   const handleSave = async () => {
-    const userId = user?.id || 'default_user'
-    const isSuperAdmin = appUser?.role === 'super_admin'
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const userId = user?.id || 'default_user'
+      const isSuperAdmin = appUser?.role === 'super_admin'
 
-    // Non-admins must not write announcement fields to their own row (banner reads only `default_user`).
-    const personalSettings: DashboardSettings = isSuperAdmin
-      ? settings
-      : {
-          ...settings,
-          announcementEnabled: DEFAULT_SETTINGS.announcementEnabled,
-          announcementText: DEFAULT_SETTINGS.announcementText,
-          announcementStyle: DEFAULT_SETTINGS.announcementStyle,
+      // Non-admins must not write announcement fields to their own row (banner reads only `default_user`).
+      const personalSettings: DashboardSettings = isSuperAdmin
+        ? settings
+        : {
+            ...settings,
+            announcementEnabled: DEFAULT_SETTINGS.announcementEnabled,
+            announcementText: DEFAULT_SETTINGS.announcementText,
+            announcementStyle: DEFAULT_SETTINGS.announcementStyle,
+          }
+
+      const personalRes = await saveDashboardSettings(userId, personalSettings)
+      let success = personalRes.ok
+      const errors: string[] = []
+      if (!personalRes.ok) errors.push(personalRes.error)
+
+      if (isSuperAdmin && userId !== 'default_user') {
+        const globalSettings = await getDashboardSettings('default_user')
+        const globalRes = await saveDashboardSettings('default_user', {
+          ...globalSettings,
+          announcementEnabled: settings.announcementEnabled,
+          announcementText: settings.announcementText,
+          announcementStyle: settings.announcementStyle,
+        })
+        if (!globalRes.ok) {
+          success = false
+          errors.push(globalRes.error)
         }
+      }
 
-    let success = await saveDashboardSettings(userId, personalSettings)
+      await queryClient.invalidateQueries({ queryKey: [...GLOBAL_ANNOUNCEMENT_QUERY_KEY] })
 
-    // Announcement is global — super_admin saves it to default_user so all users see it
-    if (isSuperAdmin && userId !== 'default_user') {
-      const globalSettings = await getDashboardSettings('default_user')
-      const globalOk = await saveDashboardSettings('default_user', {
-        ...globalSettings,
-        announcementEnabled: settings.announcementEnabled,
-        announcementText: settings.announcementText,
-        announcementStyle: settings.announcementStyle,
-      })
-      if (!globalOk) success = false
-    }
-
-    await queryClient.invalidateQueries({ queryKey: [...GLOBAL_ANNOUNCEMENT_QUERY_KEY] })
-
-    if (success) {
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
-    } else {
-      alert(
-        'Failed to save settings. If you edited the global banner, check Supabase: dashboard_settings row for user_id default_user must be writable/readable for your role (RLS).'
-      )
+      if (success) {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 3000)
+      } else {
+        const detail = errors.filter(Boolean).join(' — ') || 'Unknown error'
+        setSaveError(detail)
+        window.alert(
+          `Save failed:\n${detail}\n\n` +
+            'If you edited the global banner: run the SQL migration `20260503_dashboard_settings_global_banner_rls.sql` in Supabase so `default_user` row is allowed for your role.'
+        )
+      }
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e)
+      setSaveError(detail)
+      window.alert(`Save failed: ${detail}`)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -134,15 +169,17 @@ export default function DashboardSettingsPage() {
         </div>
         {activeTab === 'dashboard' && (
           <button
+            type="button"
             onClick={handleSave}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+            disabled={saving}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition disabled:opacity-60 disabled:cursor-not-allowed ${
               saved
                 ? 'bg-green-600 text-white'
                 : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
           >
             {saved ? <Check size={18} /> : <Save size={18} />}
-            {saved ? 'Saved!' : 'Save Settings'}
+            {saving ? 'Saving…' : saved ? 'Saved!' : 'Save Settings'}
           </button>
         )}
       </div>
@@ -261,6 +298,11 @@ export default function DashboardSettingsPage() {
       {/* Dashboard tab */}
       {activeTab === 'dashboard' && (
         <div className="space-y-6">
+          {saveError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              {saveError}
+            </div>
+          )}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             {/* Display Preferences */}
@@ -529,6 +571,21 @@ export default function DashboardSettingsPage() {
                   </div>
                 </div>
               )}
+
+              <div className="pt-2 border-t border-gray-100">
+                <p className="text-xs text-gray-500 mb-2">
+                  Use the Save button at the top of this page, or save from here after editing the banner.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {saved ? <Check size={18} /> : <Save size={18} />}
+                  {saving ? 'Saving…' : saved ? 'Saved!' : 'Save announcement & dashboard settings'}
+                </button>
+              </div>
             </div>
           </div>}
 
