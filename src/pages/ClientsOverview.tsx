@@ -94,9 +94,15 @@ export default function ClientsOverview() {
   const dates = getDates(period)
 
   const fetchPerf = async (start: string, end: string) => {
+    const { data: act, error: e1 } = await supabase.from('clients').select('id').eq('status', 'active')
+    if (e1) throw new Error(e1.message)
+    const activeIds = (act ?? []).map(c => c.id)
+    if (activeIds.length === 0) return []
+
     let q = supabase.from('daily_performance')
       .select('client_id, cost, revenue, impressions, clicks, conversions, platform')
       .gte('date', start).lte('date', end)
+      .in('client_id', activeIds)
     if (selectedPlatform !== 'all') q = q.eq('platform', selectedPlatform)
     const { data, error } = await q
     if (error) throw new Error(error.message)
@@ -106,7 +112,7 @@ export default function ClientsOverview() {
   const { data: clients, isLoading: cLoading, error: cError } = useQuery({
     queryKey: ['clients'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('clients').select('id, name, status, business_type, currency, currency_symbol').order('name')
+      const { data, error } = await supabase.from('clients').select('id, name, status, business_type, currency, currency_symbol').eq('status', 'active').order('name')
       if (error) throw new Error(error.message)
       return data || []
     },

@@ -19,6 +19,25 @@ import { mockTasks } from './mock-data'
 
 const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
 
+let activeClientIdsCache: { ids: string[]; at: number } | null = null
+const ACTIVE_CLIENT_CACHE_MS = 45_000
+
+/** IDs of `clients.status === 'active'` — cached for list + performance queries. */
+async function cachedActiveClientIds(): Promise<string[]> {
+    const now = Date.now()
+    if (activeClientIdsCache && now - activeClientIdsCache.at < ACTIVE_CLIENT_CACHE_MS) {
+        return activeClientIdsCache.ids
+    }
+    const { data, error } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('status', 'active')
+    if (error) throw error
+    const ids = (data ?? []).map((r: { id: string }) => r.id).filter(Boolean)
+    activeClientIdsCache = { ids, at: now }
+    return ids
+}
+
 export type HourWindow = 1 | 2 | 6 | 12 | 24 | 48 | 72
 
 /**
@@ -48,6 +67,10 @@ export const db = {
 
         if (filters.clientId && filters.clientId !== 'all') {
             query = query.eq('client_id', filters.clientId)
+        } else {
+            const activeIds = await cachedActiveClientIds()
+            if (activeIds.length === 0) return []
+            query = query.in('client_id', activeIds)
         }
 
         if (filters.platform && filters.platform !== 'all') {
@@ -86,6 +109,7 @@ export const db = {
         const { data, error } = await supabase
             .from('clients')
             .select('id, name, business_type, currency, currency_symbol, meta_ad_account_id, google_ads_customer_id')
+            .eq('status', 'active')
             .order('name')
         if (error) throw error
         return data
@@ -146,6 +170,10 @@ export const db = {
 
         if (clientId && clientId !== 'all') {
             query = query.eq('client_id', clientId)
+        } else {
+            const activeIds = await cachedActiveClientIds()
+            if (activeIds.length === 0) return []
+            query = query.in('client_id', activeIds)
         }
         if (startDate) query = query.gte('date', startDate)
         if (endDate) query = query.lte('date', endDate)
@@ -167,6 +195,10 @@ export const db = {
 
         if (clientId && clientId !== 'all') {
             query = query.eq('client_id', clientId)
+        } else {
+            const activeIds = await cachedActiveClientIds()
+            if (activeIds.length === 0) return []
+            query = query.in('client_id', activeIds)
         }
         if (startDate) query = query.gte('date', startDate)
         if (endDate) query = query.lte('date', endDate)
@@ -193,6 +225,10 @@ export const db = {
 
         if (clientId && clientId !== 'all') {
             query = query.eq('client_id', clientId)
+        } else {
+            const activeIds = await cachedActiveClientIds()
+            if (activeIds.length === 0) return []
+            query = query.in('client_id', activeIds)
         }
         if (startDate) query = query.gte('date', startDate)
         if (endDate) query = query.lte('date', endDate)
@@ -210,9 +246,13 @@ export const db = {
      * Fetch available platforms from database
      */
     async getAvailablePlatforms() {
-        const { data, error } = await supabase
-            .from('daily_performance')
-            .select('platform')
+        const activeIds = await cachedActiveClientIds()
+        let query = supabase.from('daily_performance').select('platform')
+        if (activeIds.length === 0) {
+            return []
+        }
+        query = query.in('client_id', activeIds)
+        const { data, error } = await query
 
         if (error) throw error
 
@@ -232,12 +272,17 @@ export const db = {
      * Returns client_id so callers can look up business_type
      */
     async getAdAccounts(filters: { clientId?: string; platform?: string }) {
+        const activeIds = await cachedActiveClientIds()
+        if (activeIds.length === 0) return []
+
         let query = supabase
             .from('daily_performance')
             .select('ad_account_id, platform, client_id')
 
         if (filters.clientId && filters.clientId !== 'all') {
             query = query.eq('client_id', filters.clientId)
+        } else {
+            query = query.in('client_id', activeIds)
         }
 
         if (filters.platform && filters.platform !== 'all') {
@@ -276,6 +321,10 @@ export const db = {
 
         if (filters.clientId && filters.clientId !== 'all') {
             query = query.eq('client_id', filters.clientId)
+        } else {
+            const activeIds = await cachedActiveClientIds()
+            if (activeIds.length === 0) return []
+            query = query.in('client_id', activeIds)
         }
 
         if (filters.adAccountId) {
@@ -307,6 +356,10 @@ export const db = {
 
         if (filters.clientId && filters.clientId !== 'all') {
             query = query.eq('client_id', filters.clientId)
+        } else {
+            const activeIds = await cachedActiveClientIds()
+            if (activeIds.length === 0) return []
+            query = query.in('client_id', activeIds)
         }
         if (filters.startDate) {
             query = query.gte('date', filters.startDate)
@@ -332,6 +385,10 @@ export const db = {
 
         if (filters.clientId && filters.clientId !== 'all') {
             query = query.eq('client_id', filters.clientId)
+        } else {
+            const activeIds = await cachedActiveClientIds()
+            if (activeIds.length === 0) return []
+            query = query.in('client_id', activeIds)
         }
         if (filters.startDate) {
             query = query.gte('date', filters.startDate)
@@ -357,6 +414,10 @@ export const db = {
 
         if (filters.clientId && filters.clientId !== 'all') {
             query = query.eq('client_id', filters.clientId)
+        } else {
+            const activeIds = await cachedActiveClientIds()
+            if (activeIds.length === 0) return []
+            query = query.in('client_id', activeIds)
         }
 
         if (filters.adAccountId) {
@@ -394,9 +455,13 @@ export const db = {
      * Client spend grouped by client for UNI Overview
      */
     async getClientSpendSummary(filters: { startDate?: string; endDate?: string }) {
+        const activeIds = await cachedActiveClientIds()
+        if (activeIds.length === 0) return []
+
         let query = supabase
             .from('daily_performance')
             .select('client_id, client_name, cost')
+            .in('client_id', activeIds)
 
         if (filters.startDate) query = query.gte('date', filters.startDate)
         if (filters.endDate) query = query.lte('date', filters.endDate)
@@ -460,6 +525,20 @@ export const db = {
         if (filters.clientId && filters.clientId !== 'all') {
             curQ = curQ.eq('client_id', filters.clientId)
             prevQ = prevQ.eq('client_id', filters.clientId)
+        } else {
+            const activeIds = await cachedActiveClientIds()
+            if (activeIds.length === 0) {
+                return {
+                    current: [],
+                    previous: [],
+                    windowStart: windowStart.toISOString(),
+                    windowEnd: now.toISOString(),
+                    prevWindowStart: prevWindowStart.toISOString(),
+                    prevWindowEnd: windowStart.toISOString(),
+                }
+            }
+            curQ = curQ.in('client_id', activeIds)
+            prevQ = prevQ.in('client_id', activeIds)
         }
 
         const [curRes, prevRes] = await Promise.all([curQ, prevQ])

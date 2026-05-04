@@ -1,6 +1,6 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { LayoutDashboard, AlertTriangle, Users, Bell, Database, Settings, Activity, Layers, Megaphone, X, LogOut, MessageSquarePlus } from 'lucide-react'
 import { db } from './lib/api'
@@ -14,7 +14,7 @@ import CreativePerformance from './pages/CreativePerformance'
 import FeedbackAdmin from './pages/FeedbackAdmin'
 import Login from './pages/Login'
 import FeedbackWidget from './components/FeedbackWidget'
-import { getDashboardSettings } from './lib/settings'
+import { getDashboardSettings, GLOBAL_ANNOUNCEMENT_QUERY_KEY } from './lib/settings'
 import { useAuth } from './contexts/AuthContext'
 
 const ANNOUNCEMENT_STYLES = {
@@ -25,17 +25,21 @@ const ANNOUNCEMENT_STYLES = {
 }
 
 function AnnouncementBanner() {
-  const [ann, setAnn] = useState<{ enabled: boolean; text: string; style: string } | null>(null)
   const [dismissed, setDismissed] = useState(false)
+  const { data: ann } = useQuery({
+    queryKey: GLOBAL_ANNOUNCEMENT_QUERY_KEY,
+    queryFn: async () => {
+      const s = await getDashboardSettings('default_user')
+      return { enabled: s.announcementEnabled, text: s.announcementText ?? '', style: s.announcementStyle }
+    },
+    staleTime: 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+  })
 
-  useEffect(() => {
-    // Announcements are global — always read from the admin/default settings
-    getDashboardSettings('default_user').then(s => {
-      setAnn({ enabled: s.announcementEnabled, text: s.announcementText, style: s.announcementStyle })
-    })
-  }, [])
-
-  if (!ann || !ann.enabled || !ann.text || dismissed) return null
+  const textTrim = (ann?.text ?? '').trim()
+  if (!ann || !ann.enabled || !textTrim || dismissed) return null
 
   const st = ANNOUNCEMENT_STYLES[ann.style as keyof typeof ANNOUNCEMENT_STYLES] || ANNOUNCEMENT_STYLES.info
 
@@ -43,7 +47,7 @@ function AnnouncementBanner() {
     <div className={`${st.bar} px-8 py-2 flex items-center gap-3 min-h-[40px]`}>
       <Megaphone size={15} className={st.icon} />
       <p className={`flex-1 text-sm font-medium ${st.text}`}
-        dangerouslySetInnerHTML={{ __html: ann.text }}
+        dangerouslySetInnerHTML={{ __html: ann.text.trim() }}
       />
       <button onClick={() => setDismissed(true)} className={`${st.icon} hover:opacity-80`}>
         <X size={15} />

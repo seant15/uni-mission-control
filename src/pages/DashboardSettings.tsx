@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { Settings as SettingsIcon, Save, ArrowLeft, Check, Users, UserCircle } from 'lucide-react'
-import { getDashboardSettings, saveDashboardSettings, DEFAULT_SETTINGS, DashboardSettings } from '../lib/settings'
+import { getDashboardSettings, saveDashboardSettings, DEFAULT_SETTINGS, DashboardSettings, GLOBAL_ANNOUNCEMENT_QUERY_KEY } from '../lib/settings'
 import UserManagement from './UserManagement'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -10,6 +11,7 @@ type SettingsTab = 'dashboard' | 'users' | 'profile'
 
 export default function DashboardSettingsPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const { user, appUser } = useAuth()
   const [activeTab, setActiveTab] = useState<SettingsTab>(
@@ -50,8 +52,17 @@ export default function DashboardSettingsPage() {
     const userId = user?.id || 'default_user'
     const isSuperAdmin = appUser?.role === 'super_admin'
 
-    // Personal settings saved to own user ID
-    const success = await saveDashboardSettings(userId, settings)
+    // Non-admins must not write announcement fields to their own row (banner reads only `default_user`).
+    const personalSettings: DashboardSettings = isSuperAdmin
+      ? settings
+      : {
+          ...settings,
+          announcementEnabled: DEFAULT_SETTINGS.announcementEnabled,
+          announcementText: DEFAULT_SETTINGS.announcementText,
+          announcementStyle: DEFAULT_SETTINGS.announcementStyle,
+        }
+
+    const success = await saveDashboardSettings(userId, personalSettings)
 
     // Announcement is global — super_admin saves it to default_user so all users see it
     if (isSuperAdmin && userId !== 'default_user') {
@@ -63,6 +74,8 @@ export default function DashboardSettingsPage() {
         announcementStyle: settings.announcementStyle,
       })
     }
+
+    await queryClient.invalidateQueries({ queryKey: [...GLOBAL_ANNOUNCEMENT_QUERY_KEY] })
 
     if (success) {
       setSaved(true)

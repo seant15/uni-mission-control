@@ -81,10 +81,12 @@ export default function MarketingOverview() {
   const { data: curRows, isLoading, error } = useQuery({
     queryKey: ['mkt_cur', period],
     queryFn: () => db.getDailyPerformance({ startDate: ranges.current.start, endDate: ranges.current.end }),
+    refetchOnMount: 'always',
   })
   const { data: prevRows } = useQuery({
     queryKey: ['mkt_prev', period],
     queryFn: () => db.getDailyPerformance({ startDate: ranges.previous.start, endDate: ranges.previous.end }),
+    refetchOnMount: 'always',
   })
 
   // Alert summary
@@ -92,12 +94,14 @@ export default function MarketingOverview() {
     queryKey: ['uni_alerts'],
     queryFn: db.getAlertSummary,
     staleTime: 2 * 60 * 1000,
+    refetchOnMount: 'always',
   })
 
   // Client spend breakdown
   const { data: clientSpend } = useQuery({
     queryKey: ['client_spend', period],
     queryFn: () => db.getClientSpendSummary({ startDate: ranges.current.start, endDate: ranges.current.end }),
+    refetchOnMount: 'always',
     staleTime: 5 * 60 * 1000,
   })
 

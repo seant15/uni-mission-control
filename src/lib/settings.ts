@@ -1,5 +1,8 @@
 import { db } from './api'
 
+/** React Query key: global announcement row (`user_id` = default_user) */
+export const GLOBAL_ANNOUNCEMENT_QUERY_KEY = ['dashboard-settings', 'global-announcement'] as const
+
 export interface DashboardSettings {
   // Display Settings
   defaultBusinessType: 'leadgen' | 'ecommerce'

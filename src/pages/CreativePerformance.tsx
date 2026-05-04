@@ -113,11 +113,13 @@ function aggregateAdSets(rows: any[]): any[] {
 
 // ── Creative Thumbnail ─────────────────────────────────────────────────────────
 function CreativeThumb({ row }: { row: any }) {
+  const [imgFailed, setImgFailed] = useState(false)
+  // Use CDN URLs as returned by sync — stripping query params often invalidates Meta signed URLs (403).
   const imgSrc = row.thumbnail_url || row.image_url
   const isVideo = !!row.video_id
   const videoUrl = isVideo ? `https://www.facebook.com/videos/${row.video_id}` : null
 
-  if (!imgSrc) {
+  if (!imgSrc || imgFailed) {
     return (
       <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
         {isVideo ? <Video size={20} className="text-gray-400" /> : <Image size={20} className="text-gray-400" />}
@@ -129,8 +131,9 @@ function CreativeThumb({ row }: { row: any }) {
     <img
       src={imgSrc}
       alt="creative"
+      referrerPolicy="no-referrer"
       className="w-14 h-14 object-cover rounded-lg shrink-0 border border-gray-100"
-      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+      onError={() => setImgFailed(true)}
     />
   )
 
@@ -144,24 +147,12 @@ function CreativeThumb({ row }: { row: any }) {
   ) : img
 }
 
-// Strip Meta CDN thumbnail resize params (e.g. stp=p64x64, stp=c0.5000x0.5000f_p64x64)
-// Only strip when stp contains a resize spec (p\d+x\d+) — NOT format params like dst-jpg_tt6
-// which are part of the signed request and cause 403 if removed
-function hiResUrl(url: string | null | undefined): string | null {
-  if (!url) return null
-  return url.replace(/([?&])stp=[^&]*p\d+x\d+[^&]*/g, (_match, sep, _offset, str) => {
-    // If this was the first param (?stp=...) and there are more params, keep the ?
-    if (sep === '?' && str.includes('&')) return '?'
-    return ''
-  }).replace(/\?&/, '?').replace(/[?&]$/, '') || url
-}
-
 // ── Ad Preview Modal ───────────────────────────────────────────────────────────
 function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
   // Use image_url (not thumbnail_url) for popup — higher res source
-  // For videos, fall back to thumbnail_url
+  // For videos, fall back to thumbnail_url. Keep URL exactly as stored — hiResUrl() can break Meta signed URLs.
   const rawSrc = row.image_url || row.thumbnail_url
-  const imgSrc = hiResUrl(rawSrc)
+  const imgSrc = rawSrc
   const isVideo = !!row.video_id
   const videoPostUrl = row.instagram_permalink_url || row.facebook_post_url || null
   const roas = row.spend > 0 ? row.revenue / row.spend : 0
@@ -229,6 +220,7 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
                 <img
                   src={imgSrc}
                   alt="creative"
+                  referrerPolicy="no-referrer"
                   className="w-full object-cover"
                   style={{ maxHeight: 320 }}
                   onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
