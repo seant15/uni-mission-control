@@ -131,7 +131,6 @@ function CreativeThumb({ row }: { row: any }) {
     <img
       src={imgSrc}
       alt="creative"
-      referrerPolicy="no-referrer"
       className="w-14 h-14 object-cover rounded-lg shrink-0 border border-gray-100"
       onError={() => setImgFailed(true)}
     />
@@ -220,7 +219,6 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
                 <img
                   src={imgSrc}
                   alt="creative"
-                  referrerPolicy="no-referrer"
                   className="w-full object-cover"
                   style={{ maxHeight: 320 }}
                   onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
@@ -447,6 +445,9 @@ export default function CreativePerformance() {
   const portfolioCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0
   const adsWithSpend = allCreatives.filter(r => r.spend > 0).length
 
+  const creativesMissingImages =
+    allCreatives.length > 0 &&
+    allCreatives.every((r: any) => !r.image_url && !r.thumbnail_url)
 
   const selectedClientName = selectedClient === 'all'
     ? 'All Clients'
@@ -471,6 +472,16 @@ export default function CreativePerformance() {
           <span>{dateRange.end}</span>
         </div>
       </div>
+
+      {!isLoading && creativesMissingImages && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          No image or thumbnail URLs are stored for these ads. The daily marketing sync must run with creative enrichment
+          (for example <code className="text-xs bg-amber-100 px-1 rounded">--with-creatives</code> on{' '}
+          <code className="text-xs bg-amber-100 px-1 rounded">sync_marketing_data.py</code>) so Meta Graph returns{' '}
+          <code className="text-xs bg-amber-100 px-1 rounded">image_url</code> /{' '}
+          <code className="text-xs bg-amber-100 px-1 rounded">thumbnail_url</code>.
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="sticky top-[52px] z-30 bg-white/95 backdrop-blur-sm shadow-md border-b border-gray-200 rounded-xl px-4 py-3">

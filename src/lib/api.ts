@@ -43,6 +43,52 @@ async function cachedActiveClientIds(): Promise<string[]> {
 
 export type HourWindow = 1 | 2 | 6 | 12 | 24 | 48 | 72
 
+/** Stable key for merging daily rows with hourly rollups (same grain as daily_performance). */
+function dailyPerfRowKey(r: {
+    client_id: string
+    date: string
+    platform: string | null
+    ad_account_id?: string | null
+}) {
+    return `${r.client_id}|${r.date}|${r.platform ?? ''}|${r.ad_account_id ?? ''}`
+}
+
+/** Sum hourly rows into daily-shaped rows (fills gaps when daily_performance sync lags hourly sync). */
+function rollupHourlyToDailyShape(hourlyRows: any[]): any[] {
+    const map = new Map<string, any>()
+    for (const r of hourlyRows) {
+        const key = dailyPerfRowKey({
+            client_id: r.client_id,
+            date: r.date,
+            platform: r.platform,
+            ad_account_id: r.ad_account_id,
+        })
+        if (!map.has(key)) {
+            map.set(key, {
+                id: `hourly-rollup:${key}`,
+                client_id: r.client_id,
+                client_name: r.client_name,
+                date: r.date,
+                platform: r.platform,
+                ad_account_id: r.ad_account_id,
+                impressions: 0,
+                clicks: 0,
+                conversions: 0,
+                cost: 0,
+                revenue: 0,
+            })
+        }
+        const e = map.get(key)!
+        e.impressions += Number(r.impressions) || 0
+        e.clicks += Number(r.clicks) || 0
+        e.conversions += Number(r.conversions) || 0
+        e.cost += Number(r.cost) || 0
+        e.revenue += Number(r.revenue) || 0
+        if (!e.client_name && r.client_name) e.client_name = r.client_name
+    }
+    return Array.from(map.values())
+}
+
 /**
  * Interface for daily performance filters
  */
@@ -56,12 +102,45 @@ export interface PerformanceFilters {
     offset?: number
 }
 
+/** Hourly slice used to synthesize missing daily_performance rows (same filters as daily query). */
+async function fetchHourlyRowsForDailyRollup(filters: PerformanceFilters): Promise<any[]> {
+    let q = supabase
+        .from('hourly_performance')
+        .select('client_id, client_name, date, platform, ad_account_id, impressions, clicks, conversions, cost, revenue')
+
+    if (filters.clientId && filters.clientId !== 'all') {
+        q = q.eq('client_id', filters.clientId)
+    } else {
+        const activeIds = await cachedActiveClientIds()
+        if (activeIds.length === 0) return []
+        q = q.in('client_id', activeIds)
+    }
+
+    if (filters.platform && filters.platform !== 'all') {
+        q = q.eq('platform', filters.platform)
+    }
+
+    if (filters.adAccountId) {
+        q = q.eq('ad_account_id', filters.adAccountId)
+    }
+
+    if (filters.startDate) q = q.gte('date', filters.startDate)
+    if (filters.endDate) q = q.lte('date', filters.endDate)
+
+    q = q.limit(25000)
+    const { data, error } = await q
+    if (error) throw error
+    return data || []
+}
+
 /**
  * Optimized database service
  */
 export const db = {
     /**
-     * Fetch daily performance with server-side filtering and specific columns
+     * Fetch daily performance with server-side filtering and specific columns.
+     * When daily_performance has gaps but hourly_performance exists (common when only hourly sync runs),
+     * missing daily keys are filled by rolling up hourly rows for the same date/account/platform.
      */
     async getDailyPerformance(filters: PerformanceFilters) {
         let query = supabase
@@ -92,17 +171,27 @@ export const db = {
             query = query.lte('date', filters.endDate)
         }
 
-        query = query
-            .order('date', { ascending: false })
-            .limit(filters.limit || 5000)
-
-        if (filters.offset) {
-            query = query.range(filters.offset, filters.offset + (filters.limit || 1000) - 1)
-        }
+        query = query.order('date', { ascending: false }).limit(20000)
 
         const { data, error } = await query
         if (error) throw error
-        return data
+        const dailyRows = data || []
+
+        const hourlyRaw = await fetchHourlyRowsForDailyRollup(filters)
+        const rolled = rollupHourlyToDailyShape(hourlyRaw)
+        const existingKeys = new Set(dailyRows.map((r: any) => dailyPerfRowKey(r)))
+        const merged = [...dailyRows]
+        for (const r of rolled) {
+            if (!existingKeys.has(dailyPerfRowKey(r))) merged.push(r)
+        }
+        merged.sort((a: any, b: any) => {
+            const db = (b.date || '').localeCompare(a.date || '')
+            if (db !== 0) return db
+            return dailyPerfRowKey(b).localeCompare(dailyPerfRowKey(a))
+        })
+        const lim = filters.limit || 5000
+        const off = filters.offset || 0
+        return merged.slice(off, off + lim)
     },
 
     /**
@@ -250,16 +339,27 @@ export const db = {
      */
     async getAvailablePlatforms() {
         const activeIds = await cachedActiveClientIds()
-        let query = supabase.from('daily_performance').select('platform')
         if (activeIds.length === 0) {
             return []
         }
-        query = query.in('client_id', activeIds)
-        const { data, error } = await query
+        const { data: dailyPlat, error: e1 } = await supabase
+            .from('daily_performance')
+            .select('platform')
+            .in('client_id', activeIds)
+        if (e1) throw e1
+        const { data: hourlyPlat, error: e2 } = await supabase
+            .from('hourly_performance')
+            .select('platform')
+            .in('client_id', activeIds)
+            .limit(8000)
+        if (e2) throw e2
 
-        if (error) throw error
-
-        const platforms = [...new Set(data?.map(item => item.platform).filter(Boolean))]
+        const platforms = [
+            ...new Set([
+                ...(dailyPlat?.map(item => item.platform).filter(Boolean) as string[]),
+                ...(hourlyPlat?.map(item => item.platform).filter(Boolean) as string[]),
+            ]),
+        ]
 
         return platforms.map(platform => ({
             id: platform,
@@ -295,15 +395,34 @@ export const db = {
         const { data, error } = await query
         if (error) throw error
 
+        let hQuery = supabase
+            .from('hourly_performance')
+            .select('ad_account_id, platform, client_id')
+            .limit(8000)
+
+        if (filters.clientId && filters.clientId !== 'all') {
+            hQuery = hQuery.eq('client_id', filters.clientId)
+        } else {
+            hQuery = hQuery.in('client_id', activeIds)
+        }
+
+        if (filters.platform && filters.platform !== 'all') {
+            hQuery = hQuery.eq('platform', filters.platform)
+        }
+
+        const { data: hourlyAccts } = await hQuery
+
         const accountMap = new Map<string, { platform: string; client_id: string }>()
-        data?.forEach(item => {
+        const addAcct = (item: { ad_account_id?: string | null; platform?: string | null; client_id?: string | null }) => {
             if (item.ad_account_id && !accountMap.has(item.ad_account_id)) {
                 accountMap.set(item.ad_account_id, {
-                    platform: item.platform,
-                    client_id: item.client_id,
+                    platform: item.platform || '',
+                    client_id: item.client_id || '',
                 })
             }
-        })
+        }
+        data?.forEach(addAcct)
+        hourlyAccts?.forEach(addAcct)
 
         return Array.from(accountMap.entries()).map(([account, info]) => ({
             id: account,
@@ -461,27 +580,23 @@ export const db = {
         const activeIds = await cachedActiveClientIds()
         if (activeIds.length === 0) return []
 
-        let query = supabase
-            .from('daily_performance')
-            .select('client_id, client_name, cost')
-            .in('client_id', activeIds)
-
-        if (filters.startDate) query = query.gte('date', filters.startDate)
-        if (filters.endDate) query = query.lte('date', filters.endDate)
-
-        const { data, error } = await query
-        if (error) throw error
+        const merged = await db.getDailyPerformance({
+            startDate: filters.startDate,
+            endDate: filters.endDate,
+            limit: 20000,
+        })
 
         const map = new Map<string, { client_id: string; client_name: string; spend: number }>()
-        data?.forEach(row => {
+        merged.forEach(row => {
             const existing = map.get(row.client_id)
+            const add = Number(row.cost) || 0
             if (existing) {
-                existing.spend += Number(row.cost) || 0
+                existing.spend += add
             } else {
                 map.set(row.client_id, {
                     client_id: row.client_id,
                     client_name: row.client_name || row.client_id,
-                    spend: Number(row.cost) || 0,
+                    spend: add,
                 })
             }
         })
