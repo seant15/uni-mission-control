@@ -22,7 +22,10 @@ const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
 let activeClientIdsCache: { ids: string[]; at: number } | null = null
 const ACTIVE_CLIENT_CACHE_MS = 45_000
 
-/** IDs of `clients.status === 'active'` — cached for list + performance queries. */
+/** Matches common DB casing for active clients (shared by dropdowns + perf scoping). */
+export const ACTIVE_CLIENT_STATUSES = ['active', 'Active', 'ACTIVE'] as const
+
+/** IDs of active clients — cached for list + performance queries. */
 async function cachedActiveClientIds(): Promise<string[]> {
     const now = Date.now()
     if (activeClientIdsCache && now - activeClientIdsCache.at < ACTIVE_CLIENT_CACHE_MS) {
@@ -31,7 +34,7 @@ async function cachedActiveClientIds(): Promise<string[]> {
     const { data, error } = await supabase
         .from('clients')
         .select('id')
-        .eq('status', 'active')
+        .in('status', [...ACTIVE_CLIENT_STATUSES])
     if (error) throw error
     const ids = (data ?? []).map((r: { id: string }) => r.id).filter(Boolean)
     activeClientIdsCache = { ids, at: now }
@@ -109,7 +112,7 @@ export const db = {
         const { data, error } = await supabase
             .from('clients')
             .select('id, name, business_type, currency, currency_symbol, meta_ad_account_id, google_ads_customer_id')
-            .eq('status', 'active')
+            .in('status', [...ACTIVE_CLIENT_STATUSES])
             .order('name')
         if (error) throw error
         return data

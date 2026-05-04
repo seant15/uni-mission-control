@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { supabase } from '../lib/supabase'
+import { ACTIVE_CLIENT_STATUSES } from '../lib/api'
 import type { TimePeriod } from '../types'
 
 type ChartMetric = 'total_spend' | 'total_revenue' | 'roas' | 'conversions'
@@ -94,7 +95,7 @@ export default function ClientsOverview() {
   const dates = getDates(period)
 
   const fetchPerf = async (start: string, end: string) => {
-    const { data: act, error: e1 } = await supabase.from('clients').select('id').eq('status', 'active')
+    const { data: act, error: e1 } = await supabase.from('clients').select('id').in('status', [...ACTIVE_CLIENT_STATUSES])
     if (e1) throw new Error(e1.message)
     const activeIds = (act ?? []).map(c => c.id)
     if (activeIds.length === 0) return []
@@ -112,7 +113,7 @@ export default function ClientsOverview() {
   const { data: clients, isLoading: cLoading, error: cError } = useQuery({
     queryKey: ['clients'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('clients').select('id, name, status, business_type, currency, currency_symbol').eq('status', 'active').order('name')
+      const { data, error } = await supabase.from('clients').select('id, name, status, business_type, currency, currency_symbol').in('status', [...ACTIVE_CLIENT_STATUSES]).order('name')
       if (error) throw new Error(error.message)
       return data || []
     },

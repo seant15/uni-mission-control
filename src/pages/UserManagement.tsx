@@ -5,6 +5,7 @@ import {
   Check, X, Save, AlertCircle, Key, Eye, EyeOff
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { ACTIVE_CLIENT_STATUSES } from '../lib/api'
 import {
   getAllUsersWithAccess, createUser, updateUser,
   setUserClientAccess
@@ -521,12 +522,12 @@ export default function UserManagement() {
 
   async function loadData() {
     setLoading(true)
-    const [usersData, clientsData] = await Promise.all([
+    const [usersData, clientsRes] = await Promise.all([
       getAllUsersWithAccess(),
-      supabase.from('clients').select('id, name').eq('status', 'active').order('name'),
+      supabase.from('clients').select('id, name').in('status', [...ACTIVE_CLIENT_STATUSES]).order('name'),
     ])
     setUsers(usersData)
-    setClients(clientsData.data ?? [])
+    setClients(clientsRes.data ?? [])
     setLoading(false)
   }
 

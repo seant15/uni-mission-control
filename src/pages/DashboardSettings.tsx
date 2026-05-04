@@ -62,17 +62,18 @@ export default function DashboardSettingsPage() {
           announcementStyle: DEFAULT_SETTINGS.announcementStyle,
         }
 
-    const success = await saveDashboardSettings(userId, personalSettings)
+    let success = await saveDashboardSettings(userId, personalSettings)
 
     // Announcement is global — super_admin saves it to default_user so all users see it
     if (isSuperAdmin && userId !== 'default_user') {
       const globalSettings = await getDashboardSettings('default_user')
-      await saveDashboardSettings('default_user', {
+      const globalOk = await saveDashboardSettings('default_user', {
         ...globalSettings,
         announcementEnabled: settings.announcementEnabled,
         announcementText: settings.announcementText,
         announcementStyle: settings.announcementStyle,
       })
+      if (!globalOk) success = false
     }
 
     await queryClient.invalidateQueries({ queryKey: [...GLOBAL_ANNOUNCEMENT_QUERY_KEY] })
@@ -81,7 +82,9 @@ export default function DashboardSettingsPage() {
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } else {
-      alert('Failed to save settings. Please try again.')
+      alert(
+        'Failed to save settings. If you edited the global banner, check Supabase: dashboard_settings row for user_id default_user must be writable/readable for your role (RLS).'
+      )
     }
   }
 
