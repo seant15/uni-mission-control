@@ -8,13 +8,15 @@ import type {
   AttachmentMeta,
 } from '../types/feedback'
 import type {
-  Alert,
-  AlertNote,
-  AlertRule,
-  AlertColumnDef,
-  AlertCounts,
-  AlertFilterState,
+    Alert,
+    AlertNote,
+    AlertRule,
+    AlertColumnDef,
+    AlertCounts,
+    AlertFilterState,
 } from '../types/alerts'
+import type { MissionCardRow, MissionColumn } from '../types/mission'
+import type { ClientAbTestConfig, ClientAlertDelivery } from '../types/abTestDelivery'
 import { mockTasks } from './mock-data'
 
 const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
@@ -565,7 +567,7 @@ export const db = {
     async getAlertSummary() {
         const { data, error } = await supabase
             .from('alerts')
-            .select('id, severity, status, account_name, message, alert_type, created_at')
+            .select('id, severity, status, account_name, message, alert_type, created_at, client_id')
             .order('created_at', { ascending: false })
             .limit(100)
 
@@ -1319,5 +1321,138 @@ export const db = {
             .order('display_name')
         if (error) throw error
         return data ?? []
+    },
+
+    async listMissionCards(): Promise<MissionCardRow[]> {
+        const { data, error } = await supabase
+            .from('mission_cards')
+            .select('*')
+            .order('updated_at', { ascending: false })
+        if (error) throw error
+        return (data ?? []) as MissionCardRow[]
+    },
+
+    async createMissionCard(input: {
+        title: string
+        body?: string
+        column_status?: MissionColumn
+        client_id?: string | null
+        source_alert_id?: string | null
+        created_by: string
+    }): Promise<MissionCardRow> {
+        const { data, error } = await supabase
+            .from('mission_cards')
+            .insert({
+                title: input.title,
+                body: input.body ?? '',
+                column_status: input.column_status ?? 'new',
+                client_id: input.client_id ?? null,
+                source_alert_id: input.source_alert_id ?? null,
+                created_by: input.created_by,
+            })
+            .select()
+            .single()
+        if (error) throw error
+        return data as MissionCardRow
+    },
+
+    async updateMissionCard(
+        id: string,
+        patch: Partial<Pick<MissionCardRow, 'title' | 'body' | 'column_status' | 'client_id'>>
+    ): Promise<void> {
+        const { error } = await supabase
+            .from('mission_cards')
+            .update({ ...patch, updated_at: new Date().toISOString() })
+            .eq('id', id)
+        if (error) throw error
+    },
+
+    async deleteMissionCard(id: string): Promise<void> {
+        const { error } = await supabase.from('mission_cards').delete().eq('id', id)
+        if (error) throw error
+    },
+
+    /** Returns existing card id if this alert was already used to create a mission card. */
+    async findMissionCardBySourceAlert(alertId: string): Promise<string | null> {
+        const { data, error } = await supabase
+            .from('mission_cards')
+            .select('id')
+            .eq('source_alert_id', alertId)
+            .maybeSingle()
+        if (error) throw error
+        return data?.id ?? null
+    },
+
+    async listAbTestConfigs(clientId?: string): Promise<ClientAbTestConfig[]> {
+        let q = supabase.from('client_ab_test_configs').select('*').order('updated_at', { ascending: false })
+        if (clientId && clientId !== 'all') q = q.eq('client_id', clientId)
+        const { data, error } = await q
+        if (error) throw error
+        return (data ?? []) as ClientAbTestConfig[]
+    },
+
+    async createAbTestConfig(
+        row: Omit<ClientAbTestConfig, 'id' | 'created_at' | 'updated_at'>
+    ): Promise<ClientAbTestConfig> {
+        const { data, error } = await supabase
+            .from('client_ab_test_configs')
+            .insert({
+                client_id: row.client_id,
+                name: row.name,
+                platform: row.platform,
+                entity_type: row.entity_type,
+                entity_name: row.entity_name,
+                cadence: row.cadence,
+                is_active: row.is_active,
+                notes: row.notes ?? '',
+                created_by: row.created_by,
+            })
+            .select()
+            .single()
+        if (error) throw error
+        return data as ClientAbTestConfig
+    },
+
+    async updateAbTestConfig(
+        id: string,
+        patch: Partial<Pick<ClientAbTestConfig, 'name' | 'platform' | 'entity_type' | 'entity_name' | 'cadence' | 'is_active' | 'notes'>>
+    ): Promise<void> {
+        const { error } = await supabase
+            .from('client_ab_test_configs')
+            .update({ ...patch, updated_at: new Date().toISOString() })
+            .eq('id', id)
+        if (error) throw error
+    },
+
+    async deleteAbTestConfig(id: string): Promise<void> {
+        const { error } = await supabase.from('client_ab_test_configs').delete().eq('id', id)
+        if (error) throw error
+    },
+
+    async getClientAlertDelivery(clientId: string): Promise<ClientAlertDelivery | null> {
+        const { data, error } = await supabase
+            .from('client_alert_delivery')
+            .select('*')
+            .eq('client_id', clientId)
+            .maybeSingle()
+        if (error) throw error
+        return data as ClientAlertDelivery | null
+    },
+
+    async upsertClientAlertDelivery(
+        row: Pick<ClientAlertDelivery, 'client_id' | 'notify_in_app' | 'slack_webhook_url' | 'notify_emails'> & { updated_by?: string | null }
+    ): Promise<void> {
+        const { error } = await supabase.from('client_alert_delivery').upsert(
+            {
+                client_id: row.client_id,
+                notify_in_app: row.notify_in_app,
+                slack_webhook_url: row.slack_webhook_url?.trim() || null,
+                notify_emails: row.notify_emails?.trim() || null,
+                updated_at: new Date().toISOString(),
+                updated_by: row.updated_by ?? null,
+            },
+            { onConflict: 'client_id' }
+        )
+        if (error) throw error
     },
 }

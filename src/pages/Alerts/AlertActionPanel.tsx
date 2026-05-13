@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import {
-  CheckCircle, Clock, X, UserPlus, ExternalLink, ChevronDown, ChevronUp
+  CheckCircle, Clock, X, UserPlus, ExternalLink, ChevronDown, ChevronUp, LayoutGrid,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { db } from '../../lib/api'
 import NoteThread from './NoteThread'
 import type { Alert } from '../../types/alerts'
@@ -79,6 +80,32 @@ export default function AlertActionPanel({ alert, currentUserId, currentUserRole
     onSuccess: invalidate,
   })
 
+  const missionCardMutation = useMutation({
+    mutationFn: async () => {
+      const existingId = await db.findMissionCardBySourceAlert(alert.id)
+      if (existingId) return { existingId, created: false as const }
+      const title = `${alert.account_name || 'Account'} — ${(alert.alert_type || 'alert').replace(/_/g, ' ')}`
+      const body = [
+        alert.message,
+        alert.metric_name != null ? `${alert.metric_name}: ${alert.metric_value ?? ''} ${alert.metric_change ?? ''}`.trim() : '',
+      ].filter(Boolean).join('\n\n')
+      const row = await db.createMissionCard({
+        title,
+        body,
+        client_id: alert.client_id ?? null,
+        source_alert_id: alert.id,
+        created_by: currentUserId,
+      })
+      return { existingId: row.id, created: true as const }
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['mission_cards'] })
+      if (res.created) toast.success('Mission card created')
+      else toast.message('Card already exists for this alert', { description: 'Open Mission Board to view it.' })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
   function handleSnoozePreset(preset: typeof SNOOZE_PRESETS[number]) {
     if (preset.hours === -1) return // custom — let user pick datetime
     const now = new Date()
@@ -101,6 +128,17 @@ export default function AlertActionPanel({ alert, currentUserId, currentUserRole
     <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 space-y-4">
       {/* Quick actions row */}
       <div className="flex items-center gap-2 flex-wrap">
+        {currentUserId && (
+          <button
+            type="button"
+            onClick={() => missionCardMutation.mutate()}
+            disabled={missionCardMutation.isPending}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          >
+            <LayoutGrid size={14} /> Mission card
+          </button>
+        )}
+
         {!isTerminal && (
           <button
             onClick={() => resolveMutation.mutate()}

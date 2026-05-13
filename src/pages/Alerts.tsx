@@ -8,6 +8,7 @@ import AlertFilterBar from './Alerts/AlertFilterBar'
 import AlertGroupList from './Alerts/AlertGroupList'
 import AlertColumnCustomizer from './Alerts/AlertColumnCustomizer'
 import AlertRulesTab from './Alerts/AlertRulesTab'
+import AbTestDeliveryTab from './Alerts/AbTestDeliveryTab'
 import type {
   Alert,
   AlertGroup,
@@ -17,7 +18,7 @@ import type {
 import { DEFAULT_ALERT_COLUMNS as DEFAULT_COLS } from '../types/alerts'
 
 const PAGE_SIZE = 25
-const TABS = ['Alerts', 'Alert Rules'] as const
+const TABS = ['Alerts', 'Alert Rules', 'A/B & delivery'] as const
 type Tab = typeof TABS[number]
 
 // Group alerts by group_key (client-side)
@@ -208,9 +209,10 @@ export default function Alerts() {
             </div>
           )}
         </>
-      ) : (
-        /* Alert Rules tab */
+      ) : activeTab === 'Alert Rules' ? (
         <AlertRulesTab currentUserId={appUser?.id ?? ''} />
+      ) : (
+        <AbTestDeliveryTab currentUserId={appUser?.id ?? ''} />
       )}
     </div>
   )

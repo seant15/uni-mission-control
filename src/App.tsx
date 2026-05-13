@@ -2,7 +2,7 @@ import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { LayoutDashboard, AlertTriangle, Users, Bell, Database, Settings, Activity, Layers, Megaphone, X, LogOut, MessageSquarePlus } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, Users, Bell, Database, Settings, Activity, Layers, Megaphone, X, LogOut, MessageSquarePlus, LayoutGrid } from 'lucide-react'
 import { db } from './lib/api'
 import MarketingOverview from './pages/MarketingOverview'
 import Alerts from './pages/Alerts'
@@ -14,8 +14,11 @@ import CreativePerformance from './pages/CreativePerformance'
 import FeedbackAdmin from './pages/FeedbackAdmin'
 import Login from './pages/Login'
 import FeedbackWidget from './components/FeedbackWidget'
+import OpenClawChatWidget from './components/OpenClawChatWidget'
+import MissionBoard from './pages/MissionBoard'
 import { getDashboardSettings, GLOBAL_ANNOUNCEMENT_QUERY_KEY } from './lib/settings'
 import { useAuth } from './contexts/AuthContext'
+import { Toaster } from 'sonner'
 
 const ANNOUNCEMENT_STYLES = {
   info:    { bar: 'bg-blue-600',   text: 'text-white',          icon: 'text-blue-200' },
@@ -70,6 +73,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <Router>
+      <Toaster position="top-right" richColors />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/*" element={<ProtectedRoute><AppShell /></ProtectedRoute>} />
@@ -123,6 +127,7 @@ function AppShell() {
               Main
             </div>
             <NavLink to="/" icon={LayoutDashboard} label="UNI Overview" />
+            <NavLink to="/mission" icon={LayoutGrid} label="Mission Board" />
             <NavLink to="/alerts" icon={AlertTriangle} label="Alerts" badge={openAlertCount ?? 0} />
             <NavLink to="/clients-overview" icon={Users} label="Clients Overview" />
             <NavLink to="/realtime-performance" icon={Activity} label="Real-time Performance" />
@@ -185,6 +190,7 @@ function AppShell() {
           <main className="p-8 max-w-7xl mx-auto w-full">
             <Routes>
               <Route path="/" element={<MarketingOverview />} />
+              <Route path="/mission" element={<MissionBoard />} />
               <Route path="/alerts" element={<Alerts />} />
               <Route path="/clients-overview" element={<ClientsOverview />} />
               <Route path="/realtime-performance" element={<RealtimePerformance />} />
@@ -197,6 +203,7 @@ function AppShell() {
         </div>
 
         {/* Feedback FAB — persists on every authenticated page */}
+        <OpenClawChatWidget />
         <FeedbackWidget />
       </div>
   )

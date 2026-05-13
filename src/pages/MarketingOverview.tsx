@@ -1,14 +1,23 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
-  DollarSign, TrendingUp, Target, MousePointer, Eye,
+  DollarSign, TrendingUp, Target, MousePointer, Eye, MousePointer2, CreditCard,
   AlertTriangle, ArrowUpRight, ArrowDownRight, AlertCircle,
-  Clock, CheckCircle, X, BarChart3
+  Clock, CheckCircle, X, BarChart3, Users, ShoppingCart, ChevronDown,
 } from 'lucide-react'
 import { db } from '../lib/api'
+import { getDashboardSettings } from '../lib/settings'
 
 type Period = '7d' | '30d' | '90d'
+
+interface Client {
+  id: string
+  name: string
+  business_type?: 'leadgen' | 'ecommerce'
+  currency?: string
+  currency_symbol?: string
+}
 
 function getDateRanges(period: Period) {
   const end = new Date()
@@ -43,17 +52,6 @@ function pctChange(cur: number, prev: number) {
   return ((cur - prev) / prev) * 100
 }
 
-/** Currency — always 2 decimals for comparable portfolio metrics */
-const fmt$ = (v: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(v)
-/** Counts / volumes on KPI cards — 2 decimal places, grouped (no K/M shorthand on overview cards) */
-const fmtMetric = (v: number) =>
-  new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
 const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 
 function MetricCard({ title, value, change, icon: Icon, color, invertTrend = false }: {
@@ -82,32 +80,125 @@ function MetricCard({ title, value, change, icon: Icon, color, invertTrend = fal
 
 export default function MarketingOverview() {
   const [period, setPeriod] = useState<Period>('30d')
+  const [selectedClient, setSelectedClient] = useState<string>('all')
+  const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
+  const [selectedAdAccount, setSelectedAdAccount] = useState<string>('')
+  const [showClientDropdown, setShowClientDropdown] = useState(false)
+  const [businessType, setBusinessType] = useState<'leadgen' | 'ecommerce'>('ecommerce')
+  const [businessTypeManual, setBusinessTypeManual] = useState(false)
+  const clientDropdownRef = useRef<HTMLDivElement>(null)
+
   const ranges = getDateRanges(period)
 
-  // Current + previous period performance
-  const { data: curRows, isLoading, error } = useQuery({
-    queryKey: ['mkt_cur', period],
-    queryFn: () => db.getDailyPerformance({ startDate: ranges.current.start, endDate: ranges.current.end }),
-    refetchOnMount: 'always',
+  useEffect(() => {
+    getDashboardSettings('default_user').then(loaded => {
+      setBusinessType(loaded.defaultBusinessType)
+    })
+  }, [])
+
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target as Node)) {
+        setShowClientDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [])
+
+  const { data: clientsFromTable } = useQuery({
+    queryKey: ['clients_table'],
+    queryFn: db.getClients,
+    staleTime: 10 * 60 * 1000,
   })
-  const { data: prevRows } = useQuery({
-    queryKey: ['mkt_prev', period],
-    queryFn: () => db.getDailyPerformance({ startDate: ranges.previous.start, endDate: ranges.previous.end }),
+
+  const { data: platformsFromDB } = useQuery({
+    queryKey: ['available_platforms'],
+    queryFn: db.getAvailablePlatforms,
+    staleTime: 10 * 60 * 1000,
+  })
+
+  const { data: adAccountsFromDB } = useQuery({
+    queryKey: ['ad_accounts', selectedClient, selectedPlatform],
+    queryFn: () => db.getAdAccounts({ clientId: selectedClient, platform: selectedPlatform }),
+    staleTime: 10 * 60 * 1000,
+  })
+
+  const clients: Client[] = clientsFromTable || []
+  const availablePlatforms = platformsFromDB || []
+
+  useEffect(() => {
+    if (businessTypeManual) return
+    let clientId = selectedClient
+    if (clientId === 'all' && selectedAdAccount && adAccountsFromDB) {
+      const match = adAccountsFromDB.find((a: any) => a.id === selectedAdAccount)
+      if (match?.client_id) clientId = match.client_id
+    }
+    if (clientId && clientId !== 'all') {
+      const client = clients.find(c => c.id === clientId)
+      if (client?.business_type) {
+        setBusinessType(client.business_type)
+      }
+    }
+  }, [selectedClient, selectedAdAccount, clients, adAccountsFromDB, businessTypeManual])
+
+  const { data: curRows, isLoading, error } = useQuery({
+    queryKey: ['mkt_cur', period, selectedClient, selectedPlatform, selectedAdAccount],
+    queryFn: () => db.getDailyPerformance({
+      clientId: selectedClient,
+      platform: selectedPlatform,
+      adAccountId: selectedAdAccount || undefined,
+      startDate: ranges.current.start,
+      endDate: ranges.current.end,
+    }),
     refetchOnMount: 'always',
   })
 
-  // Alert summary
-  const { data: alertsData } = useQuery({
+  const { data: prevRows } = useQuery({
+    queryKey: ['mkt_prev', period, selectedClient, selectedPlatform, selectedAdAccount],
+    queryFn: () => db.getDailyPerformance({
+      clientId: selectedClient,
+      platform: selectedPlatform,
+      adAccountId: selectedAdAccount || undefined,
+      startDate: ranges.previous.start,
+      endDate: ranges.previous.end,
+    }),
+    refetchOnMount: 'always',
+  })
+
+  const { data: alertsRaw } = useQuery({
     queryKey: ['uni_alerts'],
     queryFn: db.getAlertSummary,
     staleTime: 2 * 60 * 1000,
     refetchOnMount: 'always',
   })
 
+  const alertsData = alertsRaw?.filter(a => {
+    if (selectedClient === 'all') return true
+    return a.client_id === selectedClient
+  })
+
   const cur = curRows ? aggregate(curRows) : null
   const prev = prevRows ? aggregate(prevRows) : null
 
-  // Platform breakdown
+  const spendChange = cur && prev ? pctChange(cur.spend, prev.spend) : undefined
+  const ctrChange = cur && prev ? pctChange(cur.ctr, prev.ctr) : undefined
+  const convChange = cur && prev ? pctChange(cur.conversions, prev.conversions) : undefined
+  const cpaChange = cur && prev ? pctChange(cur.cpa, prev.cpa) : undefined
+  const roasChange = cur && prev ? pctChange(cur.roas, prev.roas) : undefined
+  const revChange = cur && prev ? pctChange(cur.revenue, prev.revenue) : undefined
+
+  const fmtMoney = (n: number) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: selectedClient !== 'all' ? (clients.find(c => c.id === selectedClient)?.currency || 'USD') : 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n)
+
+  const fmtMetric = (v: number) =>
+    new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
+
   const platformBreakdown = curRows
     ? Object.values(
         curRows.reduce((acc: any, row) => {
@@ -125,7 +216,6 @@ export default function MarketingOverview() {
       })).sort((a: any, b: any) => b.spend - a.spend)
     : []
 
-  // Alert summary counts
   const alertSummary = alertsData?.reduce(
     (acc, a) => {
       acc.total++
@@ -141,6 +231,10 @@ export default function MarketingOverview() {
 
   const periodLabel = period === '7d' ? '7 Days' : period === '30d' ? '30 Days' : '90 Days'
 
+  const selectedClientName = selectedClient === 'all'
+    ? 'All Clients'
+    : clients.find(c => c.id === selectedClient)?.name || 'Unknown'
+
   const getSeverityColor = (s: string) =>
     s === 'critical' ? 'bg-red-100 text-red-700' :
     s === 'high' ? 'bg-orange-100 text-orange-700' :
@@ -151,23 +245,120 @@ export default function MarketingOverview() {
     s === 'in_progress' ? <Clock size={14} /> :
     s === 'resolved' ? <CheckCircle size={14} /> : <X size={14} />
 
+  const primaryLeadGen = cur && prev && (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} color="bg-blue-600" />
+      <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} color="bg-violet-600" />
+      <MetricCard title="Leads" value={fmtMetric(cur.conversions)} change={convChange} icon={Users} color="bg-emerald-600" />
+      <MetricCard title="Cost Per Lead (CPL)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} color="bg-amber-600" invertTrend />
+    </div>
+  )
+
+  const primaryEcom = cur && prev && (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} color="bg-blue-600" />
+      <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} color="bg-violet-600" />
+      <MetricCard title="Purchases" value={fmtMetric(cur.conversions)} change={convChange} icon={ShoppingCart} color="bg-emerald-600" />
+      <MetricCard title="ROAS" value={`${cur.roas.toFixed(2)}x`} change={roasChange} icon={TrendingUp} color="bg-amber-600" />
+    </div>
+  )
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">UNI Overview</h1>
-          <p className="text-gray-500 mt-1">Cross-platform performance summary</p>
+          <p className="text-gray-500 mt-1">Cross-platform performance summary — filters match Account Performance</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-lg border border-gray-200 p-0.5">
+            <button
+              type="button"
+              onClick={() => { setBusinessType('leadgen'); setBusinessTypeManual(true) }}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1 ${businessType === 'leadgen' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              <Users size={13} /> Lead Gen
+            </button>
+            <button
+              type="button"
+              onClick={() => { setBusinessType('ecommerce'); setBusinessTypeManual(true) }}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1 ${businessType === 'ecommerce' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              <ShoppingCart size={13} /> eCommerce
+            </button>
+          </div>
+          {businessTypeManual && (
+            <button type="button" onClick={() => setBusinessTypeManual(false)} className="text-xs text-blue-500 underline">Auto</button>
+          )}
+          <div className="relative" ref={clientDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setShowClientDropdown(!showClientDropdown)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm min-w-[160px]"
+            >
+              <span className="flex-1 text-left truncate">{selectedClientName}</span>
+              <ChevronDown size={14} />
+            </button>
+            {showClientDropdown && (
+              <div className="absolute top-full right-0 mt-1 w-full min-w-[200px] bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-56 overflow-y-auto">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedClient('all'); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm"
+                >
+                  All Clients
+                </button>
+                {clients.map(client => (
+                  <button
+                    key={client.id}
+                    type="button"
+                    onClick={() => { setSelectedClient(client.id); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-50"
+                  >
+                    <div className="text-sm font-medium">{client.name}</div>
+                    {client.business_type && (
+                      <div className="text-xs text-gray-500">{client.business_type === 'leadgen' ? 'Lead Gen' : 'eCommerce'}</div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <select
+            value={selectedPlatform}
+            onChange={(e) => { setSelectedPlatform(e.target.value); setSelectedAdAccount('') }}
+            className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm min-w-[140px]"
+          >
+            <option value="all">All Platforms</option>
+            {availablePlatforms.map((platform: any) => (
+              <option key={platform.id} value={platform.id}>{platform.label}</option>
+            ))}
+          </select>
+          {adAccountsFromDB && adAccountsFromDB.length > 0 && (
+            <select
+              value={selectedAdAccount}
+              onChange={(e) => setSelectedAdAccount(e.target.value)}
+              className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm min-w-[180px]"
+            >
+              <option value="">All Accounts</option>
+              {adAccountsFromDB.map((account: any) => (
+                <option key={account.id} value={account.id}>{account.label}</option>
+              ))}
+            </select>
+          )}
           {(['7d', '30d', '90d'] as Period[]).map(p => (
-            <button key={p} onClick={() => setPeriod(p)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            <button key={p} type="button" onClick={() => setPeriod(p)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 period === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
               }`}>
-              {p === '7d' ? '7 Days' : p === '30d' ? '30 Days' : '90 Days'}
+              {p === '7d' ? '7d' : p === '30d' ? '30d' : '90d'}
             </button>
           ))}
+          {selectedClient !== 'all' && (
+            <span className="px-2 py-1 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-lg text-xs font-mono font-semibold">
+              {clients.find(c => c.id === selectedClient)?.currency || 'USD'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -190,28 +381,27 @@ export default function MarketingOverview() {
 
       {cur && (
         <>
-          {/* Primary KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <MetricCard title="Total Spend" value={fmt$(cur.spend)} change={prev ? pctChange(cur.spend, prev.spend) : undefined} icon={DollarSign} color="bg-blue-600" />
-            <MetricCard title="Total Revenue" value={fmt$(cur.revenue)} change={prev ? pctChange(cur.revenue, prev.revenue) : undefined} icon={TrendingUp} color="bg-green-600" />
-            <MetricCard title="ROAS" value={`${cur.roas.toFixed(2)}x`} change={prev ? pctChange(cur.roas, prev.roas) : undefined} icon={Target} color="bg-purple-600" />
-            <MetricCard title="Conversions" value={fmtMetric(cur.conversions)} change={prev ? pctChange(cur.conversions, prev.conversions) : undefined} icon={TrendingUp} color="bg-orange-600" />
-          </div>
+          {businessType === 'leadgen' ? primaryLeadGen : primaryEcom}
 
-          {/* Secondary KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <MetricCard title="Impressions" value={fmtMetric(cur.impressions)} change={prev ? pctChange(cur.impressions, prev.impressions) : undefined} icon={Eye} color="bg-indigo-600" />
             <MetricCard title="Clicks" value={fmtMetric(cur.clicks)} change={prev ? pctChange(cur.clicks, prev.clicks) : undefined} icon={MousePointer} color="bg-cyan-600" />
-            <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={prev ? pctChange(cur.ctr, prev.ctr) : undefined} icon={Target} color="bg-teal-600" />
-            <MetricCard title="CPC" value={fmt$(cur.cpc)} change={prev ? pctChange(cur.cpc, prev.cpc) : undefined} icon={DollarSign} color="bg-pink-600" invertTrend />
+            <MetricCard title="CTR (detail)" value={`${cur.ctr.toFixed(2)}%`} change={prev ? pctChange(cur.ctr, prev.ctr) : undefined} icon={Target} color="bg-teal-600" />
+            <MetricCard title="CPC" value={fmtMoney(cur.cpc)} change={prev ? pctChange(cur.cpc, prev.cpc) : undefined} icon={DollarSign} color="bg-pink-600" invertTrend />
           </div>
 
-          {/* CPA */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <MetricCard title="CPA (Cost Per Acquisition)" value={fmt$(cur.cpa)} change={prev ? pctChange(cur.cpa, prev.cpa) : undefined} icon={DollarSign} color="bg-rose-600" invertTrend />
-          </div>
+          {businessType === 'ecommerce' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <MetricCard title="Total Revenue" value={fmtMoney(cur.revenue)} change={revChange} icon={TrendingUp} color="bg-green-600" />
+              <MetricCard title="CPA (Cost Per Acquisition)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} color="bg-rose-600" invertTrend />
+            </div>
+          )}
+          {businessType === 'leadgen' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <MetricCard title="Total Revenue (if tracked)" value={fmtMoney(cur.revenue)} change={revChange} icon={TrendingUp} color="bg-green-600" />
+            </div>
+          )}
 
-          {/* Platform Breakdown */}
           {platformBreakdown.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
@@ -234,8 +424,8 @@ export default function MarketingOverview() {
                     {(platformBreakdown as any[]).map((p, i) => (
                       <tr key={i} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm font-medium capitalize">{p.platform.replace(/_/g, ' ')}</td>
-                        <td className="px-4 py-3 text-sm text-right">{fmt$(p.spend)}</td>
-                        <td className="px-4 py-3 text-sm text-right text-green-600 font-medium">{fmt$(p.revenue)}</td>
+                        <td className="px-4 py-3 text-sm text-right">{fmtMoney(p.spend)}</td>
+                        <td className="px-4 py-3 text-sm text-right text-green-600 font-medium">{fmtMoney(p.revenue)}</td>
                         <td className="px-4 py-3 text-sm text-right">
                           <span className={`font-semibold ${p.roas >= 2 ? 'text-green-600' : p.roas >= 1 ? 'text-blue-600' : 'text-red-600'}`}>
                             {p.roas.toFixed(2)}x
@@ -243,7 +433,7 @@ export default function MarketingOverview() {
                         </td>
                         <td className="px-4 py-3 text-sm text-right">{fmtMetric(p.conversions)}</td>
                         <td className="px-4 py-3 text-sm text-right text-gray-600">
-                          {p.conversions > 0 ? fmt$(p.cpa) : '—'}
+                          {p.conversions > 0 ? fmtMoney(p.cpa) : '—'}
                         </td>
                         <td className="px-4 py-3 text-sm text-right text-gray-500">
                           {cur.spend > 0 ? ((p.spend / cur.spend) * 100).toFixed(2) : '0.00'}%
@@ -256,7 +446,6 @@ export default function MarketingOverview() {
             </div>
           )}
 
-          {/* Alert Overview */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -268,7 +457,6 @@ export default function MarketingOverview() {
               </Link>
             </div>
 
-            {/* Alert summary cards */}
             <div className="grid grid-cols-4 gap-3 mb-5">
               <div className="bg-gray-50 rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold text-gray-900">{alertSummary.total}</div>
@@ -288,7 +476,6 @@ export default function MarketingOverview() {
               </div>
             </div>
 
-            {/* Recent alerts */}
             {recentAlerts.length > 0 ? (
               <div className="space-y-2">
                 {recentAlerts.map(alert => (

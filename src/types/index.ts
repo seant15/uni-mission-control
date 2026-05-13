@@ -28,3 +28,5 @@ export interface AgentHealth {
 export * from './alerts'
 export * from './clients'
 export * from './marketing'
+export * from './mission'
+export * from './abTestDelivery'
