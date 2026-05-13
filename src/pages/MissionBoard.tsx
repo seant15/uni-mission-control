@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { LayoutGrid, Plus, RefreshCw, ExternalLink } from 'lucide-react'
+import { LayoutGrid, Plus, RefreshCw, ExternalLink, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { db } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -11,13 +11,39 @@ export default function MissionBoard() {
   const { appUser } = useAuth()
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
+  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create')
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
+  const [columnStatus, setColumnStatus] = useState<MissionColumn>('new')
 
   const { data: cards = [], isLoading, error, refetch } = useQuery({
     queryKey: ['mission_cards'],
     queryFn: db.listMissionCards.bind(db),
   })
+
+  function openCreate() {
+    setModalMode('create')
+    setEditingId(null)
+    setTitle('')
+    setBody('')
+    setColumnStatus('new')
+    setModalOpen(true)
+  }
+
+  function openEdit(card: MissionCardRow) {
+    setModalMode('edit')
+    setEditingId(card.id)
+    setTitle(card.title)
+    setBody(card.body || '')
+    setColumnStatus(card.column_status)
+    setModalOpen(true)
+  }
+
+  function closeModal() {
+    setModalOpen(false)
+    setEditingId(null)
+  }
 
   const createMutation = useMutation({
     mutationFn: () => {
@@ -25,15 +51,31 @@ export default function MissionBoard() {
       return db.createMissionCard({
         title: title.trim() || 'Untitled',
         body: body.trim(),
+        column_status: columnStatus,
         created_by: appUser.id,
       })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mission_cards'] })
-      setModalOpen(false)
-      setTitle('')
-      setBody('')
+      closeModal()
       toast.success('Card created')
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const saveEditMutation = useMutation({
+    mutationFn: () => {
+      if (!editingId) throw new Error('No card selected')
+      return db.updateMissionCard(editingId, {
+        title: title.trim() || 'Untitled',
+        body: body.trim(),
+        column_status: columnStatus,
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mission_cards'] })
+      closeModal()
+      toast.success('Card updated')
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -52,6 +94,8 @@ export default function MissionBoard() {
     return acc
   }, {} as Record<MissionColumn, MissionCardRow[]>)
 
+  const savePending = modalMode === 'create' ? createMutation.isPending : saveEditMutation.isPending
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -61,7 +105,7 @@ export default function MissionBoard() {
             Mission Board
           </h1>
           <p className="text-gray-500 mt-1">
-            Track work from alerts and notes. Cards are not changed when an alert is archived or deleted.
+            Track work from alerts and notes. Use Edit on a card to change title, notes, or column.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -74,7 +118,7 @@ export default function MissionBoard() {
           </button>
           <button
             type="button"
-            onClick={() => setModalOpen(true)}
+            onClick={openCreate}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
           >
             <Plus size={16} /> New card
@@ -118,6 +162,8 @@ export default function MissionBoard() {
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <select
                         value={card.column_status}
+                        onClick={e => e.stopPropagation()}
+                        onMouseDown={e => e.stopPropagation()}
                         onChange={e =>
                           updateColumnMutation.mutate({
                             id: card.id,
@@ -130,6 +176,13 @@ export default function MissionBoard() {
                           <option key={c.id} value={c.id}>{c.label}</option>
                         ))}
                       </select>
+                      <button
+                        type="button"
+                        onClick={() => openEdit(card)}
+                        className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        <Pencil size={12} /> Edit
+                      </button>
                       {card.source_alert_id && (
                         <Link
                           to="/alerts"
@@ -150,7 +203,9 @@ export default function MissionBoard() {
       {modalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">New mission card</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              {modalMode === 'create' ? 'New mission card' : 'Edit mission card'}
+            </h2>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Title</label>
               <input
@@ -170,21 +225,33 @@ export default function MissionBoard() {
                 placeholder="Details…"
               />
             </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Column</label>
+              <select
+                value={columnStatus}
+                onChange={e => setColumnStatus(e.target.value as MissionColumn)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              >
+                {MISSION_COLUMNS.map(c => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+            </div>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setModalOpen(false)}
+                onClick={closeModal}
                 className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                disabled={createMutation.isPending}
-                onClick={() => createMutation.mutate()}
+                disabled={savePending}
+                onClick={() => (modalMode === 'create' ? createMutation.mutate() : saveEditMutation.mutate())}
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
-                Create
+                {modalMode === 'create' ? 'Create' : 'Save'}
               </button>
             </div>
           </div>

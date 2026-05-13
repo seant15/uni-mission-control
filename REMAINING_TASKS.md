@@ -2,51 +2,57 @@
 
 创建时间: 2026-03-10  
 产品方向确认时间: 2026-05-12  
-本轮代码完成时间: 2026-05-12（供你 Review / 合并）
+本轮更新: 2026-05-12 — Mission 卡片可编辑；波次 3 自动化脚本 + `ab_report_runs` 表
 
-状态: 波次 1–3 已合入本仓库；你已配置 OpenClaw URL 并跑过 SQL 自检（截图由你方留存）。
+状态: 前端与 `ads_data_sync` 脚本已更新；需在 Supabase 执行新 migration 后跑 Python。
 
 ---
 
-## 本轮 Review 清单（给 Sean）
+## 本轮交付（Review）
 
-环境与配置
+Mission Board
 
-- OpenClaw: 已设置 `VITE_OPENCLAW_CHAT_URL`（本地或 Vercel）。说明见 `docs/OPENCLAW_CHAT_URL.md`。  
-- Supabase: 你已执行 `20260512140000_mission_cards.sql`；若尚未执行波次 3，请跑 `20260512160000_ab_test_configs_and_delivery.sql`。  
-- SQL 自检: 你已对 verify 脚本结果截图核对；仓库内脚本路径如下（可复跑）  
-  - `supabase/scripts/verify_mission_cards.sql`  
-  - `supabase/scripts/verify_wave3_ab_delivery.sql`（在跑完 wave3 migration 后）
+- 每张卡片有「Edit」按钮：可改 Title、Notes、Column；新建卡时可一并选 Column。  
+- 列下拉旁保留快速改列；与弹窗保存一致。
 
-代码交付范围（本轮）
+波次 3 自动化（剩余部分）
 
-- 波次 1: `MarketingOverview.tsx` 与 Account Performance 筛选与 `getDailyPerformance` 口径对齐；`getAlertSummary` 含 `client_id`。  
-- 波次 2: `/mission`（`MissionBoard.tsx`）、Alert 面板「Mission card」、`mission_cards` migration、左下 OpenClaw FAB（`OpenClawChatWidget.tsx`）、保留 Feedback、`App.tsx` 路由与 Toaster。  
-- 波次 3: Alerts 第三 Tab「A/B & delivery」（`AbTestDeliveryTab.tsx`）、`client_ab_test_configs` + `client_alert_delivery` migration、对应 `api.ts` CRUD。  
-- 类型: `src/types/mission.ts`、`src/types/abTestDelivery.ts`。  
-- 文档: `docs/OPENCLAW_CHAT_URL.md`；`.env.example` 注释更新。
+- SQL: `supabase/migrations/20260513120000_ab_report_runs.sql` — 表 `ab_report_runs`（按 `config_id` + `period_key` 去重）。  
+- 自检: `supabase/scripts/verify_ab_report_runs.sql`。  
+- Python（独立仓库 `ads_data_sync`）: `execution/ab_test_reports_and_notify.py`  
+  - 读 `client_ab_test_configs`、`client_alert_delivery`；按最近 7 天在 `meta_ads` / `meta_ads_ad_sets` / `meta_ads_ads` / `google_*` 表中按**对象名称子串**汇总 spend/impr/clicks/conv/rev。  
+  - 写入 `ab_report_runs`；可选 Slack webhook；可选 SMTP 邮件；`notify_in_app` 为真时插入 `alerts`（`alert_type: other`，dedup 键 `ab_report:{config_id}:{period_key}`）。  
+  - 参数: `--dry-run`、`--force`、`--daily-only`、`--hourly-only`。
 
-构建
+---
 
-- 本轮合并前已跑通: `npm run build`（以你合并时本地再跑一次为准）。
+## 需要你来确认 / 提供（我这边无法替你填的）
 
-数据不变量
+1. Supabase: 在 SQL Editor 执行 `20260513120000_ab_report_runs.sql`（在已有 wave3 表的前提下）。  
+2. 定时任务: 在跑脚本的服务器上配置 cron（示例见脚本头部注释）；`hourly` 与 `daily` 是否分两个 cron 由你决定（可用 `--hourly-only` / `--daily-only` 避免同一时刻两类都跑两次）。  
+3. 邮件: 若要用 SMTP，在运行 `ab_test_reports_and_notify.py` 的环境设置 `SMTP_HOST`、`SMTP_PORT`、`SMTP_USER`、`SMTP_PASSWORD`、`SMTP_FROM`（未设置则只打 log，不报错中断）。  
+4. 对象名称匹配: 当前为**子串不区分大小写**（`entity_name` 包含于 `campaign_name` 等）。若你要「全词匹配」或「正则」，需要你再拍板我才能改脚本。  
+5. `ads_data_sync` 仓库: 本次会单独 commit + push 新脚本；你本地若还有对 `evaluate_rules.py` / `generate_alerts.py` 的未提交修改，请自行处理合并，我不会动那两文件的 diff。
 
-- Alert 删除或归档: 已生成的 `mission_cards` 行不变；`source_alert_id` 无外键指向 `alerts`。
+---
+
+## 数据不变量
+
+Alert 删除或归档: `mission_cards` 仍无外键到 `alerts`；卡片独立。
 
 ---
 
 ## 已移出范围
 
-顶部通知铃铛改版、全局顶栏搜索：不做。
+顶部铃铛改版、全局搜索。
 
 ---
 
-## 未完成（后续波次 / 非前端）
+## 未完成（后续产品）
 
-- Python（或 Edge）: 读 `client_ab_test_configs`、`client_alert_delivery`，按 cadence 出 AB 报告并投递 Slack/邮件。  
-- Breakdown sync + UI；Shopify 盈利字段；TimesFM。
+- Breakdown sync + UI；Shopify 盈利；TimesFM。  
+- A/B 脚本侧: 更细的维度对比、与真实「实验组/对照组」双桶逻辑（当前为单对象 7 天汇总快照）。
 
 ---
 
-参考: [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)、[DATA_SOURCE_MAPPING.md](DATA_SOURCE_MAPPING.md)
+参考: [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)、[docs/OPENCLAW_CHAT_URL.md](docs/OPENCLAW_CHAT_URL.md)
