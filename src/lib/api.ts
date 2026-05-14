@@ -1163,6 +1163,14 @@ export const db = {
         if (error) throw error
     },
 
+    /**
+     * Permanently remove an alert row (requires DELETE policy on alerts for the caller).
+     */
+    async deleteAlert(id: string): Promise<void> {
+        const { error } = await supabase.from('alerts').delete().eq('id', id)
+        if (error) throw error
+    },
+
     // ── Alert Notes ──────────────────────────────────────────────
 
     /**
@@ -1388,6 +1396,8 @@ export const db = {
         body?: string
         column_status?: MissionColumn
         client_id?: string | null
+        platform?: string | null
+        priority?: string | null
         source_alert_id?: string | null
         created_by: string
         clickup_task_id?: string | null
@@ -1401,6 +1411,8 @@ export const db = {
                 body: input.body ?? '',
                 column_status: input.column_status ?? 'new',
                 client_id: input.client_id ?? null,
+                platform: input.platform ?? null,
+                priority: input.priority ?? 'medium',
                 source_alert_id: input.source_alert_id ?? null,
                 created_by: input.created_by,
                 clickup_task_id: input.clickup_task_id ?? null,
@@ -1422,6 +1434,8 @@ export const db = {
                 | 'body'
                 | 'column_status'
                 | 'client_id'
+                | 'platform'
+                | 'priority'
                 | 'clickup_task_id'
                 | 'clickup_task_url'
                 | 'archived'

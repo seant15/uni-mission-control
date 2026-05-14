@@ -6,12 +6,16 @@ export type MissionColumn =
   | 'archived'
   | 'cancelled'
 
+export type MissionCardPriority = 'low' | 'medium' | 'high' | 'critical'
+
 export interface MissionCardRow {
   id: string
   title: string
   body: string
   column_status: MissionColumn
   client_id: string | null
+  platform?: string | null
+  priority?: MissionCardPriority | string
   /** Reference only; no FK to alerts — deleting an alert row does not modify this card. */
   source_alert_id: string | null
   created_by: string | null

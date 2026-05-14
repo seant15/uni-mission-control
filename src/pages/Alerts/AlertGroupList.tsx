@@ -1,5 +1,9 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Layers } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { ChevronDown, ChevronRight, Layers, LayoutGrid, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { db } from '../../lib/api'
+import { canMutateAlerts } from '../../lib/rbac'
 import AlertActionPanel from './AlertActionPanel'
 import type { AlertGroup, Alert, AlertSeverity, AlertStatus } from '../../types/alerts'
 
@@ -55,8 +59,60 @@ interface AlertRowProps {
   readOnly?: boolean
 }
 
+function missionPriorityFromSeverity(sev: string): 'low' | 'medium' | 'high' | 'critical' {
+  if (sev === 'critical') return 'critical'
+  if (sev === 'high') return 'high'
+  if (sev === 'low') return 'low'
+  return 'medium'
+}
+
 function SingleAlertRow({ alert, currentUserId, currentUserRole, visibleColumns, readOnly }: AlertRowProps) {
   const [expanded, setExpanded] = useState(false)
+  const queryClient = useQueryClient()
+  const canQuick = !readOnly && canMutateAlerts(currentUserRole) && !!currentUserId
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['alerts'] })
+    queryClient.invalidateQueries({ queryKey: ['alert-counts'] })
+    queryClient.invalidateQueries({ queryKey: ['alert-open-count'] })
+  }
+
+  const missionQuick = useMutation({
+    mutationFn: async () => {
+      const existingId = await db.findMissionCardBySourceAlert(alert.id)
+      if (existingId) return { existingId, created: false as const }
+      const title = `${alert.account_name || 'Account'} — ${(alert.alert_type || 'alert').replace(/_/g, ' ')}`
+      const body = [
+        alert.message,
+        alert.metric_name != null ? `${alert.metric_name}: ${alert.metric_value ?? ''} ${alert.metric_change ?? ''}`.trim() : '',
+      ].filter(Boolean).join('\n\n')
+      const row = await db.createMissionCard({
+        title,
+        body,
+        client_id: alert.client_id ?? null,
+        platform: alert.platform ?? null,
+        priority: missionPriorityFromSeverity(alert.severity),
+        source_alert_id: alert.id,
+        created_by: currentUserId,
+      })
+      return { existingId: row.id, created: true as const }
+    },
+    onSuccess: res => {
+      queryClient.invalidateQueries({ queryKey: ['mission_cards'] })
+      if (res.created) toast.success('Mission card created')
+      else toast.message('Card already exists', { description: 'Open Mission Board to view it.' })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const deleteQuick = useMutation({
+    mutationFn: () => db.deleteAlert(alert.id),
+    onSuccess: () => {
+      invalidate()
+      toast.success('Alert deleted')
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
 
   return (
     <>
@@ -125,17 +181,52 @@ function SingleAlertRow({ alert, currentUserId, currentUserRole, visibleColumns,
           </td>
         )}
         {visibleColumns.includes('actions') && (
-          <td className="px-4 py-3">
-            <ChevronDown
-              size={16}
-              className={`text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
-            />
+          <td className="px-4 py-3 w-[1%] whitespace-nowrap" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-end gap-0.5">
+              {canQuick && (
+                <>
+                  <button
+                    type="button"
+                    title="Create mission from this alert"
+                    onClick={() => missionQuick.mutate()}
+                    disabled={missionQuick.isPending}
+                    className="p-1.5 rounded-md text-indigo-600 hover:bg-indigo-50 disabled:opacity-40"
+                  >
+                    <LayoutGrid size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    title="Delete alert"
+                    onClick={() => {
+                      if (!window.confirm('Permanently delete this alert?')) return
+                      deleteQuick.mutate()
+                    }}
+                    disabled={deleteQuick.isPending}
+                    className="p-1.5 rounded-md text-red-600 hover:bg-red-50 disabled:opacity-40"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                className="p-1.5 rounded-md text-gray-400 hover:bg-gray-100"
+                aria-expanded={expanded}
+                aria-label={expanded ? 'Collapse row' : 'Expand row'}
+                onClick={() => setExpanded(e => !e)}
+              >
+                <ChevronDown
+                  size={16}
+                  className={`transition-transform ${expanded ? 'rotate-180' : ''}`}
+                />
+              </button>
+            </div>
           </td>
         )}
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={visibleColumns.length + 1} className="p-0">
+          <td colSpan={visibleColumns.length} className="p-0">
             <AlertActionPanel
               alert={alert}
               currentUserId={currentUserId}
@@ -248,11 +339,19 @@ function GroupRow({ group, currentUserId, currentUserRole, visibleColumns, readO
           </td>
         )}
         {visibleColumns.includes('actions') && (
-          <td className="px-4 py-3">
-            <ChevronRight
-              size={16}
-              className={`text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`}
-            />
+          <td className="px-4 py-3 w-[1%]" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              className="p-1.5 rounded-md text-gray-400 hover:bg-gray-100"
+              aria-expanded={expanded}
+              aria-label={expanded ? 'Collapse group' : 'Expand group'}
+              onClick={() => setExpanded(e => !e)}
+            >
+              <ChevronRight
+                size={16}
+                className={`transition-transform ${expanded ? 'rotate-90' : ''}`}
+              />
+            </button>
           </td>
         )}
       </tr>

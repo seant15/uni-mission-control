@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   TrendingUp, DollarSign, Target, Users, AlertTriangle,
@@ -9,7 +9,9 @@ import { supabase } from '../lib/supabase'
 import { ACTIVE_CLIENT_STATUSES } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
-import type { TimePeriod } from '../types'
+import AccountDateRangePicker from '../components/AccountDateRangePicker'
+import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
+import { getDashboardSettings } from '../lib/settings'
 
 type ChartMetric = 'total_spend' | 'total_revenue' | 'roas' | 'conversions'
 type SortField = 'account_name' | 'total_spend' | 'total_revenue' | 'roas' | 'conversions' | 'platform'
@@ -27,19 +29,6 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 const PLATFORM_DISPLAY: Record<string, string> = {
   meta_ads: 'Meta Ads', google_ads: 'Google Ads', tiktok_ads: 'TikTok Ads',
   linkedin_ads: 'LinkedIn Ads', twitter_ads: 'Twitter Ads',
-}
-
-function getDates(period: TimePeriod) {
-  const end = new Date()
-  const start = new Date()
-  const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365
-  start.setDate(end.getDate() - days)
-  const prevEnd = new Date(start); prevEnd.setDate(prevEnd.getDate() - 1)
-  const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days)
-  return {
-    cur: { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] },
-    prev: { start: prevStart.toISOString().split('T')[0], end: prevEnd.toISOString().split('T')[0] },
-  }
 }
 
 function pct(cur: number, prev: number) {
@@ -90,13 +79,22 @@ function aggregateByClient(rows: any[], clients: any[]) {
 export default function ClientsOverview({ embedded = false }: { embedded?: boolean }) {
   const { appUser } = useAuth()
   const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
-  const [period, setPeriod] = useState<TimePeriod>('30d')
+  const [dateRange, setDateRange] = useState(() => defaultCalendarRangeLastNDays(30))
   const [selectedPlatform, setSelectedPlatform] = useState('all')
   const [chartMetric, setChartMetric] = useState<ChartMetric>('total_spend')
   const [sortField, setSortField] = useState<SortField>('total_spend')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
-  const dates = getDates(period)
+  const previousRange = useMemo(
+    () => (dateRange.start && dateRange.end ? previousComparableCalendarRange(dateRange) : { start: '', end: '' }),
+    [dateRange.start, dateRange.end]
+  )
+
+  useEffect(() => {
+    getDashboardSettings('default_user').then(loaded => {
+      setDateRange(defaultCalendarRangeLastNDays(loaded.defaultDateRange))
+    })
+  }, [])
 
   const fetchPerf = async (start: string, end: string) => {
     const { data: act, error: e1 } = await supabase.from('clients').select('id').in('status', [...ACTIVE_CLIENT_STATUSES])
@@ -126,13 +124,15 @@ export default function ClientsOverview({ embedded = false }: { embedded?: boole
   })
 
   const { data: curRows, isLoading: perfLoading, error: perfError } = useQuery({
-    queryKey: ['co_cur', period, selectedPlatform, scopedClientId ?? 'all'],
-    queryFn: () => fetchPerf(dates.cur.start, dates.cur.end),
+    queryKey: ['co_cur', dateRange.start, dateRange.end, selectedPlatform, scopedClientId ?? 'all'],
+    queryFn: () => fetchPerf(dateRange.start, dateRange.end),
+    enabled: !!dateRange.start && !!dateRange.end,
   })
 
   const { data: prevRows } = useQuery({
-    queryKey: ['co_prev', period, selectedPlatform, scopedClientId ?? 'all'],
-    queryFn: () => fetchPerf(dates.prev.start, dates.prev.end),
+    queryKey: ['co_prev', previousRange.start, previousRange.end, selectedPlatform, scopedClientId ?? 'all'],
+    queryFn: () => fetchPerf(previousRange.start, previousRange.end),
+    enabled: !!previousRange.start && !!previousRange.end,
   })
 
   const isLoading = cLoading || perfLoading
@@ -194,7 +194,7 @@ export default function ClientsOverview({ embedded = false }: { embedded?: boole
     else { setSortField(f); setSortDir('desc') }
   }
 
-  const periodLabel = period === '7d' ? '7 Days' : period === '30d' ? '30 Days' : period === '90d' ? '90 Days' : '1 Year'
+  const rangeLabel = `${dateRange.start} → ${dateRange.end}`
 
   return (
     <div className="space-y-6">
@@ -209,15 +209,8 @@ export default function ClientsOverview({ embedded = false }: { embedded?: boole
             <p className="text-gray-500 mt-1">Account performance across all clients</p>
           </div>
         )}
-        <div className={`flex items-center gap-2 ${embedded ? 'ml-auto' : ''}`}>
-          {(['7d', '30d', '90d', '1yr'] as TimePeriod[]).map(p => (
-            <button key={p} onClick={() => setPeriod(p)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                period === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-              }`}>
-              {p === '7d' ? '7 Days' : p === '30d' ? '30 Days' : p === '90d' ? '90 Days' : '1 Year'}
-            </button>
-          ))}
+        <div className={`flex flex-wrap items-center gap-2 ${embedded ? 'ml-auto' : ''}`}>
+          <AccountDateRangePicker dateRange={dateRange} onChange={setDateRange} />
         </div>
       </div>
 
@@ -288,7 +281,7 @@ export default function ClientsOverview({ embedded = false }: { embedded?: boole
           {/* Chart — top 10 by selected metric */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Top Accounts by {chartLabel} — Last {periodLabel}
+              Top Accounts by {chartLabel} — {rangeLabel}
             </h2>
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>

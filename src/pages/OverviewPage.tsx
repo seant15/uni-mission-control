@@ -47,7 +47,7 @@ export default function OverviewPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Overview</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Agency-wide, by client, or by ad account. All clients: use 24h–72h for rolling hourly windows (same grain as Real-time); 7d+ uses calendar days. By account keeps custom date range.
+              Agency-wide, by client, or by ad account. All clients and By client use the same calendar range and presets as By account (below). Rolling short windows stay on Real-time Performance.
             </p>
           </div>
         </div>

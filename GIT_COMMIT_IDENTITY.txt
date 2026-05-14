@@ -1,0 +1,15 @@
+This repository uses LOCAL git author settings (not global) so commits
+from uni-mission-control use the UNI / agency identity while your machine
+can keep personal defaults elsewhere.
+
+Intended author for commits in this repo:
+  user.name  = seant15
+  user.email = seant@unimarketingagency.com
+
+Apply or refresh (run from this repo root):
+  git config user.name "seant15"
+  git config user.email "seant@unimarketingagency.com"
+
+Verify:
+  git config --get user.name
+  git config --get user.email

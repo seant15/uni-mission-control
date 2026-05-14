@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import {
   CheckCircle, Clock, X, UserPlus, ExternalLink, ChevronDown, ChevronUp, LayoutGrid,
+  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { db } from '../../lib/api'
@@ -33,6 +34,13 @@ function getPlatformDeepLink(alert: Alert): string | null {
     return `https://www.facebook.com/adsmanager/manage/campaigns?act=${id}`
   }
   return null
+}
+
+function missionPriorityFromSeverity(sev: string): 'low' | 'medium' | 'high' | 'critical' {
+  if (sev === 'critical') return 'critical'
+  if (sev === 'high') return 'high'
+  if (sev === 'low') return 'low'
+  return 'medium'
 }
 
 export default function AlertActionPanel({ alert, currentUserId, currentUserRole, readOnly = false }: Props) {
@@ -82,6 +90,15 @@ export default function AlertActionPanel({ alert, currentUserId, currentUserRole
     onSuccess: invalidate,
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: () => db.deleteAlert(alert.id),
+    onSuccess: () => {
+      invalidate()
+      toast.success('Alert deleted')
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
   const missionCardMutation = useMutation({
     mutationFn: async () => {
       const existingId = await db.findMissionCardBySourceAlert(alert.id)
@@ -95,6 +112,8 @@ export default function AlertActionPanel({ alert, currentUserId, currentUserRole
         title,
         body,
         client_id: alert.client_id ?? null,
+        platform: alert.platform ?? null,
+        priority: missionPriorityFromSeverity(alert.severity),
         source_alert_id: alert.id,
         created_by: currentUserId,
       })
@@ -138,6 +157,20 @@ export default function AlertActionPanel({ alert, currentUserId, currentUserRole
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
           >
             <LayoutGrid size={14} /> Mission card
+          </button>
+        )}
+
+        {canOperate && currentUserId && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!window.confirm('Permanently delete this alert? This cannot be undone.')) return
+              deleteMutation.mutate()
+            }}
+            disabled={deleteMutation.isPending}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm hover:bg-red-100 disabled:opacity-50 transition-colors"
+          >
+            <Trash2 size={14} /> Delete
           </button>
         )}
 

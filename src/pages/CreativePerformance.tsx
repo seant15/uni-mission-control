@@ -6,6 +6,9 @@ import {
   X, ThumbsUp, MessageCircle, Share2, Globe, AlertTriangle
 } from 'lucide-react'
 import { db } from '../lib/api'
+import AccountDateRangePicker from '../components/AccountDateRangePicker'
+import { defaultCalendarRangeLastNDays } from '../lib/dashboardDateRange'
+import { getDashboardSettings } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
 
@@ -415,26 +418,6 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
   )
 }
 
-// ── Date Presets ───────────────────────────────────────────────────────────────
-const DATE_PRESETS = [
-  { label: '1D',  days: 1 },
-  { label: '3D',  days: 3 },
-  { label: '7D',  days: 7 },
-  { label: '14D', days: 14 },
-  { label: '30D', days: 30 },
-  { label: '90D', days: 90 },
-]
-
-function getPresetDates(days: number) {
-  const end = new Date()
-  const start = new Date()
-  start.setDate(start.getDate() - days + 1)
-  return {
-    start: start.toISOString().split('T')[0],
-    end: end.toISOString().split('T')[0],
-  }
-}
-
 // ── Formatters ─────────────────────────────────────────────────────────────────
 const fmt$ = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(0)}`
 const fmtN = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v))
@@ -465,8 +448,7 @@ export default function CreativePerformance() {
   const { appUser } = useAuth()
   const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
   const [selectedClient, setSelectedClient] = useState<string>('all')
-  const [dateRange, setDateRange] = useState(() => getPresetDates(7))
-  const [activePreset, setActivePreset] = useState(7)
+  const [dateRange, setDateRange] = useState(() => defaultCalendarRangeLastNDays(30))
   const [showClientDrop, setShowClientDrop] = useState(false)
   const [creativePage, setCreativePage] = useState(0)
   const [expandedAdSets, setExpandedAdSets] = useState<Set<string>>(new Set())
@@ -478,6 +460,12 @@ export default function CreativePerformance() {
   useEffect(() => {
     if (scopedClientId) setSelectedClient(scopedClientId)
   }, [scopedClientId])
+
+  useEffect(() => {
+    getDashboardSettings('default_user').then(loaded => {
+      setDateRange(defaultCalendarRangeLastNDays(loaded.defaultDateRange))
+    })
+  }, [])
 
   useEffect(() => {
     setFailedThumbKeys(new Set())
@@ -640,35 +628,11 @@ export default function CreativePerformance() {
             </div>
           )}
 
-          {/* Date Presets */}
-          <div className="flex gap-1">
-            {DATE_PRESETS.map(p => (
-              <button
-                key={p.days}
-                onClick={() => { const d = getPresetDates(p.days); setDateRange(d); setActivePreset(p.days); setCreativePage(0) }}
-                className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${activePreset === p.days ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'}`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Custom date range */}
-          <div className="flex items-center gap-2 ml-auto">
-            <input
-              type="date"
-              value={dateRange.start}
-              onChange={e => { setDateRange(d => ({ ...d, start: e.target.value })); setActivePreset(0); setCreativePage(0) }}
-              className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-700 bg-gray-50"
-            />
-            <span className="text-gray-400 text-xs">→</span>
-            <input
-              type="date"
-              value={dateRange.end}
-              onChange={e => { setDateRange(d => ({ ...d, end: e.target.value })); setActivePreset(0); setCreativePage(0) }}
-              className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-700 bg-gray-50"
-            />
-          </div>
+          <AccountDateRangePicker
+            dateRange={dateRange}
+            onChange={d => { setDateRange(d); setCreativePage(0) }}
+            className="w-full sm:w-auto sm:ml-auto"
+          />
         </div>
       </div>
 

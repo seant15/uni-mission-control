@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquarePlus } from 'lucide-react'
@@ -33,6 +33,13 @@ export default function FeedbackAdmin() {
     staleTime: 30_000,
   })
 
+  const statusFilterActive = (filters.status?.length ?? 0) > 0
+  const listRows = useMemo(() => {
+    if (statusFilterActive) return data
+    const hide = new Set(['resolved', 'wont_fix', 'duplicate'] as const)
+    return data.filter(r => !hide.has(r.status as 'resolved' | 'wont_fix' | 'duplicate'))
+  }, [data, statusFilterActive])
+
   // Supabase Realtime subscription
   useEffect(() => {
     const channel = supabase
@@ -48,7 +55,7 @@ export default function FeedbackAdmin() {
     return () => { supabase.removeChannel(channel) }
   }, [queryClient])
 
-  const unresolvedCount = data.filter(r => r.status === 'new' || r.status === 'acknowledged').length
+  const unresolvedCount = listRows.filter(r => r.status === 'new' || r.status === 'acknowledged').length
 
   if (!appUser || appUser.role !== 'super_admin') return null
 
@@ -66,7 +73,7 @@ export default function FeedbackAdmin() {
       </div>
 
       {/* KPI tiles */}
-      <FeedbackStats rows={data} />
+      <FeedbackStats rows={listRows} />
 
       {/* Filter bar */}
       <FeedbackFiltersBar filters={filters} onChange={setFilters} />
@@ -87,7 +94,7 @@ export default function FeedbackAdmin() {
       {/* Table */}
       {!isLoading && !error && (
         <FeedbackTable
-          rows={data}
+          rows={listRows}
           onViewDetail={setSelectedRow}
         />
       )}

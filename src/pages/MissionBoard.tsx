@@ -1,11 +1,31 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { LayoutGrid, Plus, RefreshCw, ExternalLink, Pencil, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { db } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
-import { MISSION_COLUMNS, type MissionCardRow, type MissionColumn } from '../types/mission'
+import { MISSION_COLUMNS, type MissionCardRow, type MissionColumn, type MissionCardPriority } from '../types/mission'
+
+const PRIORITY_OPTIONS: { id: MissionCardPriority; label: string }[] = [
+  { id: 'low', label: 'Low' },
+  { id: 'medium', label: 'Medium' },
+  { id: 'high', label: 'High' },
+  { id: 'critical', label: 'Critical' },
+]
+
+const PLATFORM_FORM_OPTIONS = [
+  { id: '', label: '— Not set' },
+  { id: 'meta_ads', label: 'Meta Ads' },
+  { id: 'google_ads', label: 'Google Ads' },
+  { id: 'tiktok_ads', label: 'TikTok Ads' },
+]
+
+function platformLabel(id: string | null | undefined): string {
+  if (!id) return ''
+  const o = PLATFORM_FORM_OPTIONS.find(x => x.id === id)
+  return o?.label ?? id
+}
 
 function parseClickUpTask(input: string): { id: string; url: string } | null {
   const raw = input.trim()
@@ -36,11 +56,38 @@ export default function MissionBoard() {
   const [body, setBody] = useState('')
   const [columnStatus, setColumnStatus] = useState<MissionColumn>('new')
   const [clickupLinkInput, setClickupLinkInput] = useState('')
+  const [modalClientId, setModalClientId] = useState<string>('')
+  const [modalPlatform, setModalPlatform] = useState<string>('')
+  const [modalPriority, setModalPriority] = useState<MissionCardPriority>('medium')
+  const [filterClientId, setFilterClientId] = useState<string>('')
+  const [filterPlatform, setFilterPlatform] = useState<string>('')
+  const [filterPriority, setFilterPriority] = useState<string>('')
 
   const { data: cards = [], isLoading, error, refetch } = useQuery({
     queryKey: ['mission_cards'],
     queryFn: db.listMissionCards.bind(db),
   })
+
+  const { data: clients = [] } = useQuery({
+    queryKey: ['mission-board-clients'],
+    queryFn: () => db.getClients(),
+    staleTime: 5 * 60_000,
+  })
+
+  const clientNameById = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const c of clients as { id: string; name: string }[]) m.set(c.id, c.name)
+    return m
+  }, [clients])
+
+  const filteredCards = useMemo(() => {
+    return (cards as MissionCardRow[]).filter(c => {
+      if (filterClientId && c.client_id !== filterClientId) return false
+      if (filterPlatform && (c.platform || '') !== filterPlatform) return false
+      if (filterPriority && (c.priority || 'medium') !== filterPriority) return false
+      return true
+    })
+  }, [cards, filterClientId, filterPlatform, filterPriority])
 
   function openCreate() {
     setModalMode('create')
@@ -49,6 +96,9 @@ export default function MissionBoard() {
     setBody('')
     setColumnStatus('new')
     setClickupLinkInput('')
+    setModalClientId('')
+    setModalPlatform('')
+    setModalPriority('medium')
     setModalOpen(true)
   }
 
@@ -59,6 +109,9 @@ export default function MissionBoard() {
     setBody(card.body || '')
     setColumnStatus(card.column_status)
     setClickupLinkInput(card.clickup_task_url?.trim() || '')
+    setModalClientId(card.client_id || '')
+    setModalPlatform(card.platform || '')
+    setModalPriority((card.priority as MissionCardPriority) || 'medium')
     setModalOpen(true)
   }
 
@@ -77,6 +130,9 @@ export default function MissionBoard() {
         body: body.trim(),
         column_status: columnStatus,
         created_by: appUser.id,
+        client_id: modalClientId || null,
+        platform: modalPlatform || null,
+        priority: modalPriority,
         ...(parsed
           ? { clickup_task_id: parsed.id, clickup_task_url: parsed.url, synced_from_clickup: false }
           : {}),
@@ -98,6 +154,9 @@ export default function MissionBoard() {
         title: title.trim() || 'Untitled',
         body: body.trim(),
         column_status: columnStatus,
+        client_id: modalClientId || null,
+        platform: modalPlatform || null,
+        priority: modalPriority,
       }
       if (parsed) {
         patch.clickup_task_id = parsed.id
@@ -126,7 +185,7 @@ export default function MissionBoard() {
   })
 
   const byColumn = MISSION_COLUMNS.reduce((acc, col) => {
-    acc[col.id] = cards.filter((c: MissionCardRow) => c.column_status === col.id)
+    acc[col.id] = filteredCards.filter((c: MissionCardRow) => c.column_status === col.id)
     return acc
   }, {} as Record<MissionColumn, MissionCardRow[]>)
 
@@ -162,10 +221,55 @@ export default function MissionBoard() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3">
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Filters</span>
+        <select
+          value={filterClientId}
+          onChange={e => setFilterClientId(e.target.value)}
+          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50 min-w-[140px]"
+        >
+          <option value="">All clients</option>
+          {(clients as { id: string; name: string }[]).map(c => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        <select
+          value={filterPlatform}
+          onChange={e => setFilterPlatform(e.target.value)}
+          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50 min-w-[130px]"
+        >
+          <option value="">All platforms</option>
+          {PLATFORM_FORM_OPTIONS.filter(o => o.id).map(o => (
+            <option key={o.id} value={o.id}>{o.label}</option>
+          ))}
+        </select>
+        <select
+          value={filterPriority}
+          onChange={e => setFilterPriority(e.target.value)}
+          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50 min-w-[120px]"
+        >
+          <option value="">All priorities</option>
+          {PRIORITY_OPTIONS.map(o => (
+            <option key={o.id} value={o.id}>{o.label}</option>
+          ))}
+        </select>
+        {(filterClientId || filterPlatform || filterPriority) && (
+          <button
+            type="button"
+            className="text-xs text-blue-600 hover:underline"
+            onClick={() => { setFilterClientId(''); setFilterPlatform(''); setFilterPriority('') }}
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
       {error && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {(error as Error).message}. If the table is missing, run{' '}
-          <code className="rounded bg-amber-100 px-1">supabase/migrations/20260512140000_mission_cards.sql</code>{' '}
+          <code className="rounded bg-amber-100 px-1">supabase/migrations/20260512140000_mission_cards.sql</code>
+          {' '}and{' '}
+          <code className="rounded bg-amber-100 px-1">20260516120000_mission_platform_priority.sql</code>{' '}
           in the Supabase SQL editor.
         </div>
       )}
@@ -205,6 +309,21 @@ export default function MissionBoard() {
                           ClickUp
                         </a>
                       )}
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {card.client_id && (
+                        <span className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                          {clientNameById.get(card.client_id) || 'Client'}
+                        </span>
+                      )}
+                      {card.platform && (
+                        <span className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">
+                          {platformLabel(card.platform)}
+                        </span>
+                      )}
+                      <span className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 capitalize">
+                        {card.priority || 'medium'}
+                      </span>
                     </div>
                     {card.body && (
                       <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap line-clamp-6">{card.body}</p>
@@ -274,6 +393,45 @@ export default function MissionBoard() {
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none"
                 placeholder="Details…"
               />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Client</label>
+                <select
+                  value={modalClientId}
+                  onChange={e => setModalClientId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm"
+                >
+                  <option value="">— None</option>
+                  {(clients as { id: string; name: string }[]).map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Platform</label>
+                <select
+                  value={modalPlatform}
+                  onChange={e => setModalPlatform(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm"
+                >
+                  {PLATFORM_FORM_OPTIONS.map(o => (
+                    <option key={o.id || 'none'} value={o.id}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Priority</label>
+                <select
+                  value={modalPriority}
+                  onChange={e => setModalPriority(e.target.value as MissionCardPriority)}
+                  className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm"
+                >
+                  {PRIORITY_OPTIONS.map(o => (
+                    <option key={o.id} value={o.id}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Link ClickUp task (optional)</label>

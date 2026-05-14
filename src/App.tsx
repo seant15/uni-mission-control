@@ -2,7 +2,7 @@ import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { LayoutDashboard, AlertTriangle, Bell, Settings, Activity, Layers, Megaphone, X, LogOut, MessageSquarePlus, LayoutGrid, Menu, PanelLeftClose, PanelLeft } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, Bell, Settings, Activity, Layers, Megaphone, X, DoorOpen, MessageSquarePlus, LayoutGrid, Menu, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { db } from './lib/api'
 import OverviewPage from './pages/OverviewPage'
 import Alerts from './pages/Alerts'
@@ -168,9 +168,9 @@ function AppShell() {
               type="button"
               title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               onClick={() => setSidebarCollapsed(c => !c)}
-              className="hidden lg:flex p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex-shrink-0"
+              className="hidden lg:flex p-2 rounded-lg text-sky-400/90 hover:text-sky-300 hover:bg-slate-800 border border-slate-700/80 flex-shrink-0"
             >
-              {sidebarCollapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
+              {sidebarCollapsed ? <ChevronsRight size={18} aria-hidden /> : <ChevronsLeft size={18} aria-hidden />}
             </button>
             <button
               type="button"
@@ -209,7 +209,7 @@ function AppShell() {
             )}
           </nav>
 
-          <div className="p-2 border-t border-slate-800">
+          <div className="mt-auto p-2 border-t border-slate-700 space-y-2">
             <div className={`flex items-center gap-2 p-2 rounded-xl bg-slate-800/50 ${sidebarCollapsed ? 'lg:flex-col lg:items-center' : ''}`}>
               <Link
                 to="/dashboard/settings?tab=profile"
@@ -223,10 +223,16 @@ function AppShell() {
                 <p className="text-xs font-medium truncate">{appUser?.display_name || 'User'}</p>
                 <p className="text-[10px] text-slate-400 capitalize">{effRole.replace('_', ' ')}</p>
               </div>
-              <button onClick={handleSignOut} title="Sign out" className="text-slate-500 hover:text-slate-300 transition flex-shrink-0 p-1">
-                <LogOut size={15} />
-              </button>
             </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              title="Sign out of UNI Mission Control"
+              className={`w-full flex items-center justify-center gap-2 rounded-lg py-2 px-2 text-sm font-medium text-rose-200 bg-rose-950/40 border border-rose-900/50 hover:bg-rose-900/50 hover:border-rose-700 transition ${sidebarCollapsed ? 'lg:px-0' : ''}`}
+            >
+              <DoorOpen size={16} className="shrink-0" aria-hidden />
+              <span className={sidebarCollapsed ? 'lg:sr-only' : ''}>Sign out</span>
+            </button>
           </div>
         </aside>
 
@@ -260,7 +266,7 @@ function AppShell() {
             </div>
           </header>
 
-          <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+          <main className="p-4 sm:p-5 lg:p-6 max-w-[1600px] mx-auto w-full">
             <Routes>
               <Route path="/" element={<OverviewPage />} />
               <Route path="/clients-overview" element={<Navigate to="/?tab=by-client" replace />} />

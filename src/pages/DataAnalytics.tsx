@@ -10,6 +10,8 @@ import { db } from '../lib/api'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
+import AccountDateRangePicker from '../components/AccountDateRangePicker'
+import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ComposedChart, Area, Line, LineChart
@@ -78,17 +80,6 @@ interface Client {
   meta_ad_account_id?: string | null
   google_ads_customer_id?: string | null
 }
-
-const DATE_PRESETS = [
-  { label: 'Last 7 Days', days: 7 },
-  { label: 'Last 14 Days', days: 14 },
-  { label: 'Last 30 Days', days: 30 },
-  { label: 'Last 90 Days', days: 90 },
-  { label: 'This Month', type: 'month' },
-  { label: 'Last Month', type: 'last_month' },
-  { label: 'This Year', type: 'this_year' },
-  { label: 'Last Year', type: 'last_year' },
-]
 
 type MetricKey = 'spend' | 'ctr' | 'conversions' | 'costperconv' | 'roas'
 
@@ -179,7 +170,6 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
   const [selectedAdAccount, setSelectedAdAccount] = useState<string>('')
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
   const [showClientDropdown, setShowClientDropdown] = useState(false)
-  const [showDatePresets, setShowDatePresets] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Table sort states
@@ -272,21 +262,10 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
 
   const performanceData: DailyPerformance[] = (performance as DailyPerformance[]) || []
 
-  // Previous period range
-  const previousPeriodRange = (() => {
+  const previousPeriodRange = useMemo(() => {
     if (!dateRange.start || !dateRange.end) return { start: '', end: '' }
-    const startDate = new Date(dateRange.start)
-    const endDate = new Date(dateRange.end)
-    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-    const prevEnd = new Date(startDate)
-    prevEnd.setDate(prevEnd.getDate() - 1)
-    const prevStart = new Date(prevEnd)
-    prevStart.setDate(prevStart.getDate() - daysDiff)
-    return {
-      start: prevStart.toISOString().split('T')[0],
-      end: prevEnd.toISOString().split('T')[0]
-    }
-  })()
+    return previousComparableCalendarRange(dateRange)
+  }, [dateRange.start, dateRange.end])
 
   const { data: previousPerformance } = useQuery({
     queryKey: ['previous_performance', selectedClient, selectedPlatform, selectedAdAccount, previousPeriodRange, scopedClientId ?? ''],
@@ -435,36 +414,6 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
   const aggSearchTerms = aggregateRows(googleSearchTerms || [], 'search_term', 'search_term', ['campaign_name', 'ad_group_name', 'match_type'])
   const prevAggSearchTermsMap = new Map((aggregateRows(prevGoogleSearchTerms || [], 'search_term', 'search_term', ['campaign_name', 'ad_group_name', 'match_type'])).map(r => [r.search_term, r]))
 
-  // Apply date preset
-  const applyDatePreset = (preset: any) => {
-    const end = new Date()
-    const start = new Date()
-    if (preset.type === 'month') {
-      start.setDate(1)
-    } else if (preset.type === 'last_month') {
-      start.setMonth(start.getMonth() - 1)
-      start.setDate(1)
-      end.setDate(0)
-    } else if (preset.type === 'this_year') {
-      start.setMonth(0)
-      start.setDate(1)
-    } else if (preset.type === 'last_year') {
-      start.setFullYear(start.getFullYear() - 1)
-      start.setMonth(0)
-      start.setDate(1)
-      end.setFullYear(end.getFullYear() - 1)
-      end.setMonth(11)
-      end.setDate(31)
-    } else {
-      start.setDate(end.getDate() - preset.days)
-    }
-    setDateRange({
-      start: start.toISOString().split('T')[0],
-      end: end.toISOString().split('T')[0]
-    })
-    setShowDatePresets(false)
-  }
-
   // Totals
   const totals = performanceData.reduce((acc, day) => ({
     cost: acc.cost + (day.cost || 0),
@@ -594,13 +543,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
 
   // Default date range
   useEffect(() => {
-    const end = new Date()
-    const start = new Date()
-    start.setDate(end.getDate() - settings.defaultDateRange)
-    setDateRange({
-      start: start.toISOString().split('T')[0],
-      end: end.toISOString().split('T')[0]
-    })
+    setDateRange(defaultCalendarRangeLastNDays(settings.defaultDateRange))
   }, [settings.defaultDateRange])
 
   useEffect(() => {
@@ -713,27 +656,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
 
           <div className="w-px h-6 bg-gray-200" />
 
-          {/* Date Range */}
-          <div className="relative flex items-center gap-1.5">
-            <input type="date" value={dateRange.start} onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })} className="px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
-            <span className="text-gray-400 text-xs">to</span>
-            <input type="date" value={dateRange.end} onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })} className="px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
-            <button
-              onClick={() => setShowDatePresets(!showDatePresets)}
-              className="px-2 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 text-xs font-medium flex items-center gap-1"
-            >
-              <Calendar size={13} /> Presets
-            </button>
-            {showDatePresets && (
-              <div className="absolute top-full right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                {DATE_PRESETS.map(preset => (
-                  <button key={preset.label} onClick={() => applyDatePreset(preset)} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm first:rounded-t-lg last:rounded-b-lg">
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <AccountDateRangePicker dateRange={dateRange} onChange={setDateRange} />
 
           {/* Currency badge */}
           {selectedClient !== 'all' && (

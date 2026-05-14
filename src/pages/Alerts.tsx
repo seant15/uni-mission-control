@@ -101,7 +101,7 @@ export default function Alerts() {
     const channel = supabase
       .channel('alerts-realtime')
       .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'alerts' },
+        { event: '*', schema: 'public', table: 'alerts' },
         () => {
           queryClient.invalidateQueries({ queryKey: ['alerts'] })
           queryClient.invalidateQueries({ queryKey: ['alert-counts'] })

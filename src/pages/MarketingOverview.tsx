@@ -6,12 +6,12 @@ import {
   AlertTriangle, ArrowUpRight, ArrowDownRight, AlertCircle,
   Clock, CheckCircle, X, BarChart3, Users, ShoppingCart, ChevronDown,
 } from 'lucide-react'
-import { db, type HourWindow } from '../lib/api'
+import { db } from '../lib/api'
 import { getDashboardSettings } from '../lib/settings'
+import AccountDateRangePicker from '../components/AccountDateRangePicker'
+import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
-
-type Period = '24h' | '30h' | '48h' | '72h' | '7d' | '30d' | '90d'
 
 interface Client {
   id: string
@@ -19,33 +19,6 @@ interface Client {
   business_type?: 'leadgen' | 'ecommerce'
   currency?: string
   currency_symbol?: string
-}
-
-function rollingWindowHours(p: Period): HourWindow | null {
-  if (p === '24h') return 24
-  if (p === '30h') return 30
-  if (p === '48h') return 48
-  if (p === '72h') return 72
-  return null
-}
-
-function dailyDays(p: Period): number | null {
-  if (p === '7d') return 7
-  if (p === '30d') return 30
-  if (p === '90d') return 90
-  return null
-}
-
-function getDateRangesForDays(days: number) {
-  const end = new Date()
-  const start = new Date()
-  start.setDate(end.getDate() - days)
-  const prevEnd = new Date(start); prevEnd.setDate(prevEnd.getDate() - 1)
-  const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days)
-  return {
-    current: { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] },
-    previous: { start: prevStart.toISOString().split('T')[0], end: prevEnd.toISOString().split('T')[0] },
-  }
 }
 
 function aggregate(rows: any[]) {
@@ -97,7 +70,7 @@ function MetricCard({ title, value, change, icon: Icon, color, invertTrend = fal
 export default function MarketingOverview({ embedded = false }: { embedded?: boolean }) {
   const { appUser } = useAuth()
   const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
-  const [period, setPeriod] = useState<Period>('30d')
+  const [dateRange, setDateRange] = useState(() => defaultCalendarRangeLastNDays(30))
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
   const [selectedAdAccount, setSelectedAdAccount] = useState<string>('')
@@ -106,14 +79,10 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
   const [businessTypeManual, setBusinessTypeManual] = useState(false)
   const clientDropdownRef = useRef<HTMLDivElement>(null)
 
-  const rollingH = rollingWindowHours(period)
-  const isRolling = rollingH !== null
-
-  const ranges = useMemo(() => {
-    const d = dailyDays(period)
-    if (d === null) return null
-    return getDateRangesForDays(d)
-  }, [period])
+  const previousRange = useMemo(
+    () => (dateRange.start && dateRange.end ? previousComparableCalendarRange(dateRange) : { start: '', end: '' }),
+    [dateRange.start, dateRange.end]
+  )
 
   useEffect(() => {
     if (scopedClientId) {
@@ -125,6 +94,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
   useEffect(() => {
     getDashboardSettings('default_user').then(loaded => {
       setBusinessType(loaded.defaultBusinessType)
+      setDateRange(defaultCalendarRangeLastNDays(loaded.defaultDateRange))
     })
   }, [])
 
@@ -179,50 +149,37 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
   }, [selectedClient, selectedAdAccount, clients, adAccountsFromDB, businessTypeManual])
 
   const { data: dailyCurRows, isLoading: loadingDailyCur, error: errDailyCur } = useQuery({
-    queryKey: ['mkt_cur', period, selectedClient, selectedPlatform, selectedAdAccount, scopedClientId ?? ''],
+    queryKey: ['mkt_cur', dateRange.start, dateRange.end, selectedClient, selectedPlatform, selectedAdAccount, scopedClientId ?? ''],
     queryFn: () => db.getDailyPerformance({
       clientId: selectedClient,
       platform: selectedPlatform,
       adAccountId: selectedAdAccount || undefined,
-      startDate: ranges!.current.start,
-      endDate: ranges!.current.end,
+      startDate: dateRange.start,
+      endDate: dateRange.end,
       scopedClientId: scopedClientId || undefined,
     }),
-    enabled: !isRolling && ranges !== null,
+    enabled: !!dateRange.start && !!dateRange.end,
     refetchOnMount: 'always',
   })
 
   const { data: dailyPrevRows, isLoading: loadingDailyPrev } = useQuery({
-    queryKey: ['mkt_prev', period, selectedClient, selectedPlatform, selectedAdAccount, scopedClientId ?? ''],
+    queryKey: ['mkt_prev', previousRange.start, previousRange.end, selectedClient, selectedPlatform, selectedAdAccount, scopedClientId ?? ''],
     queryFn: () => db.getDailyPerformance({
       clientId: selectedClient,
       platform: selectedPlatform,
       adAccountId: selectedAdAccount || undefined,
-      startDate: ranges!.previous.start,
-      endDate: ranges!.previous.end,
+      startDate: previousRange.start,
+      endDate: previousRange.end,
       scopedClientId: scopedClientId || undefined,
     }),
-    enabled: !isRolling && ranges !== null,
+    enabled: !!previousRange.start && !!previousRange.end,
     refetchOnMount: 'always',
   })
 
-  const { data: hourlyPack, isLoading: loadingHourly, error: errHourly } = useQuery({
-    queryKey: ['mkt_hourly', period, selectedClient, selectedPlatform, selectedAdAccount, scopedClientId ?? ''],
-    queryFn: () => db.getHourlyPerformance({
-      windowHours: rollingH!,
-      clientId: selectedClient,
-      scopedClientId: scopedClientId || undefined,
-      platform: selectedPlatform !== 'all' ? selectedPlatform : undefined,
-      adAccountId: selectedAdAccount || undefined,
-    }),
-    enabled: isRolling,
-    refetchOnMount: 'always',
-  })
-
-  const curRows = isRolling ? (hourlyPack?.current ?? []) : (dailyCurRows ?? [])
-  const prevRows = isRolling ? (hourlyPack?.previous ?? []) : (dailyPrevRows ?? [])
-  const isLoading = isRolling ? loadingHourly : (loadingDailyCur || loadingDailyPrev)
-  const error = isRolling ? errHourly : errDailyCur
+  const curRows = dailyCurRows ?? []
+  const prevRows = dailyPrevRows ?? []
+  const isLoading = loadingDailyCur || loadingDailyPrev
+  const error = errDailyCur
 
   const { data: alertsRaw } = useQuery({
     queryKey: ['uni_alerts'],
@@ -240,9 +197,6 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
   const prev = prevRows ? aggregate(prevRows) : null
 
   const dailyTzFootnote = useMemo(() => {
-    if (isRolling && rollingH) {
-      return `Rolling ${rollingH}h sums hourly_performance (UTC hour buckets), compared to the prior ${rollingH}h window. Aligns with Real-time Performance for the same window when filters match.`
-    }
     const rows = curRows || []
     if (rows.length === 0) return null
     const tzs = [...new Set(rows.map((r: { data_timezone?: string | null }) => r.data_timezone).filter(Boolean) as string[])]
@@ -253,7 +207,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
       return `Daily totals mix reporting timezones (${tzs.slice(0, 4).join(', ')}${tzs.length > 4 ? ', …' : ''}). Hourly gap-fill uses UTC buckets.`
     }
     return 'When daily sync lags, some days are summed from hourly UTC slices; they may lack data_timezone until the daily row lands.'
-  }, [curRows, isRolling, rollingH])
+  }, [curRows])
 
   const spendChange = cur && prev ? pctChange(cur.spend, prev.spend) : undefined
   const ctrChange = cur && prev ? pctChange(cur.ctr, prev.ctr) : undefined
@@ -303,18 +257,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
 
   const recentAlerts = alertsData?.slice(0, 5) || []
 
-  const periodLabel = useMemo(() => {
-    const map: Record<Period, string> = {
-      '24h': '24 hours (rolling)',
-      '30h': '30 hours (rolling)',
-      '48h': '48 hours (rolling)',
-      '72h': '72 hours (rolling)',
-      '7d': '7 Days',
-      '30d': '30 Days',
-      '90d': '90 Days',
-    }
-    return map[period]
-  }, [period])
+  const periodLabel = `${dateRange.start} → ${dateRange.end}`
 
   const selectedClientName = selectedClient === 'all'
     ? 'All Clients'
@@ -439,16 +382,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
               ))}
             </select>
           )}
-          <div className="flex flex-wrap gap-1.5 items-center w-full sm:w-auto">
-          {(['24h', '30h', '48h', '72h', '7d', '30d', '90d'] as Period[]).map(p => (
-            <button key={p} type="button" onClick={() => setPeriod(p)}
-              className={`px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
-                period === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-              }`}>
-              {p === '24h' ? '24h' : p === '30h' ? '30h' : p === '48h' ? '48h' : p === '72h' ? '72h' : p === '7d' ? '7d' : p === '30d' ? '30d' : '90d'}
-            </button>
-          ))}
-          </div>
+          <AccountDateRangePicker dateRange={dateRange} onChange={setDateRange} className="w-full sm:w-auto" />
           {selectedClient !== 'all' && (
             <span className="px-2 py-1 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-lg text-xs font-mono font-semibold">
               {clients.find(c => c.id === selectedClient)?.currency || 'USD'}
@@ -500,7 +434,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
           {platformBreakdown.length > 0 && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
               <h2 className="text-base font-semibold text-gray-900 mb-3">
-                Performance by Platform — Last {periodLabel}
+                Performance by Platform — {periodLabel}
               </h2>
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -603,7 +537,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
       {!isLoading && !error && !cur && (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <Target className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">No data available for last {periodLabel}</p>
+          <p className="text-gray-500">No data available for {periodLabel}</p>
         </div>
       )}
     </div>
