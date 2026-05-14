@@ -8,6 +8,7 @@ interface Props {
   currentUserId: string
   currentUserRole: string
   visibleColumns: string[]
+  readOnly?: boolean
 }
 
 const SEVERITY_BADGE: Record<AlertSeverity, string> = {
@@ -51,9 +52,10 @@ interface AlertRowProps {
   currentUserId: string
   currentUserRole: string
   visibleColumns: string[]
+  readOnly?: boolean
 }
 
-function SingleAlertRow({ alert, currentUserId, currentUserRole, visibleColumns }: AlertRowProps) {
+function SingleAlertRow({ alert, currentUserId, currentUserRole, visibleColumns, readOnly }: AlertRowProps) {
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -138,6 +140,7 @@ function SingleAlertRow({ alert, currentUserId, currentUserRole, visibleColumns 
               alert={alert}
               currentUserId={currentUserId}
               currentUserRole={currentUserRole}
+              readOnly={readOnly}
             />
           </td>
         </tr>
@@ -151,9 +154,10 @@ interface GroupRowProps {
   currentUserId: string
   currentUserRole: string
   visibleColumns: string[]
+  readOnly?: boolean
 }
 
-function GroupRow({ group, currentUserId, currentUserRole, visibleColumns }: GroupRowProps) {
+function GroupRow({ group, currentUserId, currentUserRole, visibleColumns, readOnly }: GroupRowProps) {
   const [expanded, setExpanded] = useState(false)
   const rep = group.representative
 
@@ -164,6 +168,7 @@ function GroupRow({ group, currentUserId, currentUserRole, visibleColumns }: Gro
         currentUserId={currentUserId}
         currentUserRole={currentUserRole}
         visibleColumns={visibleColumns}
+        readOnly={readOnly}
       />
     )
   }
@@ -260,13 +265,14 @@ function GroupRow({ group, currentUserId, currentUserRole, visibleColumns }: Gro
           currentUserId={currentUserId}
           currentUserRole={currentUserRole}
           visibleColumns={visibleColumns}
+          readOnly={readOnly}
         />
       ))}
     </>
   )
 }
 
-export default function AlertGroupList({ groups, currentUserId, currentUserRole, visibleColumns }: Props) {
+export default function AlertGroupList({ groups, currentUserId, currentUserRole, visibleColumns, readOnly = false }: Props) {
   if (groups.length === 0) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
@@ -309,6 +315,7 @@ export default function AlertGroupList({ groups, currentUserId, currentUserRole,
               currentUserId={currentUserId}
               currentUserRole={currentUserRole}
               visibleColumns={visibleColumns}
+              readOnly={readOnly}
             />
           ))}
         </tbody>

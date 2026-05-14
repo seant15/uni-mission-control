@@ -1,11 +1,13 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Image, Video, DollarSign, TrendingUp, ShoppingCart, MousePointer2,
   ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight, ExternalLink,
-  X, ThumbsUp, MessageCircle, Share2, Globe
+  X, ThumbsUp, MessageCircle, Share2, Globe, AlertTriangle
 } from 'lucide-react'
 import { db } from '../lib/api'
+import { useAuth } from '../contexts/AuthContext'
+import { scopedClientIdFromUser } from '../lib/rbac'
 
 // ── Sort helpers ───────────────────────────────────────────────────────────────
 function useTableSort(defaultField: string, defaultDir: 'asc' | 'desc' = 'desc') {
@@ -112,28 +114,80 @@ function aggregateAdSets(rows: any[]): any[] {
 }
 
 // ── Creative Thumbnail ─────────────────────────────────────────────────────────
-function CreativeThumb({ row }: { row: any }) {
+function postLink(row: { instagram_permalink_url?: string | null; facebook_post_url?: string | null }) {
+  if (row.instagram_permalink_url) return { href: row.instagram_permalink_url, label: 'View on IG' as const }
+  if (row.facebook_post_url) return { href: row.facebook_post_url, label: 'View Post' as const }
+  return null
+}
+
+function CreativeThumb({
+  row,
+  adKey,
+  onImageError,
+}: {
+  row: any
+  adKey: string
+  onImageError?: (key: string) => void
+}) {
   const [imgFailed, setImgFailed] = useState(false)
-  // Use CDN URLs as returned by sync — stripping query params often invalidates Meta signed URLs (403).
   const imgSrc = row.thumbnail_url || row.image_url
   const isVideo = !!row.video_id
   const videoUrl = isVideo ? `https://www.facebook.com/videos/${row.video_id}` : null
+  const pl = postLink(row)
+  const extOpen = pl?.href || row.destination_url || imgSrc
+
+  const handleImgError = () => {
+    setImgFailed(true)
+    onImageError?.(adKey)
+  }
+
+  const fallback = (
+    <div className="w-14 h-14 rounded-lg bg-gray-100 flex flex-col items-center justify-center shrink-0 gap-0.5 p-1 border border-gray-100">
+      {pl ? (
+        <a
+          href={pl.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] font-semibold text-blue-600 hover:underline text-center leading-tight"
+          onClick={e => e.stopPropagation()}
+        >
+          {pl.label}
+        </a>
+      ) : (
+        <>
+          {isVideo ? <Video size={20} className="text-gray-400" /> : <Image size={20} className="text-gray-400" />}
+        </>
+      )}
+    </div>
+  )
 
   if (!imgSrc || imgFailed) {
-    return (
-      <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
-        {isVideo ? <Video size={20} className="text-gray-400" /> : <Image size={20} className="text-gray-400" />}
-      </div>
-    )
+    return fallback
   }
 
   const img = (
-    <img
-      src={imgSrc}
-      alt="creative"
-      className="w-14 h-14 object-cover rounded-lg shrink-0 border border-gray-100"
-      onError={() => setImgFailed(true)}
-    />
+    <div className="relative shrink-0">
+      <img
+        src={imgSrc}
+        alt="creative"
+        className="w-14 h-14 object-cover rounded-lg shrink-0 border border-gray-100"
+        onError={handleImgError}
+        loading="lazy"
+        decoding="async"
+      />
+      {extOpen && (
+        <a
+          href={extOpen}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open post"
+          className="absolute bottom-0.5 right-0.5 p-0.5 rounded bg-white/90 text-gray-600 hover:text-blue-600 shadow-sm"
+          onClick={e => e.stopPropagation()}
+        >
+          <ExternalLink size={12} />
+        </a>
+      )}
+    </div>
   )
 
   return videoUrl ? (
@@ -143,19 +197,27 @@ function CreativeThumb({ row }: { row: any }) {
         <ExternalLink size={14} className="text-white" />
       </span>
     </a>
-  ) : img
+  ) : (
+    img
+  )
 }
 
 // ── Ad Preview Modal ───────────────────────────────────────────────────────────
 function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
+  const [modalImgFailed, setModalImgFailed] = useState(false)
   // Use image_url (not thumbnail_url) for popup — higher res source
   // For videos, fall back to thumbnail_url. Keep URL exactly as stored — hiResUrl() can break Meta signed URLs.
   const rawSrc = row.image_url || row.thumbnail_url
   const imgSrc = rawSrc
   const isVideo = !!row.video_id
   const videoPostUrl = row.instagram_permalink_url || row.facebook_post_url || null
+  const pl = postLink(row)
   const roas = row.spend > 0 ? row.revenue / row.spend : 0
   const ctr = row.impressions > 0 ? row.clicks / row.impressions : 0
+
+  useEffect(() => {
+    setModalImgFailed(false)
+  }, [row.ad_id, row._key])
 
   // Close on Escape
   useEffect(() => {
@@ -215,19 +277,36 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
 
             {/* Creative image/video */}
             <div className="w-full bg-gray-100 relative" style={{ minHeight: 240 }}>
-              {imgSrc ? (
+              {imgSrc && !modalImgFailed ? (
                 <img
                   src={imgSrc}
                   alt="creative"
                   className="w-full object-cover"
                   style={{ maxHeight: 320 }}
-                  onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                  onError={() => setModalImgFailed(true)}
+                  loading="lazy"
+                  decoding="async"
                 />
               ) : (
-                <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: 240 }}>
-                  {isVideo
-                    ? <Video size={40} className="text-gray-300" />
-                    : <Image size={40} className="text-gray-300" />}
+                <div className="w-full flex flex-col items-center justify-center bg-gray-100 gap-3 px-4 py-10" style={{ minHeight: 240 }}>
+                  {pl ? (
+                    <a
+                      href={pl.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:underline"
+                    >
+                      <ExternalLink size={16} />
+                      {pl.label}
+                    </a>
+                  ) : (
+                    <>
+                      {isVideo
+                        ? <Video size={40} className="text-gray-300" />
+                        : <Image size={40} className="text-gray-300" />}
+                      <p className="text-xs text-gray-500 text-center">Preview unavailable</p>
+                    </>
+                  )}
                 </div>
               )}
               {isVideo && (
@@ -383,6 +462,8 @@ const CHART_COLORS = ['#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#ec4899', '#f
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function CreativePerformance() {
+  const { appUser } = useAuth()
+  const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [dateRange, setDateRange] = useState(() => getPresetDates(7))
   const [activePreset, setActivePreset] = useState(7)
@@ -391,36 +472,56 @@ export default function CreativePerformance() {
   const [expandedAdSets, setExpandedAdSets] = useState<Set<string>>(new Set())
   const [chartMode, setChartMode] = useState<'spend' | 'roas'>('spend')
   const [selectedAd, setSelectedAd] = useState<any>(null)
+  const [failedThumbKeys, setFailedThumbKeys] = useState<Set<string>>(() => new Set())
   const PAGE_SIZE = 20
+
+  useEffect(() => {
+    if (scopedClientId) setSelectedClient(scopedClientId)
+  }, [scopedClientId])
+
+  useEffect(() => {
+    setFailedThumbKeys(new Set())
+  }, [selectedClient, dateRange.start, dateRange.end])
+
+  const reportThumbFail = useCallback((key: string) => {
+    setFailedThumbKeys(prev => {
+      if (prev.has(key)) return prev
+      const n = new Set(prev)
+      n.add(key)
+      return n
+    })
+  }, [])
 
   const creativeSort = useTableSort('spend')
   const adsetSort = useTableSort('spend')
 
   // Clients
   const { data: clients = [] } = useQuery({
-    queryKey: ['clients'],
-    queryFn: () => db.getClients(),
+    queryKey: ['clients', scopedClientId ?? 'all'],
+    queryFn: () => db.getClients(scopedClientId ? { scopedClientId } : undefined),
     staleTime: 5 * 60 * 1000,
   })
 
   // Creative data (meta_ads_ads with creative fields)
   const { data: rawCreatives = [], isLoading: loadingCreatives } = useQuery({
-    queryKey: ['meta-creatives', selectedClient, dateRange.start, dateRange.end],
+    queryKey: ['meta-creatives', selectedClient, dateRange.start, dateRange.end, scopedClientId ?? ''],
     queryFn: () => db.getMetaCreatives(
       selectedClient === 'all' ? undefined : selectedClient,
       dateRange.start,
-      dateRange.end
+      dateRange.end,
+      scopedClientId || undefined
     ),
     staleTime: 5 * 60 * 1000,
   })
 
   // Ad Set data
   const { data: rawAdsets = [], isLoading: loadingAdsets } = useQuery({
-    queryKey: ['meta-adsets', selectedClient, dateRange.start, dateRange.end],
+    queryKey: ['meta-adsets', selectedClient, dateRange.start, dateRange.end, scopedClientId ?? ''],
     queryFn: () => db.getMetaAdsets({
       clientId: selectedClient === 'all' ? undefined : selectedClient,
       startDate: dateRange.start,
       endDate: dateRange.end,
+      scopedClientId: scopedClientId || undefined,
     }),
     staleTime: 5 * 60 * 1000,
   })
@@ -428,6 +529,13 @@ export default function CreativePerformance() {
   // Aggregate
   const allCreatives = aggregateCreatives(rawCreatives as any[])
   const allAdSets = aggregateAdSets(rawAdsets as any[])
+
+  const thumbWithUrlCount = useMemo(
+    () => allCreatives.filter((r: any) => r.thumbnail_url || r.image_url).length,
+    [allCreatives]
+  )
+  const showCdnStaleBanner =
+    thumbWithUrlCount > 0 && failedThumbKeys.size / thumbWithUrlCount > 0.6
 
   const sortedCreatives = creativeSort.sortRows(allCreatives)
 
@@ -473,6 +581,16 @@ export default function CreativePerformance() {
         </div>
       </div>
 
+      {showCdnStaleBanner && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 flex gap-2 items-start">
+          <AlertTriangle className="shrink-0 mt-0.5" size={18} />
+          <p>
+            Many ad image URLs from Meta have expired (CDN signatures). Use the links on each row to open the live post on
+            Instagram or Facebook.
+          </p>
+        </div>
+      )}
+
       {!isLoading && creativesMissingImages && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
           No image or thumbnail URLs are stored for these ads. The daily marketing sync must run with creative enrichment
@@ -487,34 +605,40 @@ export default function CreativePerformance() {
       <div className="sticky top-[52px] z-30 bg-white/95 backdrop-blur-sm shadow-md border-b border-gray-200 rounded-xl px-4 py-3">
         <div className="flex flex-wrap items-center gap-3">
           {/* Client Picker */}
-          <div className="relative">
-            <button
-              onClick={() => setShowClientDrop(v => !v)}
-              className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm hover:bg-gray-100 transition-colors min-w-[160px]"
-            >
-              <span className="font-medium text-gray-700 truncate">{selectedClientName}</span>
-              <ChevronDown size={14} className="text-gray-500 ml-auto shrink-0" />
-            </button>
-            {showClientDrop && (
-              <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-30 min-w-[200px] py-1">
-                <button
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedClient === 'all' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
-                  onClick={() => { setSelectedClient('all'); setShowClientDrop(false); setCreativePage(0) }}
-                >
-                  All Clients
-                </button>
-                {clients.map((c: any) => (
+          {scopedClientId ? (
+            <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-700 min-w-[160px]">
+              <span className="font-medium truncate">{selectedClientName}</span>
+            </div>
+          ) : (
+            <div className="relative">
+              <button
+                onClick={() => setShowClientDrop(v => !v)}
+                className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm hover:bg-gray-100 transition-colors min-w-[160px]"
+              >
+                <span className="font-medium text-gray-700 truncate">{selectedClientName}</span>
+                <ChevronDown size={14} className="text-gray-500 ml-auto shrink-0" />
+              </button>
+              {showClientDrop && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-30 min-w-[200px] py-1">
                   <button
-                    key={c.id}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedClient === c.id ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
-                    onClick={() => { setSelectedClient(c.id); setShowClientDrop(false); setCreativePage(0) }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedClient === 'all' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                    onClick={() => { setSelectedClient('all'); setShowClientDrop(false); setCreativePage(0) }}
                   >
-                    {c.name}
+                    All Clients
                   </button>
-                ))}
-              </div>
-            )}
-          </div>
+                  {clients.map((c: any) => (
+                    <button
+                      key={c.id}
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedClient === c.id ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                      onClick={() => { setSelectedClient(c.id); setShowClientDrop(false); setCreativePage(0) }}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Date Presets */}
           <div className="flex gap-1">
@@ -694,7 +818,7 @@ export default function CreativePerformance() {
                       <tr key={row._key} className="hover:bg-gray-50/50 transition-colors">
                         <td className="px-3 py-2.5">
                           <button onClick={() => setSelectedAd(row)} className="group relative focus:outline-none">
-                            <CreativeThumb row={row} />
+                            <CreativeThumb row={row} adKey={row._key} onImageError={reportThumbFail} />
                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
                               <ExternalLink size={12} className="text-white drop-shadow" />
                             </div>
@@ -846,7 +970,7 @@ export default function CreativePerformance() {
                             <td className="px-3 py-2" />
                             <td colSpan={2} className="px-3 py-2">
                               <div className="flex items-center gap-2 pl-4">
-                                <CreativeThumb row={cr} />
+                                <CreativeThumb row={cr} adKey={cr._key} onImageError={reportThumbFail} />
                                 <div className="min-w-0">
                                   <p className="text-xs font-medium text-gray-700 truncate">{cr.ad_name || cr.ad_id}</p>
                                   {cr.headline && <p className="text-xs text-gray-400 truncate">{cr.headline}</p>}

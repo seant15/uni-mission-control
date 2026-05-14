@@ -45,6 +45,13 @@ async function cachedActiveClientIds(): Promise<string[]> {
 
 export type HourWindow = 1 | 2 | 6 | 12 | 24 | 48 | 72
 
+export interface HourlyPerformanceFilters {
+    windowHours: HourWindow
+    clientId?: string
+    /** When set, overrides `clientId` for queries (client-role isolation). */
+    scopedClientId?: string
+}
+
 /** Stable key for merging daily rows with hourly rollups (same grain as daily_performance). */
 function dailyPerfRowKey(r: {
     client_id: string
@@ -73,6 +80,7 @@ function rollupHourlyToDailyShape(hourlyRows: any[]): any[] {
                 date: r.date,
                 platform: r.platform,
                 ad_account_id: r.ad_account_id,
+                data_timezone: null as string | null,
                 impressions: 0,
                 clicks: 0,
                 conversions: 0,
@@ -102,6 +110,13 @@ export interface PerformanceFilters {
     endDate?: string
     limit?: number
     offset?: number
+    /** When set, `clientId` is forced to this value in all queries using these filters. */
+    scopedClientId?: string
+}
+
+function applyPerformanceClientScope(filters: PerformanceFilters): PerformanceFilters {
+    if (!filters.scopedClientId) return filters
+    return { ...filters, clientId: filters.scopedClientId }
 }
 
 /** Hourly slice used to synthesize missing daily_performance rows (same filters as daily query). */
@@ -145,32 +160,33 @@ export const db = {
      * missing daily keys are filled by rolling up hourly rows for the same date/account/platform.
      */
     async getDailyPerformance(filters: PerformanceFilters) {
+        const f = applyPerformanceClientScope(filters)
         let query = supabase
             .from('daily_performance')
-            .select('id, client_id, client_name, date, platform, ad_account_id, impressions, clicks, conversions, cost, revenue')
+            .select('id, client_id, client_name, date, platform, ad_account_id, data_timezone, impressions, clicks, conversions, cost, revenue')
 
-        if (filters.clientId && filters.clientId !== 'all') {
-            query = query.eq('client_id', filters.clientId)
+        if (f.clientId && f.clientId !== 'all') {
+            query = query.eq('client_id', f.clientId)
         } else {
             const activeIds = await cachedActiveClientIds()
             if (activeIds.length === 0) return []
             query = query.in('client_id', activeIds)
         }
 
-        if (filters.platform && filters.platform !== 'all') {
-            query = query.eq('platform', filters.platform)
+        if (f.platform && f.platform !== 'all') {
+            query = query.eq('platform', f.platform)
         }
 
-        if (filters.adAccountId) {
-            query = query.eq('ad_account_id', filters.adAccountId)
+        if (f.adAccountId) {
+            query = query.eq('ad_account_id', f.adAccountId)
         }
 
-        if (filters.startDate) {
-            query = query.gte('date', filters.startDate)
+        if (f.startDate) {
+            query = query.gte('date', f.startDate)
         }
 
-        if (filters.endDate) {
-            query = query.lte('date', filters.endDate)
+        if (f.endDate) {
+            query = query.lte('date', f.endDate)
         }
 
         query = query.order('date', { ascending: false }).limit(20000)
@@ -179,32 +195,37 @@ export const db = {
         if (error) throw error
         const dailyRows = data || []
 
-        const hourlyRaw = await fetchHourlyRowsForDailyRollup(filters)
+        const hourlyRaw = await fetchHourlyRowsForDailyRollup(f)
         const rolled = rollupHourlyToDailyShape(hourlyRaw)
-        const existingKeys = new Set(dailyRows.map((r: any) => dailyPerfRowKey(r)))
+        const datesWithDailyData = new Set(dailyRows.map((r: { client_id: string; date: string }) => `${r.client_id}|${r.date}`))
         const merged = [...dailyRows]
         for (const r of rolled) {
-            if (!existingKeys.has(dailyPerfRowKey(r))) merged.push(r)
+            const dateKey = `${r.client_id}|${r.date}`
+            if (!datesWithDailyData.has(dateKey)) merged.push(r)
         }
         merged.sort((a: any, b: any) => {
             const db = (b.date || '').localeCompare(a.date || '')
             if (db !== 0) return db
             return dailyPerfRowKey(b).localeCompare(dailyPerfRowKey(a))
         })
-        const lim = filters.limit || 5000
-        const off = filters.offset || 0
+        const lim = f.limit || 5000
+        const off = f.offset || 0
         return merged.slice(off, off + lim)
     },
 
     /**
      * Fetch all clients (lightweight)
      */
-    async getClients() {
-        const { data, error } = await supabase
+    async getClients(opts?: { scopedClientId?: string }) {
+        let q = supabase
             .from('clients')
             .select('id, name, business_type, currency, currency_symbol, meta_ad_account_id, google_ads_customer_id')
             .in('status', [...ACTIVE_CLIENT_STATUSES])
             .order('name')
+        if (opts?.scopedClientId) {
+            q = q.eq('id', opts.scopedClientId)
+        }
+        const { data, error } = await q
         if (error) throw error
         return data
     },
@@ -255,15 +276,16 @@ export const db = {
      * Fetch Meta ad creatives with client and date filtering
      * Includes creative fields: image_url, thumbnail_url, headline, primary_copy, description, call_to_action_type
      */
-    async getMetaCreatives(clientId?: string, startDate?: string, endDate?: string) {
+    async getMetaCreatives(clientId?: string, startDate?: string, endDate?: string, scopedClientId?: string) {
+        const cid = scopedClientId ?? clientId
         let query = supabase
             .from('meta_ads_ads')
             .select('id, client_id, date, campaign_id, campaign_name, ad_set_id, ad_set_name, ad_id, ad_name, spend, impressions, clicks, conversions, revenue, image_url, thumbnail_url, video_id, headline, primary_copy, description, call_to_action_type, destination_url, instagram_permalink_url, facebook_post_url')
             .order('spend', { ascending: false })
             .limit(2000)
 
-        if (clientId && clientId !== 'all') {
-            query = query.eq('client_id', clientId)
+        if (cid && cid !== 'all') {
+            query = query.eq('client_id', cid)
         } else {
             const activeIds = await cachedActiveClientIds()
             if (activeIds.length === 0) return []
@@ -376,7 +398,8 @@ export const db = {
      * Fetch available ad accounts filtered by client and/or platform
      * Returns client_id so callers can look up business_type
      */
-    async getAdAccounts(filters: { clientId?: string; platform?: string }) {
+    async getAdAccounts(filters: { clientId?: string; platform?: string; scopedClientId?: string }) {
+        const clientId = filters.scopedClientId ?? filters.clientId
         const activeIds = await cachedActiveClientIds()
         if (activeIds.length === 0) return []
 
@@ -384,8 +407,8 @@ export const db = {
             .from('daily_performance')
             .select('ad_account_id, platform, client_id')
 
-        if (filters.clientId && filters.clientId !== 'all') {
-            query = query.eq('client_id', filters.clientId)
+        if (clientId && clientId !== 'all') {
+            query = query.eq('client_id', clientId)
         } else {
             query = query.in('client_id', activeIds)
         }
@@ -402,8 +425,8 @@ export const db = {
             .select('ad_account_id, platform, client_id')
             .limit(8000)
 
-        if (filters.clientId && filters.clientId !== 'all') {
-            hQuery = hQuery.eq('client_id', filters.clientId)
+        if (clientId && clientId !== 'all') {
+            hQuery = hQuery.eq('client_id', clientId)
         } else {
             hQuery = hQuery.in('client_id', activeIds)
         }
@@ -436,15 +459,16 @@ export const db = {
     /**
      * Fetch Meta adsets with filtering
      */
-    async getMetaAdsets(filters: { clientId?: string; adAccountId?: string; startDate?: string; endDate?: string }) {
+    async getMetaAdsets(filters: { clientId?: string; adAccountId?: string; startDate?: string; endDate?: string; scopedClientId?: string }) {
+        const clientId = filters.scopedClientId ?? filters.clientId
         let query = supabase
             .from('meta_ads_ad_sets')
             .select('id, client_id, date, ad_account_id, campaign_id, campaign_name, ad_set_id, ad_set_name, spend, impressions, clicks, conversions, revenue')
             .order('spend', { ascending: false })
             .limit(500)
 
-        if (filters.clientId && filters.clientId !== 'all') {
-            query = query.eq('client_id', filters.clientId)
+        if (clientId && clientId !== 'all') {
+            query = query.eq('client_id', clientId)
         } else {
             const activeIds = await cachedActiveClientIds()
             if (activeIds.length === 0) return []
@@ -471,19 +495,26 @@ export const db = {
     /**
      * Fetch Meta campaigns with filtering
      */
-    async getMetaCampaigns(filters: { clientId?: string; adAccountId?: string; startDate?: string; endDate?: string }) {
+    async getMetaCampaigns(filters: { clientId?: string; adAccountId?: string; startDate?: string; endDate?: string; scopedClientId?: string }) {
+        const clientId = filters.scopedClientId ?? filters.clientId
         let query = supabase
             .from('meta_ads')
-            .select('id, client_id, date, campaign_id, campaign_name, spend, impressions, clicks, conversions, revenue')
+            .select(
+                'id, client_id, date, campaign_id, campaign_name, spend, impressions, clicks, conversions, revenue, ' +
+                'reach, frequency, outbound_clicks, video_p25_watched, video_p50_watched, video_p75_watched, video_p100_watched, video_avg_watch_time'
+            )
             .order('spend', { ascending: false })
             .limit(500)
 
-        if (filters.clientId && filters.clientId !== 'all') {
-            query = query.eq('client_id', filters.clientId)
+        if (clientId && clientId !== 'all') {
+            query = query.eq('client_id', clientId)
         } else {
             const activeIds = await cachedActiveClientIds()
             if (activeIds.length === 0) return []
             query = query.in('client_id', activeIds)
+        }
+        if (filters.adAccountId) {
+            query = query.eq('ad_account_id', filters.adAccountId)
         }
         if (filters.startDate) {
             query = query.gte('date', filters.startDate)
@@ -500,15 +531,16 @@ export const db = {
     /**
      * Fetch Google campaigns with filtering
      */
-    async getGoogleCampaigns(filters: { clientId?: string; adAccountId?: string; startDate?: string; endDate?: string }) {
+    async getGoogleCampaigns(filters: { clientId?: string; adAccountId?: string; startDate?: string; endDate?: string; scopedClientId?: string }) {
+        const clientId = filters.scopedClientId ?? filters.clientId
         let query = supabase
             .from('google_ads')
             .select('id, client_id, date, campaign_id, campaign_name, spend, impressions, clicks, conversions, revenue')
             .order('spend', { ascending: false })
             .limit(500)
 
-        if (filters.clientId && filters.clientId !== 'all') {
-            query = query.eq('client_id', filters.clientId)
+        if (clientId && clientId !== 'all') {
+            query = query.eq('client_id', clientId)
         } else {
             const activeIds = await cachedActiveClientIds()
             if (activeIds.length === 0) return []
@@ -609,11 +641,13 @@ export const db = {
      * Hourly performance for Real-time Performance page
      * Returns current window rows and previous window rows for comparison
      */
-    async getHourlyPerformance(filters: { windowHours: HourWindow; clientId?: string }) {
+    async getHourlyPerformance(filters: HourlyPerformanceFilters) {
         // hourly_performance table uses date (DATE) + hour (INT 0-23), not a timestamp column
         const now = new Date()
         const windowStart = new Date(now.getTime() - filters.windowHours * 60 * 60 * 1000)
         const prevWindowStart = new Date(windowStart.getTime() - filters.windowHours * 60 * 60 * 1000)
+
+        const effectiveClientId = filters.scopedClientId ?? filters.clientId
 
         // Build date+hour pairs for current window
         const toDateHour = (d: Date) => ({
@@ -642,9 +676,9 @@ export const db = {
             .order('date', { ascending: false })
             .order('hour', { ascending: false })
 
-        if (filters.clientId && filters.clientId !== 'all') {
-            curQ = curQ.eq('client_id', filters.clientId)
-            prevQ = prevQ.eq('client_id', filters.clientId)
+        if (effectiveClientId && effectiveClientId !== 'all') {
+            curQ = curQ.eq('client_id', effectiveClientId)
+            prevQ = prevQ.eq('client_id', effectiveClientId)
         } else {
             const activeIds = await cachedActiveClientIds()
             if (activeIds.length === 0) {
@@ -1316,7 +1350,7 @@ export const db = {
         const { data, error } = await supabase
             .from('app_users')
             .select('id, display_name')
-            .in('role', ['super_admin', 'team_member'])
+            .in('role', ['super_admin', 'media_buyer', 'team_member'])
             .eq('is_active', true)
             .order('display_name')
         if (error) throw error
@@ -1339,6 +1373,9 @@ export const db = {
         client_id?: string | null
         source_alert_id?: string | null
         created_by: string
+        clickup_task_id?: string | null
+        clickup_task_url?: string | null
+        synced_from_clickup?: boolean
     }): Promise<MissionCardRow> {
         const { data, error } = await supabase
             .from('mission_cards')
@@ -1349,6 +1386,9 @@ export const db = {
                 client_id: input.client_id ?? null,
                 source_alert_id: input.source_alert_id ?? null,
                 created_by: input.created_by,
+                clickup_task_id: input.clickup_task_id ?? null,
+                clickup_task_url: input.clickup_task_url ?? null,
+                synced_from_clickup: input.synced_from_clickup ?? false,
             })
             .select()
             .single()
@@ -1358,7 +1398,18 @@ export const db = {
 
     async updateMissionCard(
         id: string,
-        patch: Partial<Pick<MissionCardRow, 'title' | 'body' | 'column_status' | 'client_id'>>
+        patch: Partial<
+            Pick<
+                MissionCardRow,
+                | 'title'
+                | 'body'
+                | 'column_status'
+                | 'client_id'
+                | 'clickup_task_id'
+                | 'clickup_task_url'
+                | 'archived'
+            >
+        >
     ): Promise<void> {
         const { error } = await supabase
             .from('mission_cards')
@@ -1368,6 +1419,15 @@ export const db = {
     },
 
     async deleteMissionCard(id: string): Promise<void> {
+        const { data: row, error: selErr } = await supabase
+            .from('mission_cards')
+            .select('synced_from_clickup')
+            .eq('id', id)
+            .maybeSingle()
+        if (selErr) throw selErr
+        if (row?.synced_from_clickup) {
+            throw new Error('Cannot delete a ClickUp-synced card from the dashboard. Archive it instead.')
+        }
         const { error } = await supabase.from('mission_cards').delete().eq('id', id)
         if (error) throw error
     },
@@ -1440,13 +1500,23 @@ export const db = {
     },
 
     async upsertClientAlertDelivery(
-        row: Pick<ClientAlertDelivery, 'client_id' | 'notify_in_app' | 'slack_webhook_url' | 'notify_emails'> & { updated_by?: string | null }
+        row: Pick<
+            ClientAlertDelivery,
+            | 'client_id'
+            | 'notify_in_app'
+            | 'slack_webhook_url'
+            | 'notify_emails'
+            | 'slack_channel'
+            | 'slack_notify_alert_rules'
+        > & { updated_by?: string | null }
     ): Promise<void> {
         const { error } = await supabase.from('client_alert_delivery').upsert(
             {
                 client_id: row.client_id,
                 notify_in_app: row.notify_in_app,
                 slack_webhook_url: row.slack_webhook_url?.trim() || null,
+                slack_channel: row.slack_channel?.trim() || null,
+                slack_notify_alert_rules: row.slack_notify_alert_rules ?? false,
                 notify_emails: row.notify_emails?.trim() || null,
                 updated_at: new Date().toISOString(),
                 updated_by: row.updated_by ?? null,

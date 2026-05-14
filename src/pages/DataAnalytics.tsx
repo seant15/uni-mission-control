@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -8,6 +8,8 @@ import {
 } from 'lucide-react'
 import { db } from '../lib/api'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
+import { useAuth } from '../contexts/AuthContext'
+import { scopedClientIdFromUser } from '../lib/rbac'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ComposedChart, Area, Line, LineChart
@@ -58,6 +60,7 @@ interface DailyPerformance {
   date: string
   platform: string
   ad_account_id?: string
+  data_timezone?: string | null
   impressions: number
   clicks: number
   conversions: number
@@ -89,13 +92,21 @@ const DATE_PRESETS = [
 
 type MetricKey = 'spend' | 'ctr' | 'conversions' | 'costperconv' | 'roas'
 
+type AggregateRowsOptions = {
+  sumFields?: string[]
+  weightedAvg?: { outKey: string; valueKey: string; weightKey: string }[]
+}
+
 // Aggregate rows by a key field (campaign, adset, ad), summing metrics across dates
 function aggregateRows<T extends Record<string, any>>(
   rows: T[],
   keyField: string,
   nameField: string,
-  extraFields: string[] = []
+  extraFields: string[] = [],
+  options?: AggregateRowsOptions
 ): any[] {
+  const sumFields = options?.sumFields ?? []
+  const weightedAvg = options?.weightedAvg ?? []
   const map = new Map<string, any>()
   for (const row of rows) {
     const key = row[keyField] || 'unknown'
@@ -107,6 +118,11 @@ function aggregateRows<T extends Record<string, any>>(
         spend: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0,
       }
       for (const f of extraFields) entry[f] = row[f] ?? null
+      for (const f of sumFields) entry[f] = 0
+      for (const w of weightedAvg) {
+        entry[`__wavg_${w.outKey}_n`] = 0
+        entry[`__wavg_${w.outKey}_d`] = 0
+      }
       map.set(key, entry)
     }
     const entry = map.get(key)!
@@ -115,8 +131,24 @@ function aggregateRows<T extends Record<string, any>>(
     entry.clicks += Number(row.clicks) || 0
     entry.conversions += Number(row.conversions) || 0
     entry.revenue += Number(row.revenue) || 0
+    for (const f of sumFields) entry[f] += Number(row[f]) || 0
+    for (const w of weightedAvg) {
+      const weight = Number(row[w.weightKey]) || 0
+      const val = Number(row[w.valueKey]) || 0
+      entry[`__wavg_${w.outKey}_n`] += val * weight
+      entry[`__wavg_${w.outKey}_d`] += weight
+    }
   }
   const result = Array.from(map.values())
+  for (const e of result) {
+    for (const w of weightedAvg) {
+      const n = e[`__wavg_${w.outKey}_n`]
+      const d = e[`__wavg_${w.outKey}_d`]
+      e[w.outKey] = d > 0 ? n / d : null
+      delete e[`__wavg_${w.outKey}_n`]
+      delete e[`__wavg_${w.outKey}_d`]
+    }
+  }
   result.sort((a, b) => b.spend - a.spend)
   return result
 }
@@ -136,8 +168,10 @@ function PctBadge({ current, previous, invertTrend = false }: { current: number;
   )
 }
 
-export default function DataAnalytics() {
+export default function DataAnalytics({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate()
+  const { appUser } = useAuth()
+  const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
 
   // Core states
   const [selectedClient, setSelectedClient] = useState<string>('all')
@@ -176,8 +210,8 @@ export default function DataAnalytics() {
 
   // Fetch clients
   const { data: clientsFromTable } = useQuery({
-    queryKey: ['clients_table'],
-    queryFn: db.getClients,
+    queryKey: ['clients_table', scopedClientId ?? 'all'],
+    queryFn: () => db.getClients(scopedClientId ? { scopedClientId } : undefined),
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   })
@@ -192,8 +226,12 @@ export default function DataAnalytics() {
 
   // Fetch ad accounts
   const { data: adAccountsFromDB } = useQuery({
-    queryKey: ['ad_accounts', selectedClient, selectedPlatform],
-    queryFn: () => db.getAdAccounts({ clientId: selectedClient, platform: selectedPlatform }),
+    queryKey: ['ad_accounts', selectedClient, selectedPlatform, scopedClientId ?? ''],
+    queryFn: () => db.getAdAccounts({
+      clientId: selectedClient,
+      platform: selectedPlatform,
+      scopedClientId: scopedClientId || undefined,
+    }),
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   })
@@ -218,13 +256,14 @@ export default function DataAnalytics() {
 
   // Current period performance
   const { data: performance } = useQuery({
-    queryKey: ['performance', selectedClient, selectedPlatform, selectedAdAccount, dateRange],
+    queryKey: ['performance', selectedClient, selectedPlatform, selectedAdAccount, dateRange, scopedClientId ?? ''],
     queryFn: () => db.getDailyPerformance({
       clientId: selectedClient,
       platform: selectedPlatform,
       adAccountId: selectedAdAccount || undefined,
       startDate: dateRange.start,
       endDate: dateRange.end,
+      scopedClientId: scopedClientId || undefined,
     }),
     staleTime: settings.cacheTimeout * 60 * 1000,
     gcTime: 30 * 60 * 1000,
@@ -250,13 +289,14 @@ export default function DataAnalytics() {
   })()
 
   const { data: previousPerformance } = useQuery({
-    queryKey: ['previous_performance', selectedClient, selectedPlatform, selectedAdAccount, previousPeriodRange],
+    queryKey: ['previous_performance', selectedClient, selectedPlatform, selectedAdAccount, previousPeriodRange, scopedClientId ?? ''],
     queryFn: () => db.getDailyPerformance({
       clientId: selectedClient,
       platform: selectedPlatform,
       adAccountId: selectedAdAccount || undefined,
       startDate: previousPeriodRange.start,
       endDate: previousPeriodRange.end,
+      scopedClientId: scopedClientId || undefined,
     }),
     enabled: !!previousPeriodRange.start && !!previousPeriodRange.end,
     staleTime: settings.cacheTimeout * 60 * 1000,
@@ -266,14 +306,26 @@ export default function DataAnalytics() {
 
   const previousPerformanceData: DailyPerformance[] = (previousPerformance as DailyPerformance[]) || []
 
+  const dailyDataTimezoneFootnote = useMemo(() => {
+    const tzs = [...new Set(performanceData.map(r => r.data_timezone).filter(Boolean) as string[])]
+    if (tzs.length === 0) {
+      return 'Daily chart: dates follow synced daily rows when present. Gap-filled days are summed from hourly slices (UTC hour buckets) and may lack an advertiser reporting timezone until daily sync completes.'
+    }
+    if (tzs.length === 1) {
+      return `Daily chart dates use reporting timezone ${tzs[0]} on synced rows. Gap-filled days use hourly UTC rollup.`
+    }
+    return `Daily chart mixes reporting timezones (${tzs.slice(0, 4).join(', ')}${tzs.length > 4 ? ', …' : ''}). Gap-filled days use hourly UTC rollup.`
+  }, [performanceData])
+
   // Meta campaigns
   const { data: metaCampaigns } = useQuery({
-    queryKey: ['meta_campaigns', selectedClient, selectedAdAccount, dateRange],
+    queryKey: ['meta_campaigns', selectedClient, selectedAdAccount, dateRange, scopedClientId ?? ''],
     queryFn: () => db.getMetaCampaigns({
       clientId: selectedClient,
       adAccountId: selectedAdAccount || undefined,
       startDate: dateRange.start,
       endDate: dateRange.end,
+      scopedClientId: scopedClientId || undefined,
     }),
     enabled: selectedPlatform === 'all' || selectedPlatform === 'meta_ads',
     staleTime: 5 * 60 * 1000,
@@ -281,12 +333,13 @@ export default function DataAnalytics() {
   })
 
   const { data: prevMetaCampaigns } = useQuery({
-    queryKey: ['meta_campaigns_prev', selectedClient, selectedAdAccount, previousPeriodRange],
+    queryKey: ['meta_campaigns_prev', selectedClient, selectedAdAccount, previousPeriodRange, scopedClientId ?? ''],
     queryFn: () => db.getMetaCampaigns({
       clientId: selectedClient,
       adAccountId: selectedAdAccount || undefined,
       startDate: previousPeriodRange.start,
       endDate: previousPeriodRange.end,
+      scopedClientId: scopedClientId || undefined,
     }),
     enabled: (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && !!previousPeriodRange.start,
     staleTime: 5 * 60 * 1000,
@@ -295,12 +348,13 @@ export default function DataAnalytics() {
 
   // Google campaigns
   const { data: googleCampaigns } = useQuery({
-    queryKey: ['google_campaigns', selectedClient, selectedAdAccount, dateRange],
+    queryKey: ['google_campaigns', selectedClient, selectedAdAccount, dateRange, scopedClientId ?? ''],
     queryFn: () => db.getGoogleCampaigns({
       clientId: selectedClient,
       adAccountId: selectedAdAccount || undefined,
       startDate: dateRange.start,
       endDate: dateRange.end,
+      scopedClientId: scopedClientId || undefined,
     }),
     enabled: selectedPlatform === 'all' || selectedPlatform === 'google_ads',
     staleTime: 5 * 60 * 1000,
@@ -308,12 +362,13 @@ export default function DataAnalytics() {
   })
 
   const { data: prevGoogleCampaigns } = useQuery({
-    queryKey: ['google_campaigns_prev', selectedClient, selectedAdAccount, previousPeriodRange],
+    queryKey: ['google_campaigns_prev', selectedClient, selectedAdAccount, previousPeriodRange, scopedClientId ?? ''],
     queryFn: () => db.getGoogleCampaigns({
       clientId: selectedClient,
       adAccountId: selectedAdAccount || undefined,
       startDate: previousPeriodRange.start,
       endDate: previousPeriodRange.end,
+      scopedClientId: scopedClientId || undefined,
     }),
     enabled: (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && !!previousPeriodRange.start,
     staleTime: 5 * 60 * 1000,
@@ -357,14 +412,28 @@ export default function DataAnalytics() {
   const clients: Client[] = clientsFromTable || []
 
   // Aggregated data
-  const aggMetaCampaigns = aggregateRows(metaCampaigns || [], 'campaign_id', 'campaign_name', [])
-  const prevAggMetaCampaignsMap = new Map((aggregateRows(prevMetaCampaigns || [], 'campaign_id', 'campaign_name', [])).map(r => [r.campaign_id, r]))
+  const metaCampaignAggOpts: AggregateRowsOptions = {
+    sumFields: [
+      'reach',
+      'outbound_clicks',
+      'video_p25_watched',
+      'video_p50_watched',
+      'video_p75_watched',
+      'video_p100_watched',
+      'video_avg_watch_time',
+    ],
+    weightedAvg: [{ outKey: 'frequency', valueKey: 'frequency', weightKey: 'impressions' }],
+  }
+  const aggMetaCampaigns = aggregateRows(metaCampaigns || [], 'campaign_id', 'campaign_name', [], metaCampaignAggOpts)
+  const prevAggMetaCampaignsMap = new Map(
+    aggregateRows(prevMetaCampaigns || [], 'campaign_id', 'campaign_name', [], metaCampaignAggOpts).map(r => [r.campaign_id, r])
+  )
   const aggGoogleCampaigns = aggregateRows(googleCampaigns || [], 'campaign_id', 'campaign_name', [])
   const prevAggGoogleCampaignsMap = new Map((aggregateRows(prevGoogleCampaigns || [], 'campaign_id', 'campaign_name', [])).map(r => [r.campaign_id, r]))
   const aggKeywords = aggregateRows(googleKeywords || [], 'keyword_id', 'keyword', ['campaign_name', 'ad_group_name', 'match_type'])
   const prevAggKeywordsMap = new Map((aggregateRows(prevGoogleKeywords || [], 'keyword_id', 'keyword', ['campaign_name', 'ad_group_name', 'match_type'])).map(r => [r.keyword_id, r]))
   const aggSearchTerms = aggregateRows(googleSearchTerms || [], 'search_term', 'search_term', ['campaign_name', 'ad_group_name', 'match_type'])
-  const prevAggSearchTermsMap = new Map((aggregateRows(prevGoogleSearchTerms || [], 'search_term', 'search_term', [])).map(r => [r.search_term, r]))
+  const prevAggSearchTermsMap = new Map((aggregateRows(prevGoogleSearchTerms || [], 'search_term', 'search_term', ['campaign_name', 'ad_group_name', 'match_type'])).map(r => [r.search_term, r]))
 
   // Apply date preset
   const applyDatePreset = (preset: any) => {
@@ -534,18 +603,26 @@ export default function DataAnalytics() {
     })
   }, [settings.defaultDateRange])
 
+  useEffect(() => {
+    if (scopedClientId) {
+      setSelectedClient(scopedClientId)
+      setSelectedAdAccount('')
+    }
+  }, [scopedClientId])
 
   return (
     <div className="space-y-6">
       {/* Top Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <Database className="text-blue-600" />
-            Account Performance
-          </h1>
-          <p className="text-gray-500 mt-1">Deep-dive performance metrics by account</p>
-        </div>
+        {!embedded && (
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+              <Database className="text-blue-600" />
+              Account Performance
+            </h1>
+            <p className="text-gray-500 mt-1">Deep-dive performance metrics by account</p>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -581,26 +658,32 @@ export default function DataAnalytics() {
           <div className="w-px h-6 bg-gray-200" />
 
           {/* Client Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setShowClientDropdown(!showClientDropdown)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm min-w-[180px]"
-            >
+          {scopedClientId ? (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-700 min-w-[180px]">
               <span className="flex-1 text-left truncate">{selectedClientName}</span>
-              <ChevronDown size={14} />
-            </button>
-            {showClientDropdown && (
-              <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-56 overflow-y-auto">
-                <button onClick={() => { setSelectedClient('all'); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm">All Clients</button>
-                {clients?.map(client => (
-                  <button key={client.id} onClick={() => { setSelectedClient(client.id); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50">
-                    <div className="text-sm font-medium">{client.name}</div>
-                    {client.business_type && <div className="text-xs text-gray-500">{client.business_type === 'leadgen' ? 'Lead Gen' : 'eCommerce'}</div>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="relative">
+              <button
+                onClick={() => setShowClientDropdown(!showClientDropdown)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm min-w-[180px]"
+              >
+                <span className="flex-1 text-left truncate">{selectedClientName}</span>
+                <ChevronDown size={14} />
+              </button>
+              {showClientDropdown && (
+                <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-56 overflow-y-auto">
+                  <button onClick={() => { setSelectedClient('all'); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm">All Clients</button>
+                  {clients?.map(client => (
+                    <button key={client.id} onClick={() => { setSelectedClient(client.id); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50">
+                      <div className="text-sm font-medium">{client.name}</div>
+                      {client.business_type && <div className="text-xs text-gray-500">{client.business_type === 'leadgen' ? 'Lead Gen' : 'eCommerce'}</div>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Platform */}
           <select
@@ -783,6 +866,9 @@ export default function DataAnalytics() {
             </ComposedChart>
           </ResponsiveContainer>
         )}
+        {performanceData.length > 0 && (
+          <p className="text-xs text-gray-500 mt-3 leading-relaxed">{dailyDataTimezoneFootnote}</p>
+        )}
       </div>
 
       {/* ── META CAMPAIGN PERFORMANCE ── */}
@@ -802,6 +888,10 @@ export default function DataAnalytics() {
                     <SortTh label="Spend" field="spend" sort={metaCampaignSort} />
                     <SortTh label="Clicks" field="clicks" sort={metaCampaignSort} />
                     <SortTh label="CTR" field="_ctr" sort={metaCampaignSort} />
+                    <SortTh label="Reach" field="reach" sort={metaCampaignSort} />
+                    <SortTh label="Freq" field="frequency" sort={metaCampaignSort} />
+                    <SortTh label="Outbound" field="outbound_clicks" sort={metaCampaignSort} />
+                    <SortTh label="Video 25%" field="video_p25_watched" sort={metaCampaignSort} />
                     <SortTh label="Conv." field="conversions" sort={metaCampaignSort} />
                     <SortTh label="CPA" field="_cpa" sort={metaCampaignSort} />
                     <SortTh label="ROAS" field="_roas" sort={metaCampaignSort} />
@@ -813,11 +903,16 @@ export default function DataAnalytics() {
                     _ctr: c.impressions > 0 ? c.clicks / c.impressions * 100 : 0,
                     _roas: c.spend > 0 ? c.revenue / c.spend : 0,
                     _cpa: c.conversions > 0 ? c.spend / c.conversions : 0,
+                    frequency: c.frequency ?? 0,
+                    reach: Number(c.reach) || 0,
+                    outbound_clicks: Number(c.outbound_clicks) || 0,
+                    video_p25_watched: Number(c.video_p25_watched) || 0,
                   }))).map((camp: any) => {
                     const prev = prevAggMetaCampaignsMap.get(camp.campaign_id)
                     const ctr = camp.impressions > 0 ? camp.clicks / camp.impressions * 100 : 0
                     const roas = camp.spend > 0 ? camp.revenue / camp.spend : 0
                     const cpa = camp.conversions > 0 ? camp.spend / camp.conversions : 0
+                    const freqDisplay = camp.frequency != null && camp.frequency > 0 ? camp.frequency.toFixed(2) : '—'
                     return (
                       <tr key={camp._key} className="hover:bg-blue-50">
                         <td className="px-4 py-3 font-medium max-w-[280px] truncate">{camp.campaign_name}</td>
@@ -829,6 +924,17 @@ export default function DataAnalytics() {
                         <td className="px-4 py-3 text-right">
                           {ctr.toFixed(2)}%
                           {prev && prev.impressions > 0 && <PctBadge current={ctr} previous={prev.clicks / prev.impressions * 100} />}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {camp.reach > 0 ? camp.reach.toLocaleString() : '—'}
+                          {prev && prev.reach > 0 && camp.reach > 0 && <PctBadge current={camp.reach} previous={prev.reach} />}
+                        </td>
+                        <td className="px-4 py-3 text-right text-gray-700">{freqDisplay}</td>
+                        <td className="px-4 py-3 text-right">
+                          {camp.outbound_clicks > 0 ? camp.outbound_clicks.toLocaleString() : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {camp.video_p25_watched > 0 ? camp.video_p25_watched.toLocaleString() : '—'}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${camp.conversions > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>

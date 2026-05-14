@@ -34,7 +34,7 @@ function toggle<T>(arr: T[], val: T): T[] {
 export default function AlertFilterBar({ filters, onChange }: Props) {
   const { data: clients } = useQuery({
     queryKey: ['clients-list'],
-    queryFn:  db.getClients.bind(db),
+    queryFn: () => db.getClients(),
     staleTime: 300_000,
   })
 

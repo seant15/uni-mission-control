@@ -33,6 +33,12 @@ const TEMPLATE_LABELS: Record<AlertTemplateType, string> = {
   budget_pacing:            'Budget Pacing',
   ctr_anomaly:              'CTR Anomaly',
   zero_conversions:         'Zero Conversions',
+  roas_above_target:        'ROAS Above Target',
+  roas_below_target:        'ROAS Below Target',
+  roas_critical_drop:       'ROAS Critical Drop',
+  cpa_above_target:         'CPA Above Target',
+  zero_spend_technical:     'Zero Spend (technical)',
+  metrics_anomaly:          'Metrics Anomaly',
   custom:                   'Custom Rule',
 }
 

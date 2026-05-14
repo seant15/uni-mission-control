@@ -2,12 +2,10 @@ import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { LayoutDashboard, AlertTriangle, Users, Bell, Database, Settings, Activity, Layers, Megaphone, X, LogOut, MessageSquarePlus, LayoutGrid } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, Bell, Settings, Activity, Layers, Megaphone, X, LogOut, MessageSquarePlus, LayoutGrid } from 'lucide-react'
 import { db } from './lib/api'
-import MarketingOverview from './pages/MarketingOverview'
+import OverviewPage from './pages/OverviewPage'
 import Alerts from './pages/Alerts'
-import ClientsOverview from './pages/ClientsOverview'
-import DataAnalytics from './pages/DataAnalytics'
 import DashboardSettings from './pages/DashboardSettings'
 import RealtimePerformance from './pages/RealtimePerformance'
 import CreativePerformance from './pages/CreativePerformance'
@@ -16,8 +14,16 @@ import Login from './pages/Login'
 import FeedbackWidget from './components/FeedbackWidget'
 import OpenClawChatWidget from './components/OpenClawChatWidget'
 import MissionBoard from './pages/MissionBoard'
+import { RoleGuard } from './components/RoleGuard'
 import { getDashboardSettings, GLOBAL_ANNOUNCEMENT_QUERY_KEY } from './lib/settings'
 import { useAuth } from './contexts/AuthContext'
+import {
+  normalizeRole,
+  canAccessMission,
+  canAccessCreative,
+  canAccessAlerts,
+  canAccessSettings,
+} from './lib/rbac'
 import { Toaster } from 'sonner'
 
 const ANNOUNCEMENT_STYLES = {
@@ -85,6 +91,7 @@ function App() {
 function AppShell() {
   const { appUser, signOut } = useAuth()
   const navigate = useNavigate()
+  const effRole = normalizeRole(appUser?.role)
 
   const { data: openAlertCount } = useQuery({
     queryKey: ['alert-open-count'],
@@ -126,13 +133,17 @@ function AppShell() {
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 px-4">
               Main
             </div>
-            <NavLink to="/" icon={LayoutDashboard} label="UNI Overview" />
-            <NavLink to="/mission" icon={LayoutGrid} label="Mission Board" />
-            <NavLink to="/alerts" icon={AlertTriangle} label="Alerts" badge={openAlertCount ?? 0} />
-            <NavLink to="/clients-overview" icon={Users} label="Clients Overview" />
+            <NavLink to="/" icon={LayoutDashboard} label="Overview" />
+            {canAccessMission(appUser?.role) && (
+              <NavLink to="/mission" icon={LayoutGrid} label="Mission Board" />
+            )}
+            {canAccessAlerts(appUser?.role) && (
+              <NavLink to="/alerts" icon={AlertTriangle} label="Alerts" badge={openAlertCount ?? 0} />
+            )}
             <NavLink to="/realtime-performance" icon={Activity} label="Real-time Performance" />
-            <NavLink to="/data-analytics" icon={Database} label="Account Performance" />
-            <NavLink to="/creative-performance" icon={Layers} label="Creative Performance" />
+            {canAccessCreative(appUser?.role) && (
+              <NavLink to="/creative-performance" icon={Layers} label="Creative Performance" />
+            )}
 
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-6 px-4">
               System
@@ -140,7 +151,9 @@ function AppShell() {
             {appUser?.role === 'super_admin' && (
               <NavLink to="/feedback" icon={MessageSquarePlus} label="Feedback" />
             )}
-            <NavLink to="/dashboard/settings" icon={Settings} label="Settings" />
+            {canAccessSettings(appUser?.role) && (
+              <NavLink to="/dashboard/settings" icon={Settings} label="Settings" />
+            )}
           </nav>
 
           {/* User Profile */}
@@ -155,7 +168,7 @@ function AppShell() {
               </Link>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{appUser?.display_name || 'User'}</p>
-                <p className="text-xs text-slate-400 capitalize">{appUser?.role?.replace('_', ' ') || 'viewer'}</p>
+                <p className="text-xs text-slate-400 capitalize">{effRole.replace('_', ' ')}</p>
               </div>
               <button onClick={handleSignOut} title="Sign out" className="text-slate-500 hover:text-slate-300 transition">
                 <LogOut size={16} />
@@ -174,9 +187,9 @@ function AppShell() {
                 UNI Mission Control
               </span>
               <button
-                onClick={() => navigate('/alerts')}
+                onClick={() => navigate(canAccessAlerts(appUser?.role) ? '/alerts' : '/')}
                 className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                title="View alerts"
+                title={canAccessAlerts(appUser?.role) ? 'View alerts' : 'Home'}
               >
                 <Bell size={18} />
                 {(openAlertCount ?? 0) > 0 && (
@@ -189,15 +202,50 @@ function AppShell() {
           {/* Page Content */}
           <main className="p-8 max-w-7xl mx-auto w-full">
             <Routes>
-              <Route path="/" element={<MarketingOverview />} />
-              <Route path="/mission" element={<MissionBoard />} />
-              <Route path="/alerts" element={<Alerts />} />
-              <Route path="/clients-overview" element={<ClientsOverview />} />
+              <Route path="/" element={<OverviewPage />} />
+              <Route path="/clients-overview" element={<Navigate to="/?tab=by-client" replace />} />
+              <Route path="/data-analytics" element={<Navigate to="/?tab=by-account" replace />} />
+              <Route
+                path="/mission"
+                element={
+                  <RoleGuard allowed={['super_admin', 'media_buyer']}>
+                    <MissionBoard />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/alerts"
+                element={
+                  <RoleGuard allowed={['super_admin', 'media_buyer', 'partner']}>
+                    <Alerts />
+                  </RoleGuard>
+                }
+              />
               <Route path="/realtime-performance" element={<RealtimePerformance />} />
-              <Route path="/data-analytics" element={<DataAnalytics />} />
-              <Route path="/creative-performance" element={<CreativePerformance />} />
-              <Route path="/dashboard/settings" element={<DashboardSettings />} />
-              <Route path="/feedback" element={<FeedbackAdmin />} />
+              <Route
+                path="/creative-performance"
+                element={
+                  <RoleGuard allowed={['super_admin', 'media_buyer']}>
+                    <CreativePerformance />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/dashboard/settings"
+                element={
+                  <RoleGuard allowed={['super_admin', 'media_buyer', 'client']}>
+                    <DashboardSettings />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/feedback"
+                element={
+                  <RoleGuard allowed={['super_admin']}>
+                    <FeedbackAdmin />
+                  </RoleGuard>
+                }
+              />
             </Routes>
           </main>
         </div>

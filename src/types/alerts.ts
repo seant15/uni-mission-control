@@ -21,6 +21,15 @@ export type AlertType =
   | 'impression_collapse'
   | 'conversion_velocity_drop'
   | 'zero_impressions_sustained'
+  | 'budget_pacing'
+  | 'ctr_anomaly'
+  | 'zero_conversions'
+  | 'roas_above_target'
+  | 'roas_below_target'
+  | 'roas_critical_drop'
+  | 'cpa_above_target'
+  | 'zero_spend_technical'
+  | 'metrics_anomaly'
   | 'other'
 
 export type AlertTemplateType =
@@ -34,6 +43,12 @@ export type AlertTemplateType =
   | 'budget_pacing'
   | 'ctr_anomaly'
   | 'zero_conversions'
+  | 'roas_above_target'
+  | 'roas_below_target'
+  | 'roas_critical_drop'
+  | 'cpa_above_target'
+  | 'zero_spend_technical'
+  | 'metrics_anomaly'
   | 'custom'
 
 export type AlertSource = 'auto' | 'rule'

@@ -10,7 +10,14 @@ interface AppUser {
   auth_user_id: string
   display_name: string
   email: string
-  role: 'super_admin' | 'team_member' | 'client_user'
+  role:
+    | 'super_admin'
+    | 'media_buyer'
+    | 'team_member'
+    | 'partner'
+    | 'client'
+    | 'client_user'
+  primary_client_id?: string | null
 }
 
 interface AuthContextValue {

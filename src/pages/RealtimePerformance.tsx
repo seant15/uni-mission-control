@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Activity, AlertTriangle, ChevronDown, TrendingUp, TrendingDown,
@@ -6,6 +6,8 @@ import {
 } from 'lucide-react'
 import { db } from '../lib/api'
 import type { HourWindow } from '../lib/api'
+import { useAuth } from '../contexts/AuthContext'
+import { scopedClientIdFromUser } from '../lib/rbac'
 
 // Timezone display options
 type TzMode = 'utc' | 'browser' | 'account'
@@ -113,6 +115,8 @@ type RTSortField = 'spend' | 'conversions' | 'roas' | 'client_name'
 type RTSortDir = 'asc' | 'desc'
 
 export default function RealtimePerformance() {
+  const { appUser } = useAuth()
+  const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
   const [windowHours, setWindowHours] = useState<HourWindow>(24)
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [showClientDropdown, setShowClientDropdown] = useState(false)
@@ -120,6 +124,18 @@ export default function RealtimePerformance() {
   const [sortField, setSortField] = useState<RTSortField>('spend')
   const [sortDir, setSortDir] = useState<RTSortDir>('desc')
   const [tzMode, setTzMode] = useState<TzMode>('utc')
+  const [hourlySlot, setHourlySlot] = useState(() => Math.floor(Date.now() / 300_000))
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setHourlySlot(Math.floor(Date.now() / 300_000))
+    }, 60_000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    if (scopedClientId) setSelectedClient(scopedClientId)
+  }, [scopedClientId])
 
   const handleSort = (field: RTSortField) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -131,16 +147,20 @@ export default function RealtimePerformance() {
   }
 
   const { data: clients } = useQuery({
-    queryKey: ['clients_table'],
-    queryFn: db.getClients,
+    queryKey: ['clients_table', scopedClientId ?? 'all'],
+    queryFn: () => db.getClients(scopedClientId ? { scopedClientId } : undefined),
     staleTime: 10 * 60 * 1000,
   })
 
   const { data: hourlyData, isLoading, refetch, dataUpdatedAt } = useQuery({
-    queryKey: ['hourly_performance', windowHours, selectedClient],
-    queryFn: () => db.getHourlyPerformance({ windowHours, clientId: selectedClient }),
-    staleTime: 5 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000, // auto-refresh every 5 minutes
+    queryKey: ['hourly_performance', windowHours, selectedClient, scopedClientId ?? '', hourlySlot],
+    queryFn: () => db.getHourlyPerformance({
+      windowHours,
+      clientId: selectedClient,
+      scopedClientId: scopedClientId || undefined,
+    }),
+    staleTime: 60 * 1000,
+    refetchInterval: 60 * 1000,
   })
 
   const { data: recentAlerts } = useQuery({
@@ -321,35 +341,44 @@ export default function RealtimePerformance() {
         </div>
 
         {/* Client filter */}
-        <div className="relative">
-          <label className="text-xs font-medium text-gray-500 uppercase block mb-1">Client</label>
-          <button
-            onClick={() => setShowClientDropdown(!showClientDropdown)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg min-w-[200px]"
-          >
-            <span className="flex-1 text-left">{selectedClientName}</span>
-            <ChevronDown size={16} />
-          </button>
-          {showClientDropdown && (
-            <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-60 overflow-y-auto">
-              <button
-                onClick={() => { setSelectedClient('all'); setShowClientDropdown(false) }}
-                className="w-full text-left px-4 py-2 hover:bg-gray-50"
-              >
-                All Clients
-              </button>
-              {clients?.map((c: any) => (
+        {scopedClientId ? (
+          <div>
+            <label className="text-xs font-medium text-gray-500 uppercase block mb-1">Client</label>
+            <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 border border-slate-200 rounded-lg min-w-[200px] text-sm text-slate-700">
+              {selectedClientName}
+            </div>
+          </div>
+        ) : (
+          <div className="relative">
+            <label className="text-xs font-medium text-gray-500 uppercase block mb-1">Client</label>
+            <button
+              onClick={() => setShowClientDropdown(!showClientDropdown)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg min-w-[200px]"
+            >
+              <span className="flex-1 text-left">{selectedClientName}</span>
+              <ChevronDown size={16} />
+            </button>
+            {showClientDropdown && (
+              <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-60 overflow-y-auto">
                 <button
-                  key={c.id}
-                  onClick={() => { setSelectedClient(c.id); setShowClientDropdown(false) }}
+                  onClick={() => { setSelectedClient('all'); setShowClientDropdown(false) }}
                   className="w-full text-left px-4 py-2 hover:bg-gray-50"
                 >
-                  {c.name}
+                  All Clients
                 </button>
-              ))}
-            </div>
-          )}
-        </div>
+                {clients?.map((c: any) => (
+                  <button
+                    key={c.id}
+                    onClick={() => { setSelectedClient(c.id); setShowClientDropdown(false) }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-50"
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Loading */}

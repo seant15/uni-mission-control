@@ -1,11 +1,30 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { LayoutGrid, Plus, RefreshCw, ExternalLink, Pencil } from 'lucide-react'
+import { LayoutGrid, Plus, RefreshCw, ExternalLink, Pencil, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { db } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { MISSION_COLUMNS, type MissionCardRow, type MissionColumn } from '../types/mission'
+
+function parseClickUpTask(input: string): { id: string; url: string } | null {
+  const raw = input.trim()
+  if (!raw) return null
+  try {
+    const u = new URL(raw.includes('://') ? raw : `https://${raw}`)
+    const m = u.pathname.match(/\/t\/([a-zA-Z0-9]+)/)
+    if (m?.[1]) return { id: m[1], url: u.toString() }
+  } catch {
+    /* ignore */
+  }
+  const m2 = raw.match(/(?:clickup\.com\/[^/]+\/)?t\/([a-zA-Z0-9]+)/i)
+  if (m2?.[1]) {
+    const id = m2[1]
+    const url = raw.includes('://') ? raw : `https://app.clickup.com/t/${id}`
+    return { id, url }
+  }
+  return null
+}
 
 export default function MissionBoard() {
   const { appUser } = useAuth()
@@ -16,6 +35,7 @@ export default function MissionBoard() {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [columnStatus, setColumnStatus] = useState<MissionColumn>('new')
+  const [clickupLinkInput, setClickupLinkInput] = useState('')
 
   const { data: cards = [], isLoading, error, refetch } = useQuery({
     queryKey: ['mission_cards'],
@@ -28,6 +48,7 @@ export default function MissionBoard() {
     setTitle('')
     setBody('')
     setColumnStatus('new')
+    setClickupLinkInput('')
     setModalOpen(true)
   }
 
@@ -37,22 +58,28 @@ export default function MissionBoard() {
     setTitle(card.title)
     setBody(card.body || '')
     setColumnStatus(card.column_status)
+    setClickupLinkInput(card.clickup_task_url?.trim() || '')
     setModalOpen(true)
   }
 
   function closeModal() {
     setModalOpen(false)
     setEditingId(null)
+    setClickupLinkInput('')
   }
 
   const createMutation = useMutation({
     mutationFn: () => {
       if (!appUser?.id) throw new Error('Not signed in')
+      const parsed = parseClickUpTask(clickupLinkInput)
       return db.createMissionCard({
         title: title.trim() || 'Untitled',
         body: body.trim(),
         column_status: columnStatus,
         created_by: appUser.id,
+        ...(parsed
+          ? { clickup_task_id: parsed.id, clickup_task_url: parsed.url, synced_from_clickup: false }
+          : {}),
       })
     },
     onSuccess: () => {
@@ -66,11 +93,20 @@ export default function MissionBoard() {
   const saveEditMutation = useMutation({
     mutationFn: () => {
       if (!editingId) throw new Error('No card selected')
-      return db.updateMissionCard(editingId, {
+      const parsed = parseClickUpTask(clickupLinkInput)
+      const patch: Parameters<typeof db.updateMissionCard>[1] = {
         title: title.trim() || 'Untitled',
         body: body.trim(),
         column_status: columnStatus,
-      })
+      }
+      if (parsed) {
+        patch.clickup_task_id = parsed.id
+        patch.clickup_task_url = parsed.url
+      } else if (!clickupLinkInput.trim()) {
+        patch.clickup_task_id = null
+        patch.clickup_task_url = null
+      }
+      return db.updateMissionCard(editingId, patch)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mission_cards'] })
@@ -155,7 +191,21 @@ export default function MissionBoard() {
                     key={card.id}
                     className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:border-blue-200 transition-colors"
                   >
-                    <div className="font-medium text-gray-900 text-sm leading-snug">{card.title}</div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-medium text-gray-900 text-sm leading-snug flex-1 min-w-0">{card.title}</div>
+                      {card.synced_from_clickup && card.clickup_task_url && (
+                        <a
+                          href={card.clickup_task_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold px-2 py-0.5 hover:bg-purple-200"
+                          title="Open in ClickUp"
+                        >
+                          <Zap size={10} />
+                          ClickUp
+                        </a>
+                      )}
+                    </div>
                     {card.body && (
                       <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap line-clamp-6">{card.body}</p>
                     )}
@@ -224,6 +274,16 @@ export default function MissionBoard() {
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none"
                 placeholder="Details…"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Link ClickUp task (optional)</label>
+              <input
+                value={clickupLinkInput}
+                onChange={e => setClickupLinkInput(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                placeholder="https://app.clickup.com/t/…"
+              />
+              <p className="text-[11px] text-gray-500 mt-1">Paste a ClickUp task URL to store task id and link on this card.</p>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Column</label>

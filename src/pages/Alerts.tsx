@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { db } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
+import { canMutateAlerts } from '../lib/rbac'
 import AlertSummaryBar from './Alerts/AlertSummaryBar'
 import AlertFilterBar from './Alerts/AlertFilterBar'
 import AlertGroupList from './Alerts/AlertGroupList'
@@ -60,7 +61,7 @@ export default function Alerts() {
   const [page,         setPage]         = useState(1)
   const [columns,      setColumns]      = useState<AlertColumnDef[]>(DEFAULT_COLS)
 
-  const isAdmin = ['super_admin', 'team_member'].includes(appUser?.role ?? '')
+  const canManageRules = canMutateAlerts(appUser?.role)
 
   // Load saved column preferences on mount
   useEffect(() => {
@@ -124,7 +125,7 @@ export default function Alerts() {
           <p className="text-sm text-gray-400 mt-0.5">Performance monitoring across all clients</p>
         </div>
         <div className="flex border-b border-gray-200">
-          {TABS.filter(t => t === 'Alerts' || isAdmin).map(tab => (
+          {TABS.filter(t => t === 'Alerts' || canManageRules).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -185,6 +186,7 @@ export default function Alerts() {
               currentUserId={appUser?.id ?? ''}
               currentUserRole={appUser?.role ?? 'client_user'}
               visibleColumns={visibleColumns}
+              readOnly={!canManageRules}
             />
           )}
 

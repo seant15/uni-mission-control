@@ -3,7 +3,13 @@
 // Mirrors the DB schema in 20260312_user_permission_system.sql
 // ============================================================
 
-export type AppRole = 'super_admin' | 'team_member' | 'client_user'
+export type AppRole =
+  | 'super_admin'
+  | 'media_buyer'
+  | 'team_member'
+  | 'partner'
+  | 'client'
+  | 'client_user'
 export type AccessLevel = 'viewer' | 'editor'
 
 export interface AppUser {
@@ -95,12 +101,18 @@ export const MINIMAL_ACCESS: ClientGranularAccess = {
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   super_admin: 'Super Admin',
+  media_buyer: 'Media Buyer',
   team_member: 'Team Member',
+  partner: 'Partner',
+  client: 'Client',
   client_user: 'Client',
 }
 
 export const ROLE_COLORS: Record<AppRole, string> = {
   super_admin: 'bg-purple-100 text-purple-700',
+  media_buyer: 'bg-blue-100 text-blue-700',
   team_member: 'bg-blue-100 text-blue-700',
+  partner: 'bg-amber-100 text-amber-800',
+  client: 'bg-green-100 text-green-700',
   client_user: 'bg-green-100 text-green-700',
 }

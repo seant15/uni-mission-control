@@ -7,9 +7,10 @@ import type { AlertNote } from '../../types/alerts'
 interface Props {
   alertId: string
   currentUserId: string
+  readOnly?: boolean
 }
 
-export default function NoteThread({ alertId, currentUserId }: Props) {
+export default function NoteThread({ alertId, currentUserId, readOnly = false }: Props) {
   const [content, setContent]       = useState('')
   const [actionTaken, setActionTaken] = useState('')
   const queryClient = useQueryClient()
@@ -67,7 +68,7 @@ export default function NoteThread({ alertId, currentUserId }: Props) {
                 </div>
                 <p className="text-sm text-gray-700 mt-0.5">{note.content}</p>
               </div>
-              {note.user_id === currentUserId && (
+              {note.user_id === currentUserId && !readOnly && (
                 <button
                   onClick={() => deleteMutation.mutate(note.id)}
                   className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-all flex-shrink-0 mt-1"
@@ -86,6 +87,7 @@ export default function NoteThread({ alertId, currentUserId }: Props) {
       )}
 
       {/* Add note form */}
+      {!readOnly && (
       <form onSubmit={handleSubmit} className="space-y-2 pt-2 border-t border-gray-100">
         <input
           type="text"
@@ -111,6 +113,7 @@ export default function NoteThread({ alertId, currentUserId }: Props) {
           </button>
         </div>
       </form>
+      )}
     </div>
   )
 }

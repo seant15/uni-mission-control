@@ -7,11 +7,13 @@ import { toast } from 'sonner'
 import { db } from '../../lib/api'
 import NoteThread from './NoteThread'
 import type { Alert } from '../../types/alerts'
+import { canMutateAlerts } from '../../lib/rbac'
 
 interface Props {
   alert: Alert
   currentUserId: string
   currentUserRole: string
+  readOnly?: boolean
 }
 
 const SNOOZE_PRESETS = [
@@ -33,14 +35,14 @@ function getPlatformDeepLink(alert: Alert): string | null {
   return null
 }
 
-export default function AlertActionPanel({ alert, currentUserId, currentUserRole }: Props) {
+export default function AlertActionPanel({ alert, currentUserId, currentUserRole, readOnly = false }: Props) {
   const [showSnooze,   setShowSnooze]   = useState(false)
   const [showAssign,   setShowAssign]   = useState(false)
   const [customSnooze, setCustomSnooze] = useState('')
   const [showNotes,    setShowNotes]    = useState(true)
   const queryClient = useQueryClient()
 
-  const isAdmin = ['super_admin', 'team_member'].includes(currentUserRole)
+  const canOperate = !readOnly && canMutateAlerts(currentUserRole)
 
   const { data: teamMembers } = useQuery({
     queryKey: ['team-members'],
@@ -128,7 +130,7 @@ export default function AlertActionPanel({ alert, currentUserId, currentUserRole
     <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 space-y-4">
       {/* Quick actions row */}
       <div className="flex items-center gap-2 flex-wrap">
-        {currentUserId && (
+        {canOperate && currentUserId && (
           <button
             type="button"
             onClick={() => missionCardMutation.mutate()}
@@ -139,7 +141,7 @@ export default function AlertActionPanel({ alert, currentUserId, currentUserRole
           </button>
         )}
 
-        {!isTerminal && (
+        {canOperate && !isTerminal && (
           <button
             onClick={() => resolveMutation.mutate()}
             disabled={resolveMutation.isPending}
@@ -149,7 +151,7 @@ export default function AlertActionPanel({ alert, currentUserId, currentUserRole
           </button>
         )}
 
-        {!isTerminal && (
+        {canOperate && !isTerminal && (
           <div className="relative">
             <button
               onClick={() => setShowSnooze(!showSnooze)}
@@ -191,7 +193,7 @@ export default function AlertActionPanel({ alert, currentUserId, currentUserRole
           </div>
         )}
 
-        {isAdmin && !isTerminal && (
+        {canOperate && !isTerminal && (
           <div className="relative">
             <button
               onClick={() => setShowAssign(!showAssign)}
@@ -215,7 +217,7 @@ export default function AlertActionPanel({ alert, currentUserId, currentUserRole
           </div>
         )}
 
-        {isAdmin && !isTerminal && (
+        {canOperate && !isTerminal && (
           <button
             onClick={() => dismissMutation.mutate()}
             disabled={dismissMutation.isPending}
@@ -225,7 +227,7 @@ export default function AlertActionPanel({ alert, currentUserId, currentUserRole
           </button>
         )}
 
-        {isTerminal && (
+        {canOperate && isTerminal && (
           <button
             onClick={() => reopenMutation.mutate()}
             disabled={reopenMutation.isPending}
@@ -256,7 +258,7 @@ export default function AlertActionPanel({ alert, currentUserId, currentUserRole
           Notes {showNotes ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
         </button>
         {showNotes && (
-          <NoteThread alertId={alert.id} currentUserId={currentUserId} />
+          <NoteThread alertId={alert.id} currentUserId={currentUserId} readOnly={readOnly} />
         )}
       </div>
     </div>

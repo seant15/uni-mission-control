@@ -101,3 +101,7 @@
 ---
 
 （本文件路径：`uni-mission-control/docs/PROMPT_ads_data_sync_ab_cron.md`，便于与 Mission Control 仓库一起版本管理；复制正文给 ads_data_sync Agent 即可。）
+
+## OpenClaw 工作区落地（与 `ads_data_sync` 同步）
+
+合并需求与实现状态见：`ads_data_sync/docs/BACKEND_CONSOLIDATED_REQUIREMENTS.md`。A/B 定时与 cron 样例见：`ads_data_sync/docs/AB_REPORTS_CRON.md`。VPS 可用 `execution/n8n_ssh_wrapper.sh` 的 `ab_reports` / `ab_reports_daily` 动作。

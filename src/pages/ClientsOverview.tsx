@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   TrendingUp, DollarSign, Target, Users, AlertTriangle,
@@ -7,6 +7,8 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { ACTIVE_CLIENT_STATUSES } from '../lib/api'
+import { useAuth } from '../contexts/AuthContext'
+import { scopedClientIdFromUser } from '../lib/rbac'
 import type { TimePeriod } from '../types'
 
 type ChartMetric = 'total_spend' | 'total_revenue' | 'roas' | 'conversions'
@@ -85,7 +87,9 @@ function aggregateByClient(rows: any[], clients: any[]) {
   }).filter(a => a.total_spend > 0)
 }
 
-export default function ClientsOverview() {
+export default function ClientsOverview({ embedded = false }: { embedded?: boolean }) {
+  const { appUser } = useAuth()
+  const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
   const [period, setPeriod] = useState<TimePeriod>('30d')
   const [selectedPlatform, setSelectedPlatform] = useState('all')
   const [chartMetric, setChartMetric] = useState<ChartMetric>('total_spend')
@@ -97,7 +101,7 @@ export default function ClientsOverview() {
   const fetchPerf = async (start: string, end: string) => {
     const { data: act, error: e1 } = await supabase.from('clients').select('id').in('status', [...ACTIVE_CLIENT_STATUSES])
     if (e1) throw new Error(e1.message)
-    const activeIds = (act ?? []).map(c => c.id)
+    const activeIds = ((act ?? []).map(c => c.id)).filter(id => !scopedClientId || id === scopedClientId)
     if (activeIds.length === 0) return []
 
     let q = supabase.from('daily_performance')
@@ -111,21 +115,23 @@ export default function ClientsOverview() {
   }
 
   const { data: clients, isLoading: cLoading, error: cError } = useQuery({
-    queryKey: ['clients'],
+    queryKey: ['clients', scopedClientId ?? 'all'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('clients').select('id, name, status, business_type, currency, currency_symbol').in('status', [...ACTIVE_CLIENT_STATUSES]).order('name')
+      let q = supabase.from('clients').select('id, name, status, business_type, currency, currency_symbol').in('status', [...ACTIVE_CLIENT_STATUSES]).order('name')
+      if (scopedClientId) q = q.eq('id', scopedClientId)
+      const { data, error } = await q
       if (error) throw new Error(error.message)
       return data || []
     },
   })
 
   const { data: curRows, isLoading: perfLoading, error: perfError } = useQuery({
-    queryKey: ['co_cur', period, selectedPlatform],
+    queryKey: ['co_cur', period, selectedPlatform, scopedClientId ?? 'all'],
     queryFn: () => fetchPerf(dates.cur.start, dates.cur.end),
   })
 
   const { data: prevRows } = useQuery({
-    queryKey: ['co_prev', period, selectedPlatform],
+    queryKey: ['co_prev', period, selectedPlatform, scopedClientId ?? 'all'],
     queryFn: () => fetchPerf(dates.prev.start, dates.prev.end),
   })
 
@@ -194,14 +200,16 @@ export default function ClientsOverview() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <Users className="text-blue-600" />
-            Clients Overview
-          </h1>
-          <p className="text-gray-500 mt-1">Account performance across all clients</p>
-        </div>
-        <div className="flex items-center gap-2">
+        {!embedded && (
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+              <Users className="text-blue-600" />
+              Clients Overview
+            </h1>
+            <p className="text-gray-500 mt-1">Account performance across all clients</p>
+          </div>
+        )}
+        <div className={`flex items-center gap-2 ${embedded ? 'ml-auto' : ''}`}>
           {(['7d', '30d', '90d', '1yr'] as TimePeriod[]).map(p => (
             <button key={p} onClick={() => setPeriod(p)}
               className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
@@ -8,6 +8,8 @@ import {
 } from 'lucide-react'
 import { db } from '../lib/api'
 import { getDashboardSettings } from '../lib/settings'
+import { useAuth } from '../contexts/AuthContext'
+import { scopedClientIdFromUser } from '../lib/rbac'
 
 type Period = '7d' | '30d' | '90d'
 
@@ -78,7 +80,9 @@ function MetricCard({ title, value, change, icon: Icon, color, invertTrend = fal
   )
 }
 
-export default function MarketingOverview() {
+export default function MarketingOverview({ embedded = false }: { embedded?: boolean }) {
+  const { appUser } = useAuth()
+  const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
   const [period, setPeriod] = useState<Period>('30d')
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
@@ -89,6 +93,13 @@ export default function MarketingOverview() {
   const clientDropdownRef = useRef<HTMLDivElement>(null)
 
   const ranges = getDateRanges(period)
+
+  useEffect(() => {
+    if (scopedClientId) {
+      setSelectedClient(scopedClientId)
+      setSelectedAdAccount('')
+    }
+  }, [scopedClientId])
 
   useEffect(() => {
     getDashboardSettings('default_user').then(loaded => {
@@ -107,8 +118,8 @@ export default function MarketingOverview() {
   }, [])
 
   const { data: clientsFromTable } = useQuery({
-    queryKey: ['clients_table'],
-    queryFn: db.getClients,
+    queryKey: ['clients_table', scopedClientId ?? 'all'],
+    queryFn: () => db.getClients(scopedClientId ? { scopedClientId } : undefined),
     staleTime: 10 * 60 * 1000,
   })
 
@@ -119,8 +130,12 @@ export default function MarketingOverview() {
   })
 
   const { data: adAccountsFromDB } = useQuery({
-    queryKey: ['ad_accounts', selectedClient, selectedPlatform],
-    queryFn: () => db.getAdAccounts({ clientId: selectedClient, platform: selectedPlatform }),
+    queryKey: ['ad_accounts', selectedClient, selectedPlatform, scopedClientId ?? ''],
+    queryFn: () => db.getAdAccounts({
+      clientId: selectedClient,
+      platform: selectedPlatform,
+      scopedClientId: scopedClientId || undefined,
+    }),
     staleTime: 10 * 60 * 1000,
   })
 
@@ -143,25 +158,27 @@ export default function MarketingOverview() {
   }, [selectedClient, selectedAdAccount, clients, adAccountsFromDB, businessTypeManual])
 
   const { data: curRows, isLoading, error } = useQuery({
-    queryKey: ['mkt_cur', period, selectedClient, selectedPlatform, selectedAdAccount],
+    queryKey: ['mkt_cur', period, selectedClient, selectedPlatform, selectedAdAccount, scopedClientId ?? ''],
     queryFn: () => db.getDailyPerformance({
       clientId: selectedClient,
       platform: selectedPlatform,
       adAccountId: selectedAdAccount || undefined,
       startDate: ranges.current.start,
       endDate: ranges.current.end,
+      scopedClientId: scopedClientId || undefined,
     }),
     refetchOnMount: 'always',
   })
 
   const { data: prevRows } = useQuery({
-    queryKey: ['mkt_prev', period, selectedClient, selectedPlatform, selectedAdAccount],
+    queryKey: ['mkt_prev', period, selectedClient, selectedPlatform, selectedAdAccount, scopedClientId ?? ''],
     queryFn: () => db.getDailyPerformance({
       clientId: selectedClient,
       platform: selectedPlatform,
       adAccountId: selectedAdAccount || undefined,
       startDate: ranges.previous.start,
       endDate: ranges.previous.end,
+      scopedClientId: scopedClientId || undefined,
     }),
     refetchOnMount: 'always',
   })
@@ -180,6 +197,19 @@ export default function MarketingOverview() {
 
   const cur = curRows ? aggregate(curRows) : null
   const prev = prevRows ? aggregate(prevRows) : null
+
+  const dailyTzFootnote = useMemo(() => {
+    const rows = curRows || []
+    if (rows.length === 0) return null
+    const tzs = [...new Set(rows.map((r: { data_timezone?: string | null }) => r.data_timezone).filter(Boolean) as string[])]
+    if (tzs.length === 1) {
+      return `Daily totals use reporting timezone ${tzs[0]} on rows from daily sync. Days filled only from hourly rollup use UTC hour buckets and may show no timezone until daily sync arrives.`
+    }
+    if (tzs.length > 1) {
+      return `Daily totals mix reporting timezones (${tzs.slice(0, 4).join(', ')}${tzs.length > 4 ? ', …' : ''}). Hourly gap-fill uses UTC buckets.`
+    }
+    return 'When daily sync lags, some days are summed from hourly UTC slices; they may lack data_timezone until the daily row lands.'
+  }, [curRows])
 
   const spendChange = cur && prev ? pctChange(cur.spend, prev.spend) : undefined
   const ctrChange = cur && prev ? pctChange(cur.ctr, prev.ctr) : undefined
@@ -266,11 +296,13 @@ export default function MarketingOverview() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">UNI Overview</h1>
-          <p className="text-gray-500 mt-1">Cross-platform performance summary — filters match Account Performance</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+        {!embedded && (
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">UNI Overview</h1>
+            <p className="text-gray-500 mt-1">Cross-platform performance summary — filters match Account Performance</p>
+          </div>
+        )}
+        <div className={`flex flex-wrap items-center gap-2 ${embedded ? '' : 'lg:ml-auto'}`}>
           <div className="flex rounded-lg border border-gray-200 p-0.5">
             <button
               type="button"
@@ -290,40 +322,46 @@ export default function MarketingOverview() {
           {businessTypeManual && (
             <button type="button" onClick={() => setBusinessTypeManual(false)} className="text-xs text-blue-500 underline">Auto</button>
           )}
-          <div className="relative" ref={clientDropdownRef}>
-            <button
-              type="button"
-              onClick={() => setShowClientDropdown(!showClientDropdown)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm min-w-[160px]"
-            >
+          {scopedClientId ? (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-700 min-w-[160px]">
               <span className="flex-1 text-left truncate">{selectedClientName}</span>
-              <ChevronDown size={14} />
-            </button>
-            {showClientDropdown && (
-              <div className="absolute top-full right-0 mt-1 w-full min-w-[200px] bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-56 overflow-y-auto">
-                <button
-                  type="button"
-                  onClick={() => { setSelectedClient('all'); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm"
-                >
-                  All Clients
-                </button>
-                {clients.map(client => (
+            </div>
+          ) : (
+            <div className="relative" ref={clientDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setShowClientDropdown(!showClientDropdown)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm min-w-[160px]"
+              >
+                <span className="flex-1 text-left truncate">{selectedClientName}</span>
+                <ChevronDown size={14} />
+              </button>
+              {showClientDropdown && (
+                <div className="absolute top-full right-0 mt-1 w-full min-w-[200px] bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-56 overflow-y-auto">
                   <button
-                    key={client.id}
                     type="button"
-                    onClick={() => { setSelectedClient(client.id); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-50"
+                    onClick={() => { setSelectedClient('all'); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm"
                   >
-                    <div className="text-sm font-medium">{client.name}</div>
-                    {client.business_type && (
-                      <div className="text-xs text-gray-500">{client.business_type === 'leadgen' ? 'Lead Gen' : 'eCommerce'}</div>
-                    )}
+                    All Clients
                   </button>
-                ))}
-              </div>
-            )}
-          </div>
+                  {clients.map(client => (
+                    <button
+                      key={client.id}
+                      type="button"
+                      onClick={() => { setSelectedClient(client.id); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }}
+                      className="w-full text-left px-4 py-2 hover:bg-gray-50"
+                    >
+                      <div className="text-sm font-medium">{client.name}</div>
+                      {client.business_type && (
+                        <div className="text-xs text-gray-500">{client.business_type === 'leadgen' ? 'Lead Gen' : 'eCommerce'}</div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <select
             value={selectedPlatform}
             onChange={(e) => { setSelectedPlatform(e.target.value); setSelectedAdAccount('') }}
@@ -444,6 +482,10 @@ export default function MarketingOverview() {
                 </table>
               </div>
             </div>
+          )}
+
+          {dailyTzFootnote && (
+            <p className="text-xs text-gray-500 max-w-4xl leading-relaxed">{dailyTzFootnote}</p>
           )}
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

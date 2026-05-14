@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { X, AlertTriangle } from 'lucide-react'
 import { db } from '../../lib/api'
@@ -9,12 +9,18 @@ import type { AlertRule, AlertTemplateType, AlertSeverity } from '../../types/al
 interface ConditionField {
   key: string
   label: string
-  type: 'number' | 'select'
+  type: 'number' | 'select' | 'textarea'
   options?: { value: string; label: string }[]
   placeholder?: string
   hint?: string
   defaultValue: string | number
 }
+
+/** Default `conditions.metrics` for metrics_anomaly — must match generate_alerts.py shape: { metric, threshold (%), direction }. */
+const DEFAULT_METRICS_ANOMALY_JSON = `[
+  {"metric":"ctr","threshold":30,"direction":"under"},
+  {"metric":"cpc","threshold":35,"direction":"over"}
+]`
 
 const TEMPLATE_CONDITION_FIELDS: Record<AlertTemplateType, ConditionField[]> = {
   spend_spike: [
@@ -52,6 +58,130 @@ const TEMPLATE_CONDITION_FIELDS: Record<AlertTemplateType, ConditionField[]> = {
     { key: 'min_spend',  label: 'Min Cumulative Spend ($)',  type: 'number', placeholder: '20', hint: 'Only fire if today spend exceeds this before triggering', defaultValue: 20 },
     { key: 'min_hour',   label: 'Safe Until Hour (local)',   type: 'number', placeholder: '14', hint: 'Do not fire before this hour of the day (conversions need time to register)', defaultValue: 14 },
   ],
+  roas_above_target: [
+    {
+      key: 'cooldown_hours',
+      label: 'Cooldown (hours)',
+      type: 'number',
+      placeholder: '24',
+      hint: 'generate_alerts.py: hours before same alert_type can fire again. Spend floor uses Minimum daily spend below (stored as min_spend_threshold; cond_min_spend prefers it over min_spend).',
+      defaultValue: 24,
+    },
+  ],
+  roas_below_target: [
+    {
+      key: 'cooldown_hours',
+      label: 'Cooldown (hours)',
+      type: 'number',
+      placeholder: '12',
+      hint: 'generate_alerts.py: re-fire suppression. Fires when today ROAS < clients.target_roas (ecommerce) and spend meets cond_min_spend (defaults 100 if unset).',
+      defaultValue: 12,
+    },
+  ],
+  roas_critical_drop: [
+    {
+      key: 'threshold_ratio',
+      label: 'Critical threshold (× target ROAS)',
+      type: 'number',
+      placeholder: '0.5',
+      hint: 'generate_alerts.py: alert when today ROAS < target_roas × this value (default 0.5).',
+      defaultValue: 0.5,
+    },
+    {
+      key: 'cooldown_hours',
+      label: 'Cooldown (hours)',
+      type: 'number',
+      placeholder: '6',
+      hint: 'generate_alerts.py: re-fire suppression window.',
+      defaultValue: 6,
+    },
+  ],
+  cpa_above_target: [
+    {
+      key: 'min_conversions',
+      label: 'Min conversions (today)',
+      type: 'number',
+      placeholder: '3',
+      hint: 'generate_alerts.py: require at least this many conversions before comparing CPA to clients.target_cpa.',
+      defaultValue: 3,
+    },
+    {
+      key: 'cooldown_hours',
+      label: 'Cooldown (hours)',
+      type: 'number',
+      placeholder: '12',
+      hint: 'generate_alerts.py: re-fire suppression.',
+      defaultValue: 12,
+    },
+  ],
+  zero_spend_technical: [
+    {
+      key: 'duration_hours',
+      label: 'Consecutive zero-spend hours',
+      type: 'number',
+      placeholder: '6',
+      hint: 'generate_alerts.py: trailing run of $0 cost hours required to fire.',
+      defaultValue: 6,
+    },
+    {
+      key: 'min_expected_daily_spend',
+      label: 'Min baseline avg daily spend ($)',
+      type: 'number',
+      placeholder: '20',
+      hint: 'generate_alerts.py: account_daily_baselines.avg_daily_cost must be at least this (active account filter).',
+      defaultValue: 20,
+    },
+    {
+      key: 'tc_min_hour',
+      label: 'Business window start (local hour)',
+      type: 'number',
+      placeholder: '8',
+      hint: 'Saved as conditions.time_constraints.min_hour_of_day.',
+      defaultValue: 8,
+    },
+    {
+      key: 'tc_max_hour',
+      label: 'Business window end (local hour)',
+      type: 'number',
+      placeholder: '20',
+      hint: 'Saved as conditions.time_constraints.max_hour_of_day.',
+      defaultValue: 20,
+    },
+    {
+      key: 'cooldown_hours',
+      label: 'Cooldown (hours)',
+      type: 'number',
+      placeholder: '12',
+      hint: 'generate_alerts.py: re-fire suppression.',
+      defaultValue: 12,
+    },
+  ],
+  metrics_anomaly: [
+    {
+      key: 'min_impressions',
+      label: 'Min impressions (today)',
+      type: 'number',
+      placeholder: '1000',
+      hint: 'generate_alerts.py: cumulative impressions gate.',
+      defaultValue: 1000,
+    },
+    {
+      key: 'cooldown_hours',
+      label: 'Cooldown (hours)',
+      type: 'number',
+      placeholder: '8',
+      hint: 'generate_alerts.py: re-fire suppression.',
+      defaultValue: 8,
+    },
+    {
+      key: 'metrics_json',
+      label: 'Metrics (JSON array)',
+      type: 'textarea',
+      placeholder: '',
+      hint: 'generate_alerts.py: each object { metric: ctr|cpc|cpm, threshold: number as percent e.g. 30, direction: under|over }. Stored as conditions.metrics.',
+      defaultValue: DEFAULT_METRICS_ANOMALY_JSON,
+    },
+  ],
   custom: [],
 }
 
@@ -66,6 +196,12 @@ const TEMPLATE_LABELS: Record<AlertTemplateType, string> = {
   budget_pacing:            'Budget Pacing (daily)',
   ctr_anomaly:              'CTR Anomaly (daily)',
   zero_conversions:         'Zero Conversions with Spend (daily)',
+  roas_above_target:      'ROAS Above Target',
+  roas_below_target:      'ROAS Below Target',
+  roas_critical_drop:     'ROAS Critical Drop',
+  cpa_above_target:       'CPA Above Target',
+  zero_spend_technical:   'Zero Spend (technical)',
+  metrics_anomaly:        'Metrics Anomaly',
   custom:                   'Custom Rule',
 }
 
@@ -80,7 +216,43 @@ const TEMPLATE_DESCRIPTIONS: Record<AlertTemplateType, string> = {
   budget_pacing:            'Fires when today\'s spend is significantly above or below the expected pace, based on 30-day avg × time-of-day weight.',
   ctr_anomaly:              'Fires when today\'s overall CTR drops well below the 30-day daily baseline.',
   zero_conversions:         'Fires once per day when spend is high but conversions are 0 past the safe window.',
+  roas_above_target:        'Ecommerce only: fires when today cumulative ROAS > clients.target_roas and spend passes cond_min_spend (see Minimum daily spend). Engine: ads_data_sync/execution/generate_alerts.py.',
+  roas_below_target:        'Ecommerce only: fires when today ROAS < target (and critical-drop did not fire). Same spend gate as generate_alerts.py.',
+  roas_critical_drop:       'Ecommerce only: fires when today ROAS < target_roas × conditions.threshold_ratio (default 0.5).',
+  cpa_above_target:         'Lead gen only: fires when today CPA > clients.target_cpa with enough conversions (conditions.min_conversions).',
+  zero_spend_technical:     'Consecutive zero-spend hours during conditions.time_constraints, for accounts with avg_daily_cost ≥ min_expected_daily_spend. generate_alerts.py.',
+  metrics_anomaly:          'CTR/CPC/CPM vs 7-day daily_performance average per conditions.metrics[]. Engine: generate_alerts.py evaluate_metrics_anomaly.',
   custom:                   'Define your own conditions using the fields below.',
+}
+
+function flattenConditionsForForm(
+  conditions: Record<string, unknown> | undefined,
+  templateType: AlertTemplateType
+): Record<string, string> {
+  const c = conditions ?? {}
+  const fields = TEMPLATE_CONDITION_FIELDS[templateType]
+  const out: Record<string, string> = {}
+  for (const f of fields) {
+    if (f.key === 'metrics_json') {
+      const m = c.metrics
+      out[f.key] = Array.isArray(m) ? JSON.stringify(m, null, 2) : String(f.defaultValue)
+      continue
+    }
+    if (f.key === 'tc_min_hour') {
+      const tc = c.time_constraints as Record<string, unknown> | undefined
+      out[f.key] = String(tc?.min_hour_of_day ?? f.defaultValue)
+      continue
+    }
+    if (f.key === 'tc_max_hour') {
+      const tc = c.time_constraints as Record<string, unknown> | undefined
+      out[f.key] = String(tc?.max_hour_of_day ?? f.defaultValue)
+      continue
+    }
+    const v = c[f.key]
+    if (v !== undefined && v !== null && v !== '') out[f.key] = String(v)
+    else out[f.key] = String(f.defaultValue)
+  }
+  return out
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -107,30 +279,56 @@ export default function RuleBuilderModal({ editRule, currentUserId, onClose }: P
   const [dateRangeStart, setDateRangeStart] = useState(editRule?.date_range_start ?? '')
   const [dateRangeEnd,   setDateRangeEnd]   = useState(editRule?.date_range_end ?? '')
   const [errorMsg,       setErrorMsg]       = useState<string | null>(null)
+  const [minSpendThreshold, setMinSpendThreshold] = useState(() => {
+    const c = editRule?.conditions as Record<string, unknown> | undefined
+    const m = c?.min_spend_threshold
+    return m !== undefined && m !== null && String(m).trim() !== '' ? String(m) : '5'
+  })
+  const [slackRuleNotify, setSlackRuleNotify] = useState(false)
+  const [slackRuleUrl, setSlackRuleUrl] = useState('')
+  const [slackRuleChannel, setSlackRuleChannel] = useState('')
 
   // Condition values keyed by field key
   const [condValues, setCondValues] = useState<Record<string, string>>(() => {
     if (editRule) {
-      return Object.fromEntries(
-        Object.entries(editRule.conditions as Record<string, unknown>).map(([k, v]) => [k, String(v)])
-      )
+      return flattenConditionsForForm(editRule.conditions as Record<string, unknown>, editRule.template_type)
     }
-    // Pre-fill from template defaults
     const fields = TEMPLATE_CONDITION_FIELDS['zero_spend']
     return Object.fromEntries(fields.map(f => [f.key, String(f.defaultValue)]))
   })
 
   const { data: clients } = useQuery({
     queryKey: ['clients-list'],
-    queryFn:  db.getClients.bind(db),
+    queryFn: () => db.getClients(),
     staleTime: 300_000,
   })
+
+  const { data: delivery } = useQuery({
+    queryKey: ['client-alert-delivery', clientId],
+    queryFn: () => db.getClientAlertDelivery(clientId),
+    enabled: !!clientId,
+  })
+
+  useEffect(() => {
+    if (!delivery) {
+      setSlackRuleNotify(false)
+      setSlackRuleUrl('')
+      setSlackRuleChannel('')
+      return
+    }
+    setSlackRuleNotify(!!delivery.slack_notify_alert_rules)
+    setSlackRuleUrl(delivery.slack_webhook_url ?? '')
+    setSlackRuleChannel(delivery.slack_channel ?? '')
+  }, [delivery])
 
   const SEVERITY_DEFAULTS: Record<AlertTemplateType, AlertSeverity> = {
     spend_spike: 'high', spend_dead_zone: 'high', ctr_cliff: 'medium',
     impression_collapse: 'high', conversion_velocity_drop: 'high',
     zero_impressions_sustained: 'critical', zero_spend: 'critical',
-    budget_pacing: 'medium', ctr_anomaly: 'medium', zero_conversions: 'high', custom: 'medium',
+    budget_pacing: 'medium', ctr_anomaly: 'medium', zero_conversions: 'high',
+    roas_above_target: 'low', roas_below_target: 'high', roas_critical_drop: 'critical',
+    cpa_above_target: 'high', zero_spend_technical: 'high', metrics_anomaly: 'medium',
+    custom: 'medium',
   }
 
   function applyTemplate(tt: AlertTemplateType) {
@@ -151,10 +349,39 @@ export default function RuleBuilderModal({ editRule, currentUserId, onClose }: P
       // Build conditions object — parse numbers where possible
       const condObj: Record<string, unknown> = {}
       for (const f of fields) {
-        const raw = condValues[f.key] ?? String(f.defaultValue)
+        const raw = (condValues[f.key] ?? String(f.defaultValue)).trim()
+        if (f.type === 'textarea' && f.key === 'metrics_json') {
+          try {
+            const parsed = JSON.parse(raw || '[]')
+            if (!Array.isArray(parsed)) throw new Error('metrics must be a JSON array')
+            condObj.metrics = parsed
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            throw new Error(`Invalid metrics JSON: ${msg}`)
+          }
+          continue
+        }
+        if (f.type === 'textarea') {
+          condObj[f.key] = raw
+          continue
+        }
         const num = parseFloat(raw)
-        condObj[f.key] = isNaN(num) ? raw : num
+        condObj[f.key] = raw === '' ? f.defaultValue : (isNaN(num) ? raw : num)
       }
+
+      if (templateType === 'zero_spend_technical') {
+        const minH = Number(condObj.tc_min_hour)
+        const maxH = Number(condObj.tc_max_hour)
+        condObj.time_constraints = {
+          min_hour_of_day: Number.isFinite(minH) ? minH : 8,
+          max_hour_of_day: Number.isFinite(maxH) ? maxH : 20,
+        }
+        delete condObj.tc_min_hour
+        delete condObj.tc_max_hour
+      }
+
+      const minNum = parseFloat(minSpendThreshold)
+      condObj.min_spend_threshold = isNaN(minNum) ? 5 : minNum
 
       const payload: Omit<AlertRule, 'id' | 'created_at' | 'updated_at'> = {
         name:             name.trim(),
@@ -176,9 +403,23 @@ export default function RuleBuilderModal({ editRule, currentUserId, onClose }: P
       } else {
         await db.createAlertRule(payload)
       }
+
+      if (clientId) {
+        const prev = await db.getClientAlertDelivery(clientId)
+        await db.upsertClientAlertDelivery({
+          client_id: clientId,
+          notify_in_app: prev?.notify_in_app ?? true,
+          slack_webhook_url: slackRuleNotify ? slackRuleUrl.trim() || null : prev?.slack_webhook_url ?? null,
+          slack_channel: slackRuleNotify ? slackRuleChannel.trim() || null : prev?.slack_channel ?? null,
+          slack_notify_alert_rules: slackRuleNotify,
+          notify_emails: prev?.notify_emails ?? null,
+          updated_by: currentUserId || null,
+        })
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alert-rules'] })
+      if (clientId) queryClient.invalidateQueries({ queryKey: ['client-alert-delivery', clientId] })
       onClose()
     },
     onError: (err: unknown) => {
@@ -208,7 +449,7 @@ export default function RuleBuilderModal({ editRule, currentUserId, onClose }: P
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <optgroup label="Daily Rules">
-                {(['zero_spend', 'budget_pacing', 'ctr_anomaly', 'zero_conversions'] as AlertTemplateType[]).map(tt => (
+                {(['zero_spend', 'zero_spend_technical', 'budget_pacing', 'ctr_anomaly', 'zero_conversions', 'roas_above_target', 'roas_below_target', 'roas_critical_drop', 'cpa_above_target', 'metrics_anomaly'] as AlertTemplateType[]).map(tt => (
                   <option key={tt} value={tt}>{TEMPLATE_LABELS[tt]}</option>
                 ))}
               </optgroup>
@@ -317,6 +558,14 @@ export default function RuleBuilderModal({ editRule, currentUserId, onClose }: P
                           <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
                       </select>
+                    ) : f.type === 'textarea' ? (
+                      <textarea
+                        value={condValues[f.key] ?? String(f.defaultValue)}
+                        onChange={e => setCondValue(f.key, e.target.value)}
+                        placeholder={f.placeholder}
+                        rows={6}
+                        className="w-full text-xs font-mono border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
                     ) : (
                       <input
                         type="number"
@@ -339,6 +588,66 @@ export default function RuleBuilderModal({ editRule, currentUserId, onClose }: P
           ) : (
             <div className="bg-amber-50 rounded-xl p-3 text-xs text-amber-700">
               Custom rules don't have a built-in evaluation engine template. You'll need to implement custom logic in <code>evaluate_rules.py</code>.
+            </div>
+          )}
+
+          {/* Minimum daily spend (all templates) */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+              Minimum daily spend ($)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={minSpendThreshold}
+              onChange={e => setMinSpendThreshold(e.target.value)}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Saved as <code className="text-gray-600">conditions.min_spend_threshold</code>. In{' '}
+              <code className="text-gray-600">generate_alerts.py</code>, <code className="text-gray-600">cond_min_spend</code>{' '}
+              uses this value first, then <code className="text-gray-600">min_spend</code> if present. ROAS / CPA / metrics_anomaly gates use it; hourly rules in{' '}
+              <code className="text-gray-600">evaluate_rules.py</code> may differ.
+            </p>
+          </div>
+
+          {/* Slack notify (per client delivery row) */}
+          {!!clientId && (
+            <div className="rounded-xl border border-gray-200 p-4 space-y-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-800">
+                <input
+                  type="checkbox"
+                  checked={slackRuleNotify}
+                  onChange={e => setSlackRuleNotify(e.target.checked)}
+                />
+                Notify via Slack (alert rules)
+              </label>
+              {slackRuleNotify && (
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Slack incoming webhook URL</label>
+                    <input
+                      type="url"
+                      value={slackRuleUrl}
+                      onChange={e => setSlackRuleUrl(e.target.value)}
+                      placeholder="https://hooks.slack.com/services/..."
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Channel name</label>
+                    <input
+                      type="text"
+                      value={slackRuleChannel}
+                      onChange={e => setSlackRuleChannel(e.target.value)}
+                      placeholder="#alerts-client"
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500">Saved to client delivery settings for backend jobs; the app does not call Slack.</p>
+                </div>
+              )}
             </div>
           )}
 

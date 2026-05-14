@@ -13,6 +13,10 @@ dist
 .DS_Store
 *.pem
 
+# Python (local scripts under repo)
+__pycache__/
+*.py[cod]
+
 # Local env files
 .env
 .env.local

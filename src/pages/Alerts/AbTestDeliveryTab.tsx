@@ -14,7 +14,7 @@ export default function AbTestDeliveryTab({ currentUserId }: Props) {
 
   const { data: clients = [] } = useQuery({
     queryKey: ['clients-list-ab'],
-    queryFn: db.getClients.bind(db),
+    queryFn: () => db.getClients(),
     staleTime: 300_000,
   })
 
@@ -47,17 +47,20 @@ export default function AbTestDeliveryTab({ currentUserId }: Props) {
 
   const [notifyInApp, setNotifyInApp] = useState(true)
   const [slackUrl, setSlackUrl] = useState('')
+  const [slackChannel, setSlackChannel] = useState('')
   const [notifyEmails, setNotifyEmails] = useState('')
 
   useEffect(() => {
     if (!delivery) {
       setNotifyInApp(true)
       setSlackUrl('')
+      setSlackChannel('')
       setNotifyEmails('')
       return
     }
     setNotifyInApp(delivery.notify_in_app)
     setSlackUrl(delivery.slack_webhook_url ?? '')
+    setSlackChannel(delivery.slack_channel ?? '')
     setNotifyEmails(delivery.notify_emails ?? '')
   }, [delivery])
 
@@ -141,6 +144,8 @@ export default function AbTestDeliveryTab({ currentUserId }: Props) {
         client_id: clientId,
         notify_in_app: notifyInApp,
         slack_webhook_url: slackUrl.trim() || null,
+        slack_channel: slackChannel.trim() || null,
+        slack_notify_alert_rules: delivery?.slack_notify_alert_rules ?? false,
         notify_emails: notifyEmails.trim() || null,
         updated_by: currentUserId || null,
       }),
@@ -201,6 +206,16 @@ export default function AbTestDeliveryTab({ currentUserId }: Props) {
             value={slackUrl}
             onChange={e => setSlackUrl(e.target.value)}
             placeholder="https://hooks.slack.com/services/..."
+            className="w-full max-w-xl px-3 py-2 border border-gray-200 rounded-lg text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Slack channel label (optional)</label>
+          <input
+            type="text"
+            value={slackChannel}
+            onChange={e => setSlackChannel(e.target.value)}
+            placeholder="#alerts-client"
             className="w-full max-w-xl px-3 py-2 border border-gray-200 rounded-lg text-sm"
           />
         </div>

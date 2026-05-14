@@ -17,6 +17,10 @@ export interface MissionCardRow {
   created_by: string | null
   created_at: string
   updated_at: string
+  clickup_task_id?: string | null
+  clickup_task_url?: string | null
+  archived?: boolean
+  synced_from_clickup?: boolean
 }
 
 export const MISSION_COLUMNS: { id: MissionColumn; label: string }[] = [
