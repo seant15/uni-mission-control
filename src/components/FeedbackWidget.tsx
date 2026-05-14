@@ -108,40 +108,44 @@ export default function FeedbackWidget() {
     mutationFn: async () => {
       if (!appUser || !user) throw new Error('Not authenticated')
       setUploading(true)
+      try {
+        // 1. Insert feedback row (without attachments first)
+        const { id } = await db.submitFeedback({
+          user_id: appUser.id,
+          auth_user_id: user.id,
+          display_name: appUser.display_name,
+          email: appUser.email,
+          role: appUser.role,
+          page_url: pageUrl.current,
+          page_title: pageTitle.current,
+          message,
+          severity: severity ?? undefined,
+          attachments: [],
+          attachment_count: 0,
+        })
 
-      // 1. Insert feedback row (without attachments first)
-      const { id } = await db.submitFeedback({
-        user_id: appUser.id,
-        auth_user_id: user.id,
-        display_name: appUser.display_name,
-        email: appUser.email,
-        role: appUser.role,
-        page_url: pageUrl.current,
-        page_title: pageTitle.current,
-        message,
-        severity: severity ?? undefined,
-        attachments: [],
-        attachment_count: 0,
-      })
-
-      // 2. Upload any attachments and collect metadata (non-fatal if Storage not yet configured)
-      if (files.length > 0) {
-        try {
-          const attachments: AttachmentMeta[] = await Promise.all(
-            files.map(pf => db.uploadFeedbackAttachment(id, pf.file))
-          )
-          await supabase
-            .from('feedback')
-            .update({ attachments, attachment_count: attachments.length })
-            .eq('id', id)
-        } catch (uploadErr) {
-          console.warn('[FeedbackWidget] attachment upload failed (Storage may not be configured):', uploadErr)
-          // Feedback row is already saved — don't fail the whole submission
+        // 2. Upload any attachments and collect metadata (non-fatal if Storage not yet configured)
+        if (files.length > 0) {
+          try {
+            const attachments: AttachmentMeta[] = await Promise.all(
+              files.map(pf => db.uploadFeedbackAttachment(id, pf.file))
+            )
+            const { error: updErr } = await supabase
+              .from('feedback')
+              .update({ attachments, attachment_count: attachments.length })
+              .eq('id', id)
+            if (updErr) throw updErr
+          } catch (uploadErr) {
+            console.warn('[FeedbackWidget] attachment upload failed (Storage may not be configured):', uploadErr)
+            const msg = uploadErr instanceof Error ? uploadErr.message : String(uploadErr)
+            toast.error(`Feedback saved, but attachment upload failed: ${msg}`)
+          }
         }
-      }
 
-      setUploading(false)
-      return id
+        return id
+      } finally {
+        setUploading(false)
+      }
     },
     onSuccess: (id) => {
       setSubmittedId(id)

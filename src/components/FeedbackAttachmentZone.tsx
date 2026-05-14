@@ -17,7 +17,11 @@ const MAX_SIZE_MB = 50
 const ACCEPTED_TYPES = ['image/', 'video/mp4', 'video/webm', 'video/quicktime']
 
 function isAccepted(file: File) {
-  return ACCEPTED_TYPES.some(t => file.type.startsWith(t))
+  if (ACCEPTED_TYPES.some(t => file.type.startsWith(t))) return true
+  const lower = file.name.toLowerCase()
+  if (lower.endsWith('.heic') || lower.endsWith('.heif')) return true
+  if (!file.type && /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(file.name)) return true
+  return false
 }
 
 function fmtSize(bytes: number) {
@@ -111,7 +115,7 @@ export default function FeedbackAttachmentZone({ files, onChange, disabled }: Pr
       {files.length > 0 && (
         <ul className="space-y-1.5">
           {files.map((pf, i) => (
-            <li key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+            <li key={`${pf.file.name}-${pf.file.size}-${pf.file.lastModified}-${i}`} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
               {pf.previewUrl ? (
                 <img
                   src={pf.previewUrl}

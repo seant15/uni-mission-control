@@ -43,13 +43,15 @@ async function cachedActiveClientIds(): Promise<string[]> {
     return ids
 }
 
-export type HourWindow = 1 | 2 | 6 | 12 | 24 | 48 | 72
+export type HourWindow = 1 | 2 | 6 | 12 | 24 | 30 | 48 | 72
 
 export interface HourlyPerformanceFilters {
     windowHours: HourWindow
     clientId?: string
     /** When set, overrides `clientId` for queries (client-role isolation). */
     scopedClientId?: string
+    platform?: string
+    adAccountId?: string
 }
 
 /** Stable key for merging daily rows with hourly rollups (same grain as daily_performance). */
@@ -695,6 +697,17 @@ export const db = {
             prevQ = prevQ.in('client_id', activeIds)
         }
 
+        const pf = filters.platform && filters.platform !== 'all' ? filters.platform : null
+        const acct = filters.adAccountId?.trim() ? filters.adAccountId : null
+        if (pf) {
+            curQ = curQ.eq('platform', pf)
+            prevQ = prevQ.eq('platform', pf)
+        }
+        if (acct) {
+            curQ = curQ.eq('ad_account_id', acct)
+            prevQ = prevQ.eq('ad_account_id', acct)
+        }
+
         const [curRes, prevRes] = await Promise.all([curQ, prevQ])
         if (curRes.error) throw curRes.error
         if (prevRes.error) throw prevRes.error
@@ -816,7 +829,11 @@ export const db = {
      * Returns the AttachmentMeta object to be stored in the feedback row.
      */
     async uploadFeedbackAttachment(feedbackId: string, file: File): Promise<AttachmentMeta> {
-        const path = `${feedbackId}/${file.name}`
+        const safeBase = file.name
+            .replace(/[^a-zA-Z0-9._-]+/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .slice(0, 120) || 'attachment'
+        const path = `${feedbackId}/${Date.now()}-${safeBase}`
         const { error } = await supabase.storage
             .from('feedback-attachments')
             .upload(path, file, { upsert: false })
@@ -824,7 +841,7 @@ export const db = {
         return {
             url: path,
             name: file.name,
-            type: file.type,
+            type: file.type || 'application/octet-stream',
             size_bytes: file.size,
         }
     },

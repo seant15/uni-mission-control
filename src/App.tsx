@@ -1,8 +1,8 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { LayoutDashboard, AlertTriangle, Bell, Settings, Activity, Layers, Megaphone, X, LogOut, MessageSquarePlus, LayoutGrid } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, Bell, Settings, Activity, Layers, Megaphone, X, LogOut, MessageSquarePlus, LayoutGrid, Menu, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { db } from './lib/api'
 import OverviewPage from './pages/OverviewPage'
 import Alerts from './pages/Alerts'
@@ -93,6 +93,32 @@ function AppShell() {
   const navigate = useNavigate()
   const effRole = normalizeRole(appUser?.role)
 
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('uni_sidebar_collapsed') === '1'
+    } catch {
+      return false
+    }
+  })
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('uni_sidebar_collapsed', sidebarCollapsed ? '1' : '0')
+    } catch { /* ignore */ }
+  }, [sidebarCollapsed])
+
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    const onResize = () => {
+      if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches) {
+        setMobileNavOpen(false)
+      }
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [mobileNavOpen])
+
   const { data: openAlertCount } = useQuery({
     queryKey: ['alert-open-count'],
     queryFn:  db.getOpenAlertCount.bind(db),
@@ -111,84 +137,119 @@ function AppShell() {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-        {/* Sidebar */}
-        <aside className="w-72 bg-slate-900 text-white flex flex-col fixed h-full z-50">
-          {/* Logo */}
-          <div className="p-5 border-b border-slate-800">
-            <div className="flex items-center gap-3">
-              <img
-                src="/uni-logo.gif"
-                alt="UNI"
-                className="w-10 h-10 rounded-xl object-cover"
-              />
-              <div>
-                <h1 className="font-bold text-lg tracking-tight">UNI Mission Control</h1>
-                <p className="text-xs text-slate-400">Marketing Performance Hub</p>
+        {mobileNavOpen && (
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+            onClick={() => setMobileNavOpen(false)}
+          />
+        )}
+
+        <aside
+          className={`
+            fixed top-0 left-0 z-50 h-full bg-slate-900 text-white flex flex-col
+            transition-transform duration-200 ease-out
+            w-[min(18rem,88vw)]
+            ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'}
+            lg:translate-x-0 lg:static lg:z-auto
+            ${sidebarCollapsed ? 'lg:w-[4.5rem]' : 'lg:w-72'}
+          `}
+        >
+          <div className={`p-3 border-b border-slate-800 flex items-center gap-2 ${sidebarCollapsed ? 'lg:flex-col lg:items-stretch' : ''}`}>
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <img src="/uni-logo.gif" alt="UNI" className="w-9 h-9 rounded-xl object-cover flex-shrink-0" />
+              <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+                <h1 className="font-bold text-sm tracking-tight truncate">UNI Mission Control</h1>
+                <p className="text-[10px] text-slate-400 truncate">Marketing Performance Hub</p>
               </div>
             </div>
+            <button
+              type="button"
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              onClick={() => setSidebarCollapsed(c => !c)}
+              className="hidden lg:flex p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex-shrink-0"
+            >
+              {sidebarCollapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
+            </button>
+            <button
+              type="button"
+              title="Close menu"
+              className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 lg:hidden ml-auto"
+              onClick={() => setMobileNavOpen(false)}
+            >
+              <X size={18} />
+            </button>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 px-4">
+          <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
+            <div className={`text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1 px-3 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
               Main
             </div>
-            <NavLink to="/" icon={LayoutDashboard} label="Overview" />
+            <NavLink to="/" icon={LayoutDashboard} label="Overview" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
             {canAccessMission(appUser?.role) && (
-              <NavLink to="/mission" icon={LayoutGrid} label="Mission Board" />
+              <NavLink to="/mission" icon={LayoutGrid} label="Mission Board" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
             )}
             {canAccessAlerts(appUser?.role) && (
-              <NavLink to="/alerts" icon={AlertTriangle} label="Alerts" badge={openAlertCount ?? 0} />
+              <NavLink to="/alerts" icon={AlertTriangle} label="Alerts" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} badge={openAlertCount ?? 0} />
             )}
-            <NavLink to="/realtime-performance" icon={Activity} label="Real-time Performance" />
+            <NavLink to="/realtime-performance" icon={Activity} label="Real-time Performance" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
             {canAccessCreative(appUser?.role) && (
-              <NavLink to="/creative-performance" icon={Layers} label="Creative Performance" />
+              <NavLink to="/creative-performance" icon={Layers} label="Creative Performance" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
             )}
 
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-6 px-4">
+            <div className={`text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1 mt-4 px-3 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
               System
             </div>
             {appUser?.role === 'super_admin' && (
-              <NavLink to="/feedback" icon={MessageSquarePlus} label="Feedback" />
+              <NavLink to="/feedback" icon={MessageSquarePlus} label="Feedback" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
             )}
             {canAccessSettings(appUser?.role) && (
-              <NavLink to="/dashboard/settings" icon={Settings} label="Settings" />
+              <NavLink to="/dashboard/settings" icon={Settings} label="Settings" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
             )}
           </nav>
 
-          {/* User Profile */}
-          <div className="p-4 border-t border-slate-800">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/50">
+          <div className="p-2 border-t border-slate-800">
+            <div className={`flex items-center gap-2 p-2 rounded-xl bg-slate-800/50 ${sidebarCollapsed ? 'lg:flex-col lg:items-center' : ''}`}>
               <Link
                 to="/dashboard/settings?tab=profile"
                 title="Edit profile"
-                className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-sm font-semibold hover:opacity-80 transition flex-shrink-0"
+                onClick={() => setMobileNavOpen(false)}
+                className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-xs font-semibold hover:opacity-80 transition flex-shrink-0"
               >
                 {(appUser?.display_name || 'U')[0].toUpperCase()}
               </Link>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{appUser?.display_name || 'User'}</p>
-                <p className="text-xs text-slate-400 capitalize">{effRole.replace('_', ' ')}</p>
+              <div className={`flex-1 min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+                <p className="text-xs font-medium truncate">{appUser?.display_name || 'User'}</p>
+                <p className="text-[10px] text-slate-400 capitalize">{effRole.replace('_', ' ')}</p>
               </div>
-              <button onClick={handleSignOut} title="Sign out" className="text-slate-500 hover:text-slate-300 transition">
-                <LogOut size={16} />
+              <button onClick={handleSignOut} title="Sign out" className="text-slate-500 hover:text-slate-300 transition flex-shrink-0 p-1">
+                <LogOut size={15} />
               </button>
             </div>
           </div>
         </aside>
 
-        {/* Main Content Area */}
-        <div className="flex-1 ml-72 flex flex-col">
-          {/* Top Header — announcement banner + bell */}
+        <div className={`flex-1 flex flex-col min-w-0 w-full ${sidebarCollapsed ? 'lg:ml-[4.5rem]' : 'lg:ml-72'}`}>
           <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
             <AnnouncementBanner />
-            <div className="h-12 px-8 flex items-center justify-between">
-              <span className="text-xs text-gray-400 font-medium tracking-wide uppercase select-none">
-                UNI Mission Control
-              </span>
+            <div className="h-12 px-4 sm:px-8 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <button
+                  type="button"
+                  className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100"
+                  aria-label="Open menu"
+                  onClick={() => setMobileNavOpen(true)}
+                >
+                  <Menu size={20} />
+                </button>
+                <span className="text-xs text-gray-400 font-medium tracking-wide uppercase truncate select-none">
+                  UNI Mission Control
+                </span>
+              </div>
               <button
                 onClick={() => navigate(canAccessAlerts(appUser?.role) ? '/alerts' : '/')}
-                className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
                 title={canAccessAlerts(appUser?.role) ? 'View alerts' : 'Home'}
               >
                 <Bell size={18} />
@@ -199,8 +260,7 @@ function AppShell() {
             </div>
           </header>
 
-          {/* Page Content */}
-          <main className="p-8 max-w-7xl mx-auto w-full">
+          <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
             <Routes>
               <Route path="/" element={<OverviewPage />} />
               <Route path="/clients-overview" element={<Navigate to="/?tab=by-client" replace />} />
@@ -257,29 +317,49 @@ function AppShell() {
   )
 }
 
-function NavLink({ to, icon: Icon, label, badge }: { to: string; icon: any; label: string; badge?: number }) {
+function NavLink({
+  to,
+  icon: Icon,
+  label,
+  badge,
+  collapsed,
+  onNavigate,
+}: {
+  to: string
+  icon: React.ComponentType<{ size?: number | string; className?: string }>
+  label: string
+  badge?: number
+  collapsed?: boolean
+  onNavigate?: () => void
+}) {
   const location = useLocation()
   const isActive = location.pathname === to
 
   return (
     <Link
       to={to}
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+      title={label}
+      onClick={() => onNavigate?.()}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
+        collapsed ? 'lg:justify-center lg:px-2' : ''
+      } ${
         isActive
           ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
           : 'text-slate-400 hover:text-white hover:bg-slate-800'
       }`}
     >
-      <Icon size={20} />
-      <span className="font-medium">{label}</span>
-      {badge && badge > 0 ? (
+      <Icon size={20} className="flex-shrink-0" />
+      <span className={`font-medium text-sm ${collapsed ? 'lg:hidden' : ''}`}>{label}</span>
+      {badge !== undefined && badge > 0 ? (
         <span className={`ml-auto px-1.5 py-0.5 rounded-full text-xs font-bold min-w-[20px] text-center ${
+          collapsed ? 'lg:hidden' : ''
+        } ${
           isActive ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
         }`}>
           {badge > 99 ? '99+' : badge}
         </span>
       ) : (
-        isActive && <div className="ml-auto w-1.5 h-1.5 bg-white rounded-full" />
+        isActive && <div className={`ml-auto w-1.5 h-1.5 bg-white rounded-full ${collapsed ? 'lg:hidden' : ''}`} />
       )}
     </Link>
   )

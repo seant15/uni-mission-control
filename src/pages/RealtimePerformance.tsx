@@ -34,10 +34,39 @@ const WINDOW_OPTIONS: { label: string; value: HourWindow }[] = [
   { label: '6h', value: 6 },
   { label: '12h', value: 12 },
   { label: '24h', value: 24 },
+  { label: '30h', value: 30 },
   { label: '48h', value: 48 },
   { label: '72h', value: 72 },
 ]
 
+function resolveDisplayTimeZone(mode: TzMode, accountTz?: string | null): string {
+  if (mode === 'utc') return 'UTC'
+  if (mode === 'browser') {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'local'
+    } catch {
+      return 'local'
+    }
+  }
+  const z = (accountTz || '').trim()
+  if (z && z !== 'advertiser_tz') return z
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+}
+
+function formatIsoInTimeZone(iso: string, zone: string): string {
+  try {
+    return new Date(iso).toLocaleString('en-US', {
+      timeZone: zone,
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+  } catch {
+    return new Date(iso).toISOString().slice(0, 16).replace('T', ' ')
+  }
+}
 const fmt$ = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(2)}`
 const fmtN = (v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toString()
 const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
@@ -245,6 +274,21 @@ export default function RealtimePerformance() {
     return sortDir === 'asc' ? av - bv : bv - av
   })
 
+  const windowBoundsLabel = useMemo(() => {
+    if (!hourlyData?.windowStart || !hourlyData?.windowEnd) return null
+    const z = resolveDisplayTimeZone(tzMode, null)
+    const a = formatIsoInTimeZone(hourlyData.windowStart, z)
+    const b = formatIsoInTimeZone(hourlyData.windowEnd, z)
+    const base = `Current window in ${z}: ${a} → ${b}.`
+    if (tzMode === 'utc') {
+      return `${base} Hour rows are UTC buckets (date + hour from hourly_performance).`
+    }
+    if (tzMode === 'browser') {
+      return `${base} Same UTC buckets; labels use your local timezone.`
+    }
+    return `${base} Per-account timezone hints appear in the Client column; slice boundaries stay UTC-hour based.`
+  }, [hourlyData?.windowStart, hourlyData?.windowEnd, tzMode])
+
   const selectedClientName = selectedClient === 'all'
     ? 'All Clients'
     : clients?.find((c: any) => c.id === selectedClient)?.name || selectedClient
@@ -271,6 +315,9 @@ export default function RealtimePerformance() {
           <p className="text-gray-500 mt-1">
             Live window comparison — current vs previous {windowHours}h
           </p>
+          {windowBoundsLabel && (
+            <p className="text-xs text-gray-500 mt-2 max-w-3xl leading-relaxed">{windowBoundsLabel}</p>
+          )}
         </div>
         <div className="flex items-center gap-3 text-sm text-gray-500">
           <Clock size={14} />

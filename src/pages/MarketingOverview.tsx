@@ -6,12 +6,12 @@ import {
   AlertTriangle, ArrowUpRight, ArrowDownRight, AlertCircle,
   Clock, CheckCircle, X, BarChart3, Users, ShoppingCart, ChevronDown,
 } from 'lucide-react'
-import { db } from '../lib/api'
+import { db, type HourWindow } from '../lib/api'
 import { getDashboardSettings } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
 
-type Period = '7d' | '30d' | '90d'
+type Period = '24h' | '30h' | '48h' | '72h' | '7d' | '30d' | '90d'
 
 interface Client {
   id: string
@@ -21,10 +21,24 @@ interface Client {
   currency_symbol?: string
 }
 
-function getDateRanges(period: Period) {
+function rollingWindowHours(p: Period): HourWindow | null {
+  if (p === '24h') return 24
+  if (p === '30h') return 30
+  if (p === '48h') return 48
+  if (p === '72h') return 72
+  return null
+}
+
+function dailyDays(p: Period): number | null {
+  if (p === '7d') return 7
+  if (p === '30d') return 30
+  if (p === '90d') return 90
+  return null
+}
+
+function getDateRangesForDays(days: number) {
   const end = new Date()
   const start = new Date()
-  const days = period === '7d' ? 7 : period === '30d' ? 30 : 90
   start.setDate(end.getDate() - days)
   const prevEnd = new Date(start); prevEnd.setDate(prevEnd.getDate() - 1)
   const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days)
@@ -62,20 +76,20 @@ function MetricCard({ title, value, change, icon: Icon, color, invertTrend = fal
   const isGood = change === undefined ? true : invertTrend ? change <= 0 : change >= 0
   const absChange = change !== undefined ? Math.abs(change) : undefined
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-start justify-between mb-3">
-        <div className={`p-3 rounded-lg ${color}`}>
-          <Icon className="w-5 h-5 text-white" />
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+      <div className="flex items-start justify-between mb-1.5 gap-1">
+        <div className={`p-1.5 rounded-md ${color}`}>
+          <Icon className="w-4 h-4 text-white" />
         </div>
         {change !== undefined && (
-          <div className={`flex items-center gap-1 text-sm font-medium ${isGood ? 'text-green-600' : 'text-red-600'}`}>
-            {isGood ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+          <div className={`flex items-center gap-0.5 text-xs font-medium shrink-0 ${isGood ? 'text-green-600' : 'text-red-600'}`}>
+            {isGood ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
             {fmtPct(absChange!)}
           </div>
         )}
       </div>
-      <div className="text-2xl font-bold text-gray-900">{value}</div>
-      <div className="text-sm text-gray-500 mt-1">{title}</div>
+      <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight truncate">{value}</div>
+      <div className="text-xs text-gray-500 mt-0.5 leading-snug">{title}</div>
     </div>
   )
 }
@@ -92,7 +106,14 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
   const [businessTypeManual, setBusinessTypeManual] = useState(false)
   const clientDropdownRef = useRef<HTMLDivElement>(null)
 
-  const ranges = getDateRanges(period)
+  const rollingH = rollingWindowHours(period)
+  const isRolling = rollingH !== null
+
+  const ranges = useMemo(() => {
+    const d = dailyDays(period)
+    if (d === null) return null
+    return getDateRangesForDays(d)
+  }, [period])
 
   useEffect(() => {
     if (scopedClientId) {
@@ -157,31 +178,51 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
     }
   }, [selectedClient, selectedAdAccount, clients, adAccountsFromDB, businessTypeManual])
 
-  const { data: curRows, isLoading, error } = useQuery({
+  const { data: dailyCurRows, isLoading: loadingDailyCur, error: errDailyCur } = useQuery({
     queryKey: ['mkt_cur', period, selectedClient, selectedPlatform, selectedAdAccount, scopedClientId ?? ''],
     queryFn: () => db.getDailyPerformance({
       clientId: selectedClient,
       platform: selectedPlatform,
       adAccountId: selectedAdAccount || undefined,
-      startDate: ranges.current.start,
-      endDate: ranges.current.end,
+      startDate: ranges!.current.start,
+      endDate: ranges!.current.end,
       scopedClientId: scopedClientId || undefined,
     }),
+    enabled: !isRolling && ranges !== null,
     refetchOnMount: 'always',
   })
 
-  const { data: prevRows } = useQuery({
+  const { data: dailyPrevRows, isLoading: loadingDailyPrev } = useQuery({
     queryKey: ['mkt_prev', period, selectedClient, selectedPlatform, selectedAdAccount, scopedClientId ?? ''],
     queryFn: () => db.getDailyPerformance({
       clientId: selectedClient,
       platform: selectedPlatform,
       adAccountId: selectedAdAccount || undefined,
-      startDate: ranges.previous.start,
-      endDate: ranges.previous.end,
+      startDate: ranges!.previous.start,
+      endDate: ranges!.previous.end,
       scopedClientId: scopedClientId || undefined,
     }),
+    enabled: !isRolling && ranges !== null,
     refetchOnMount: 'always',
   })
+
+  const { data: hourlyPack, isLoading: loadingHourly, error: errHourly } = useQuery({
+    queryKey: ['mkt_hourly', period, selectedClient, selectedPlatform, selectedAdAccount, scopedClientId ?? ''],
+    queryFn: () => db.getHourlyPerformance({
+      windowHours: rollingH!,
+      clientId: selectedClient,
+      scopedClientId: scopedClientId || undefined,
+      platform: selectedPlatform !== 'all' ? selectedPlatform : undefined,
+      adAccountId: selectedAdAccount || undefined,
+    }),
+    enabled: isRolling,
+    refetchOnMount: 'always',
+  })
+
+  const curRows = isRolling ? (hourlyPack?.current ?? []) : (dailyCurRows ?? [])
+  const prevRows = isRolling ? (hourlyPack?.previous ?? []) : (dailyPrevRows ?? [])
+  const isLoading = isRolling ? loadingHourly : (loadingDailyCur || loadingDailyPrev)
+  const error = isRolling ? errHourly : errDailyCur
 
   const { data: alertsRaw } = useQuery({
     queryKey: ['uni_alerts'],
@@ -199,6 +240,9 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
   const prev = prevRows ? aggregate(prevRows) : null
 
   const dailyTzFootnote = useMemo(() => {
+    if (isRolling && rollingH) {
+      return `Rolling ${rollingH}h sums hourly_performance (UTC hour buckets), compared to the prior ${rollingH}h window. Aligns with Real-time Performance for the same window when filters match.`
+    }
     const rows = curRows || []
     if (rows.length === 0) return null
     const tzs = [...new Set(rows.map((r: { data_timezone?: string | null }) => r.data_timezone).filter(Boolean) as string[])]
@@ -209,7 +253,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
       return `Daily totals mix reporting timezones (${tzs.slice(0, 4).join(', ')}${tzs.length > 4 ? ', …' : ''}). Hourly gap-fill uses UTC buckets.`
     }
     return 'When daily sync lags, some days are summed from hourly UTC slices; they may lack data_timezone until the daily row lands.'
-  }, [curRows])
+  }, [curRows, isRolling, rollingH])
 
   const spendChange = cur && prev ? pctChange(cur.spend, prev.spend) : undefined
   const ctrChange = cur && prev ? pctChange(cur.ctr, prev.ctr) : undefined
@@ -259,7 +303,18 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
 
   const recentAlerts = alertsData?.slice(0, 5) || []
 
-  const periodLabel = period === '7d' ? '7 Days' : period === '30d' ? '30 Days' : '90 Days'
+  const periodLabel = useMemo(() => {
+    const map: Record<Period, string> = {
+      '24h': '24 hours (rolling)',
+      '30h': '30 hours (rolling)',
+      '48h': '48 hours (rolling)',
+      '72h': '72 hours (rolling)',
+      '7d': '7 Days',
+      '30d': '30 Days',
+      '90d': '90 Days',
+    }
+    return map[period]
+  }, [period])
 
   const selectedClientName = selectedClient === 'all'
     ? 'All Clients'
@@ -276,7 +331,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
     s === 'resolved' ? <CheckCircle size={14} /> : <X size={14} />
 
   const primaryLeadGen = cur && prev && (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
       <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} color="bg-blue-600" />
       <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} color="bg-violet-600" />
       <MetricCard title="Leads" value={fmtMetric(cur.conversions)} change={convChange} icon={Users} color="bg-emerald-600" />
@@ -285,7 +340,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
   )
 
   const primaryEcom = cur && prev && (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
       <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} color="bg-blue-600" />
       <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} color="bg-violet-600" />
       <MetricCard title="Purchases" value={fmtMetric(cur.conversions)} change={convChange} icon={ShoppingCart} color="bg-emerald-600" />
@@ -294,7 +349,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
   )
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         {!embedded && (
           <div>
@@ -384,14 +439,16 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
               ))}
             </select>
           )}
-          {(['7d', '30d', '90d'] as Period[]).map(p => (
+          <div className="flex flex-wrap gap-1.5 items-center w-full sm:w-auto">
+          {(['24h', '30h', '48h', '72h', '7d', '30d', '90d'] as Period[]).map(p => (
             <button key={p} type="button" onClick={() => setPeriod(p)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                 period === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
               }`}>
-              {p === '7d' ? '7d' : p === '30d' ? '30d' : '90d'}
+              {p === '24h' ? '24h' : p === '30h' ? '30h' : p === '48h' ? '48h' : p === '72h' ? '72h' : p === '7d' ? '7d' : p === '30d' ? '30d' : '90d'}
             </button>
           ))}
+          </div>
           {selectedClient !== 'all' && (
             <span className="px-2 py-1 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-lg text-xs font-mono font-semibold">
               {clients.find(c => c.id === selectedClient)?.currency || 'USD'}
@@ -421,7 +478,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
         <>
           {businessType === 'leadgen' ? primaryLeadGen : primaryEcom}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
             <MetricCard title="Impressions" value={fmtMetric(cur.impressions)} change={prev ? pctChange(cur.impressions, prev.impressions) : undefined} icon={Eye} color="bg-indigo-600" />
             <MetricCard title="Clicks" value={fmtMetric(cur.clicks)} change={prev ? pctChange(cur.clicks, prev.clicks) : undefined} icon={MousePointer} color="bg-cyan-600" />
             <MetricCard title="CTR (detail)" value={`${cur.ctr.toFixed(2)}%`} change={prev ? pctChange(cur.ctr, prev.ctr) : undefined} icon={Target} color="bg-teal-600" />
@@ -429,51 +486,51 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
           </div>
 
           {businessType === 'ecommerce' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
               <MetricCard title="Total Revenue" value={fmtMoney(cur.revenue)} change={revChange} icon={TrendingUp} color="bg-green-600" />
               <MetricCard title="CPA (Cost Per Acquisition)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} color="bg-rose-600" invertTrend />
             </div>
           )}
           {businessType === 'leadgen' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
               <MetricCard title="Total Revenue (if tracked)" value={fmtMoney(cur.revenue)} change={revChange} icon={TrendingUp} color="bg-green-600" />
             </div>
           )}
 
           {platformBreakdown.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <h2 className="text-base font-semibold text-gray-900 mb-3">
                 Performance by Platform — Last {periodLabel}
               </h2>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Platform</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Spend</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Revenue</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">ROAS</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Conversions</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">CPA</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Share</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Platform</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Spend</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Revenue</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">ROAS</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Conversions</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">CPA</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Share</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {(platformBreakdown as any[]).map((p, i) => (
                       <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-medium capitalize">{p.platform.replace(/_/g, ' ')}</td>
-                        <td className="px-4 py-3 text-sm text-right">{fmtMoney(p.spend)}</td>
-                        <td className="px-4 py-3 text-sm text-right text-green-600 font-medium">{fmtMoney(p.revenue)}</td>
-                        <td className="px-4 py-3 text-sm text-right">
+                        <td className="px-3 py-2 text-sm font-medium capitalize">{p.platform.replace(/_/g, ' ')}</td>
+                        <td className="px-3 py-2 text-sm text-right">{fmtMoney(p.spend)}</td>
+                        <td className="px-3 py-2 text-sm text-right text-green-600 font-medium">{fmtMoney(p.revenue)}</td>
+                        <td className="px-3 py-2 text-sm text-right">
                           <span className={`font-semibold ${p.roas >= 2 ? 'text-green-600' : p.roas >= 1 ? 'text-blue-600' : 'text-red-600'}`}>
                             {p.roas.toFixed(2)}x
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-right">{fmtMetric(p.conversions)}</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-600">
+                        <td className="px-3 py-2 text-sm text-right">{fmtMetric(p.conversions)}</td>
+                        <td className="px-3 py-2 text-sm text-right text-gray-600">
                           {p.conversions > 0 ? fmtMoney(p.cpa) : '—'}
                         </td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-500">
+                        <td className="px-3 py-2 text-sm text-right text-gray-500">
                           {cur.spend > 0 ? ((p.spend / cur.spend) * 100).toFixed(2) : '0.00'}%
                         </td>
                       </tr>
@@ -488,33 +545,33 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
             <p className="text-xs text-gray-500 max-w-4xl leading-relaxed">{dailyTzFootnote}</p>
           )}
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <BarChart3 size={20} className="text-orange-500" />
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3 gap-2">
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <BarChart3 size={18} className="text-orange-500" />
                 Alert Overview
               </h2>
-              <Link to="/alerts" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+              <Link to="/alerts" className="text-xs sm:text-sm text-blue-600 hover:text-blue-700 font-medium whitespace-nowrap">
                 View all alerts →
               </Link>
             </div>
 
-            <div className="grid grid-cols-4 gap-3 mb-5">
-              <div className="bg-gray-50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-gray-900">{alertSummary.total}</div>
-                <div className="text-xs text-gray-500 mt-1">Total</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+              <div className="bg-gray-50 rounded-lg p-2.5 text-center">
+                <div className="text-lg sm:text-xl font-bold text-gray-900">{alertSummary.total}</div>
+                <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5">Total</div>
               </div>
-              <div className="bg-red-50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-red-700">{alertSummary.new}</div>
-                <div className="text-xs text-red-600 mt-1">New</div>
+              <div className="bg-red-50 rounded-lg p-2.5 text-center">
+                <div className="text-lg sm:text-xl font-bold text-red-700">{alertSummary.new}</div>
+                <div className="text-[10px] sm:text-xs text-red-600 mt-0.5">New</div>
               </div>
-              <div className="bg-red-50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-red-700">{alertSummary.critical}</div>
-                <div className="text-xs text-red-600 mt-1">Critical</div>
+              <div className="bg-red-50 rounded-lg p-2.5 text-center">
+                <div className="text-lg sm:text-xl font-bold text-red-700">{alertSummary.critical}</div>
+                <div className="text-[10px] sm:text-xs text-red-600 mt-0.5">Critical</div>
               </div>
-              <div className="bg-orange-50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-orange-700">{alertSummary.high}</div>
-                <div className="text-xs text-orange-600 mt-1">High</div>
+              <div className="bg-orange-50 rounded-lg p-2.5 text-center">
+                <div className="text-lg sm:text-xl font-bold text-orange-700">{alertSummary.high}</div>
+                <div className="text-[10px] sm:text-xs text-orange-600 mt-0.5">High</div>
               </div>
             </div>
 
