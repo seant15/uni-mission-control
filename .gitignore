@@ -30,3 +30,6 @@ __pycache__/
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Handoff docs live outside repo (OPENCLAW: "uni-mission-control workspace 062026/mission-control-handoff-2026-05")
+uni-mission-control-workspace/

@@ -46,7 +46,7 @@ Frontend `AuthContext` already loads `app_users` by `auth_user_id`. Contract: RL
 
 Important: `partner` receives all client IDs at the SQL layer (same as `media_buyer` for read scope). The product still hides Creative Performance and Mission Board for partners in the UI; tightening creative rows at RLS level is a follow-up if you need defense in depth.
 
-## 4. Align with `uni-mission-control-workspace/archive/AGENT_BRIEF_FRONTEND_DEV_2026-05-13.md` (superseded snapshot)
+## 4. Align with `AGENT_BRIEF_FRONTEND_DEV.md`
 
 - P1 data fixes remain unchanged.
 - When you add the `client` role in the UI, ensure each `app_users` row has `primary_client_id` set and `role` in (`client`, `client_user`) so RLS returns exactly one client.
@@ -56,7 +56,7 @@ Important: `partner` receives all client IDs at the SQL layer (same as `media_bu
 
 - `ads_data_sync/docs/BACKEND_TEAM_CONTRACTS.md` — contracts A–D.
 - `ads_data_sync/docs/AB_REPORTS_CRON.md` — cron + `job_runs` section.
-- Root `AGENT_BRIEF_FRONTEND_DEV.md` — section 六 / 七. (Archived in-repo at `uni-mission-control-workspace/archive/AGENT_BRIEF_FRONTEND_DEV_2026-05-13.md`.)
+- `AGENT_BRIEF_FRONTEND_DEV.md` (OPENCLAW workspace root) — section 六 / 七. Optional snapshot: `uni-mission-control workspace 062026/mission-control-handoff-2026-05/archive/AGENT_BRIEF_FRONTEND_DEV_2026-05-13.md`.
 
 ## 6. Frontend implementation (this repo)
 
