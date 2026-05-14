@@ -291,7 +291,7 @@ function TemplateReferencePanel() {
           {TEMPLATE_REFERENCE.map(cat => (
             <div key={cat.category}>
               <h3 className={`text-xs font-bold uppercase tracking-wider mb-3 ${
-                cat.color === 'blue' ? 'text-blue-600' : 'text-purple-600'
+                cat.color === 'blue' ? 'text-blue-600' : cat.color === 'green' ? 'text-green-600' : 'text-purple-600'
               }`}>{cat.category}</h3>
               <div className="space-y-3">
                 {cat.templates.map(t => (

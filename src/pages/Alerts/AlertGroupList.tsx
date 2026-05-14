@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ChevronDown, ChevronRight, Layers, LayoutGrid, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -13,6 +13,10 @@ interface Props {
   currentUserRole: string
   visibleColumns: string[]
   readOnly?: boolean
+  /** When set with callbacks, shows a leading checkbox column for bulk actions */
+  bulkSelection?: Set<string>
+  onBulkToggleOne?: (id: string) => void
+  onBulkToggleMany?: (ids: string[], select: boolean) => void
 }
 
 const SEVERITY_BADGE: Record<AlertSeverity, string> = {
@@ -23,7 +27,7 @@ const SEVERITY_BADGE: Record<AlertSeverity, string> = {
 }
 
 const STATUS_BADGE: Record<AlertStatus, string> = {
-  new:          'bg-red-50 text-red-700',
+  new:          'bg-amber-100 text-amber-950 ring-2 ring-amber-400/90 font-semibold uppercase tracking-wide',
   in_progress:  'bg-blue-50 text-blue-700',
   snoozed:      'bg-amber-50 text-amber-700',
   resolved:     'bg-green-50 text-green-700',
@@ -57,6 +61,10 @@ interface AlertRowProps {
   currentUserRole: string
   visibleColumns: string[]
   readOnly?: boolean
+  showBulk?: boolean
+  bulkSelected?: boolean
+  onBulkToggle?: (id: string) => void
+  totalColumns: number
 }
 
 function missionPriorityFromSeverity(sev: string): 'low' | 'medium' | 'high' | 'critical' {
@@ -66,7 +74,17 @@ function missionPriorityFromSeverity(sev: string): 'low' | 'medium' | 'high' | '
   return 'medium'
 }
 
-function SingleAlertRow({ alert, currentUserId, currentUserRole, visibleColumns, readOnly }: AlertRowProps) {
+function SingleAlertRow({
+  alert,
+  currentUserId,
+  currentUserRole,
+  visibleColumns,
+  readOnly,
+  showBulk,
+  bulkSelected,
+  onBulkToggle,
+  totalColumns,
+}: AlertRowProps) {
   const [expanded, setExpanded] = useState(false)
   const queryClient = useQueryClient()
   const canQuick = !readOnly && canMutateAlerts(currentUserRole) && !!currentUserId
@@ -120,6 +138,17 @@ function SingleAlertRow({ alert, currentUserId, currentUserRole, visibleColumns,
         className="hover:bg-gray-50 cursor-pointer transition-colors"
         onClick={() => setExpanded(e => !e)}
       >
+        {showBulk && (
+          <td className="px-2 py-3 w-10 align-middle" onClick={e => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              className="rounded border-gray-300 text-[var(--brand-600)] focus:ring-[var(--brand-500)]"
+              checked={!!bulkSelected}
+              onChange={() => onBulkToggle?.(alert.id)}
+              aria-label={`Select alert ${alert.id}`}
+            />
+          </td>
+        )}
         {visibleColumns.includes('severity') && (
           <td className="px-4 py-3">
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${SEVERITY_BADGE[alert.severity]}`}>
@@ -226,7 +255,7 @@ function SingleAlertRow({ alert, currentUserId, currentUserRole, visibleColumns,
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={visibleColumns.length} className="p-0">
+          <td colSpan={totalColumns} className="p-0">
             <AlertActionPanel
               alert={alert}
               currentUserId={currentUserId}
@@ -246,11 +275,36 @@ interface GroupRowProps {
   currentUserRole: string
   visibleColumns: string[]
   readOnly?: boolean
+  showBulk?: boolean
+  bulkSelection?: Set<string>
+  onBulkToggleOne?: (id: string) => void
+  onBulkToggleMany?: (ids: string[], select: boolean) => void
+  totalColumns: number
 }
 
-function GroupRow({ group, currentUserId, currentUserRole, visibleColumns, readOnly }: GroupRowProps) {
+function GroupRow({
+  group,
+  currentUserId,
+  currentUserRole,
+  visibleColumns,
+  readOnly,
+  showBulk,
+  bulkSelection,
+  onBulkToggleOne,
+  onBulkToggleMany,
+  totalColumns,
+}: GroupRowProps) {
   const [expanded, setExpanded] = useState(false)
   const rep = group.representative
+  const groupIds = useMemo(() => group.all_alerts.map(a => a.id), [group.all_alerts])
+  const allGroupSelected = !!(showBulk && groupIds.length > 0 && groupIds.every(id => bulkSelection?.has(id)))
+  const someGroupSelected = !!(showBulk && groupIds.some(id => bulkSelection?.has(id)))
+  const headerCheckboxRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const el = headerCheckboxRef.current
+    if (!el) return
+    el.indeterminate = someGroupSelected && !allGroupSelected
+  }, [someGroupSelected, allGroupSelected])
 
   if (group.count === 1) {
     return (
@@ -260,6 +314,10 @@ function GroupRow({ group, currentUserId, currentUserRole, visibleColumns, readO
         currentUserRole={currentUserRole}
         visibleColumns={visibleColumns}
         readOnly={readOnly}
+        showBulk={showBulk}
+        bulkSelected={bulkSelection?.has(rep.id)}
+        onBulkToggle={onBulkToggleOne}
+        totalColumns={totalColumns}
       />
     )
   }
@@ -271,6 +329,18 @@ function GroupRow({ group, currentUserId, currentUserRole, visibleColumns, readO
         className="hover:bg-blue-50/30 cursor-pointer transition-colors bg-slate-50/50"
         onClick={() => setExpanded(e => !e)}
       >
+        {showBulk && (
+          <td className="px-2 py-3 w-10 align-middle" onClick={e => e.stopPropagation()}>
+            <input
+              ref={headerCheckboxRef}
+              type="checkbox"
+              className="rounded border-gray-300 text-[var(--brand-600)] focus:ring-[var(--brand-500)]"
+              checked={!!allGroupSelected}
+              onChange={() => onBulkToggleMany?.(groupIds, !allGroupSelected)}
+              aria-label="Select all alerts in this group"
+            />
+          </td>
+        )}
         {visibleColumns.includes('severity') && (
           <td className="px-4 py-3">
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${SEVERITY_BADGE[rep.severity]}`}>
@@ -365,13 +435,37 @@ function GroupRow({ group, currentUserId, currentUserRole, visibleColumns, readO
           currentUserRole={currentUserRole}
           visibleColumns={visibleColumns}
           readOnly={readOnly}
+          showBulk={showBulk}
+          bulkSelected={bulkSelection?.has(alert.id)}
+          onBulkToggle={onBulkToggleOne}
+          totalColumns={totalColumns}
         />
       ))}
     </>
   )
 }
 
-export default function AlertGroupList({ groups, currentUserId, currentUserRole, visibleColumns, readOnly = false }: Props) {
+export default function AlertGroupList({
+  groups,
+  currentUserId,
+  currentUserRole,
+  visibleColumns,
+  readOnly = false,
+  bulkSelection,
+  onBulkToggleOne,
+  onBulkToggleMany,
+}: Props) {
+  const showBulk = !readOnly && !!bulkSelection && !!onBulkToggleOne && !!onBulkToggleMany
+  const totalColumns = visibleColumns.length + (showBulk ? 1 : 0)
+  const pageAlertIds = useMemo(() => groups.flatMap(g => g.all_alerts.map(a => a.id)), [groups])
+  const allPageSelected = !!(showBulk && pageAlertIds.length > 0 && pageAlertIds.every(id => bulkSelection!.has(id)))
+  const somePageSelected = !!(showBulk && pageAlertIds.some(id => bulkSelection!.has(id)))
+  const pageCheckboxRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const el = pageCheckboxRef.current
+    if (!el) return
+    el.indeterminate = somePageSelected && !allPageSelected
+  }, [somePageSelected, allPageSelected, showBulk])
   if (groups.length === 0) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
@@ -399,6 +493,19 @@ export default function AlertGroupList({ groups, currentUserId, currentUserRole,
       <table className="w-full">
         <thead className="bg-gray-50 border-b border-gray-100">
           <tr>
+            {showBulk && (
+              <th className="px-2 py-3 w-10 text-left">
+                <input
+                  ref={pageCheckboxRef}
+                  type="checkbox"
+                  className="rounded border-gray-300 text-[var(--brand-600)] focus:ring-[var(--brand-500)]"
+                  checked={!!allPageSelected}
+                  onChange={() => onBulkToggleMany(pageAlertIds, !allPageSelected)}
+                  title="Select all on this page"
+                  aria-label="Select all alerts on this page"
+                />
+              </th>
+            )}
             {visibleColumns.map(col => (
               <th key={col} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 {COLUMN_HEADERS[col] ?? col}
@@ -415,6 +522,11 @@ export default function AlertGroupList({ groups, currentUserId, currentUserRole,
               currentUserRole={currentUserRole}
               visibleColumns={visibleColumns}
               readOnly={readOnly}
+              showBulk={showBulk}
+              bulkSelection={bulkSelection}
+              onBulkToggleOne={onBulkToggleOne}
+              onBulkToggleMany={onBulkToggleMany}
+              totalColumns={totalColumns}
             />
           ))}
         </tbody>

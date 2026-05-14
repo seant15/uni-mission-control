@@ -186,6 +186,8 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>('roas')
   const [secondaryMetric, setSecondaryMetric] = useState<MetricKey | 'none'>('none')
   const [showRolling7, setShowRolling7] = useState(false)
+  type HeatedDrillTab = 'daily' | 'meta' | 'google' | 'keywords' | 'search'
+  const [heatedDrillTab, setHeatedDrillTab] = useState<HeatedDrillTab>('daily')
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
 
   // Load settings
@@ -571,8 +573,28 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
     }).format(n)
 
   const shellCard = embedded ? 'bg-white rounded-lg shadow-sm border border-gray-200 p-3' : 'bg-white rounded-xl shadow-sm border border-gray-200 p-6'
-  const detailSummaryClass = embedded ? 'text-sm font-semibold text-gray-900 cursor-pointer flex items-center gap-2' : 'text-lg font-semibold text-gray-900 cursor-pointer flex items-center gap-2'
   const tableWrapMt = embedded ? 'overflow-x-auto mt-2' : 'overflow-x-auto mt-4'
+
+  const canDailyTab = dailyDataWithMetrics.length > 0
+  const canMetaTab = (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && aggMetaCampaigns.length > 0
+  const canGoogleTab = (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggGoogleCampaigns.length > 0
+  const canKwTab = (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggKeywords.length > 0
+  const canSearchTab = (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggSearchTerms.length > 0
+
+  useEffect(() => {
+    const ok =
+      (heatedDrillTab === 'daily' && canDailyTab) ||
+      (heatedDrillTab === 'meta' && canMetaTab) ||
+      (heatedDrillTab === 'google' && canGoogleTab) ||
+      (heatedDrillTab === 'keywords' && canKwTab) ||
+      (heatedDrillTab === 'search' && canSearchTab)
+    if (ok) return
+    if (canDailyTab) setHeatedDrillTab('daily')
+    else if (canMetaTab) setHeatedDrillTab('meta')
+    else if (canGoogleTab) setHeatedDrillTab('google')
+    else if (canKwTab) setHeatedDrillTab('keywords')
+    else if (canSearchTab) setHeatedDrillTab('search')
+  }, [heatedDrillTab, canDailyTab, canMetaTab, canGoogleTab, canKwTab, canSearchTab])
 
   return (
     <div className={embedded ? 'space-y-3' : 'space-y-6'}>
@@ -763,36 +785,6 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
         })}
       </div>
 
-      {embedded && dailyDataWithMetrics.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3">
-          <h2 className="text-sm font-semibold text-gray-900 mb-2">
-            Daily breakdown — {dateRange.start} → {dateRange.end}
-          </h2>
-          <div className="overflow-x-auto max-h-[260px] overflow-y-auto rounded-md border border-slate-100">
-            <table className="w-full text-xs tabular-nums">
-              <thead className="bg-slate-50 sticky top-0">
-                <tr>
-                  <th className="px-2 py-1.5 text-left font-medium text-slate-500">Date</th>
-                  <th className="px-2 py-1.5 text-right font-medium text-slate-500">Spend</th>
-                  <th className="px-2 py-1.5 text-right font-medium text-slate-500">Revenue</th>
-                  <th className="px-2 py-1.5 text-right font-medium text-slate-500">Conv.</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {dailyDataWithMetrics.map(d => (
-                  <tr key={d.date} className="text-slate-800 hover:bg-slate-50/80">
-                    <td className="px-2 py-1 whitespace-nowrap font-medium">{d.date}</td>
-                    <td className="px-2 py-1 text-right">{fmtDailyMoney(d.spend)}</td>
-                    <td className="px-2 py-1 text-right text-green-700">{fmtDailyMoney(d.revenue)}</td>
-                    <td className="px-2 py-1 text-right">{d.conversions.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* Dynamic Chart */}
       <div className={`bg-white shadow-sm border border-gray-200 ${embedded ? 'rounded-lg p-3' : 'rounded-xl p-6'}`}>
         <div className={`flex items-center justify-between flex-wrap gap-3 ${embedded ? 'mb-2' : 'mb-4'}`}>
@@ -867,33 +859,87 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
         )}
       </div>
 
-      {/* ── META CAMPAIGN PERFORMANCE ── */}
-      {(selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && aggMetaCampaigns.length > 0 && (
+      {performanceData.length > 0 && (
         <div className={shellCard}>
-          <details open>
-            <summary className={detailSummaryClass}>
-              <BookOpen className="text-[var(--brand-600)] shrink-0" size={20} aria-hidden />
-              Meta Campaigns ({aggMetaCampaigns.length})
-              <span className="ml-2 text-xs font-normal text-gray-400">vs previous period</span>
-            </summary>
-            <div className={tableWrapMt}>
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <SortTh label="Campaign" field="campaign_name" sort={metaCampaignSort} align="left" />
-                    <SortTh label="Spend" field="spend" sort={metaCampaignSort} />
-                    <SortTh label="Clicks" field="clicks" sort={metaCampaignSort} />
-                    <SortTh label="CTR" field="_ctr" sort={metaCampaignSort} />
-                    <SortTh label="Reach" field="reach" sort={metaCampaignSort} />
-                    <SortTh label="Freq" field="frequency" sort={metaCampaignSort} />
-                    <SortTh label="Outbound" field="outbound_clicks" sort={metaCampaignSort} />
-                    <SortTh label="Video 25%" field="video_p25_watched" sort={metaCampaignSort} />
-                    <SortTh label="Conv." field="conversions" sort={metaCampaignSort} />
-                    <SortTh label="CPA" field="_cpa" sort={metaCampaignSort} />
-                    <SortTh label="ROAS" field="_roas" sort={metaCampaignSort} />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
+          <p className="text-xs text-stone-500 mb-2">Switch report. Tabs with no rows for the current filters are disabled.</p>
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {([
+              { id: 'daily' as const, label: 'Daily breakdown', disabled: !canDailyTab },
+              { id: 'meta' as const, label: 'Meta campaigns' + (aggMetaCampaigns.length ? ` (${aggMetaCampaigns.length})` : ''), disabled: !canMetaTab },
+              { id: 'google' as const, label: 'Google campaigns' + (aggGoogleCampaigns.length ? ` (${aggGoogleCampaigns.length})` : ''), disabled: !canGoogleTab },
+              { id: 'keywords' as const, label: 'Google keywords' + (aggKeywords.length ? ` (${aggKeywords.length})` : ''), disabled: !canKwTab },
+              { id: 'search' as const, label: 'Search terms' + (aggSearchTerms.length ? ` (${aggSearchTerms.length})` : ''), disabled: !canSearchTab },
+            ] as const).map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                disabled={tab.disabled}
+                onClick={() => !tab.disabled && setHeatedDrillTab(tab.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                  tab.disabled
+                    ? 'opacity-40 cursor-not-allowed border-gray-100 text-gray-400'
+                    : heatedDrillTab === tab.id
+                      ? 'bg-[var(--brand-600)] text-white border-transparent shadow-sm'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {heatedDrillTab === 'daily' && canDailyTab && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">Daily breakdown — {dateRange.start} → {dateRange.end}</h3>
+              <div className="overflow-x-auto max-h-[360px] overflow-y-auto rounded-md border border-slate-100">
+                <table className="w-full text-xs tabular-nums">
+                  <thead className="bg-slate-50 sticky top-0">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left font-medium text-slate-500">Date</th>
+                      <th className="px-2 py-1.5 text-right font-medium text-slate-500">Spend</th>
+                      <th className="px-2 py-1.5 text-right font-medium text-slate-500">Revenue</th>
+                      <th className="px-2 py-1.5 text-right font-medium text-slate-500">Conv.</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {dailyDataWithMetrics.map(d => (
+                      <tr key={d.date} className="text-slate-800 hover:bg-slate-50/80">
+                        <td className="px-2 py-1 whitespace-nowrap font-medium">{d.date}</td>
+                        <td className="px-2 py-1 text-right">{fmtDailyMoney(d.spend)}</td>
+                        <td className="px-2 py-1 text-right text-green-700">{fmtDailyMoney(d.revenue)}</td>
+                        <td className="px-2 py-1 text-right">{d.conversions.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {heatedDrillTab === 'meta' && canMetaTab && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                <BookOpen className="text-[var(--brand-600)]" size={18} aria-hidden />
+                Meta campaigns <span className="text-xs font-normal text-gray-400">vs previous period</span>
+              </h3>
+              <div className={tableWrapMt}>
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <SortTh label="Campaign" field="campaign_name" sort={metaCampaignSort} align="left" />
+                      <SortTh label="Spend" field="spend" sort={metaCampaignSort} />
+                      <SortTh label="Clicks" field="clicks" sort={metaCampaignSort} />
+                      <SortTh label="CTR" field="_ctr" sort={metaCampaignSort} />
+                      <SortTh label="Reach" field="reach" sort={metaCampaignSort} />
+                      <SortTh label="Freq" field="frequency" sort={metaCampaignSort} />
+                      <SortTh label="Outbound" field="outbound_clicks" sort={metaCampaignSort} />
+                      <SortTh label="Video 25%" field="video_p25_watched" sort={metaCampaignSort} />
+                      <SortTh label="Conv." field="conversions" sort={metaCampaignSort} />
+                      <SortTh label="CPA" field="_cpa" sort={metaCampaignSort} />
+                      <SortTh label="ROAS" field="_roas" sort={metaCampaignSort} />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
                   {metaCampaignSort.sortRows(aggMetaCampaigns.map((c: any) => ({
                     ...c,
                     _ctr: c.impressions > 0 ? c.clicks / c.impressions * 100 : 0,
@@ -954,35 +1000,28 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
                     )
                   })}
                 </tbody>
-              </table>
+                </table>
+              </div>
             </div>
-          </details>
-        </div>
-      )}
+          )}
 
-      {/* ── GOOGLE CAMPAIGN PERFORMANCE ── */}
-      {(selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggGoogleCampaigns.length > 0 && (
-        <div className={shellCard}>
-          <details open>
-            <summary className={detailSummaryClass}>
-              <span className="text-red-500">🔴</span>
-              Google Campaigns ({aggGoogleCampaigns.length})
-              <span className="ml-2 text-xs font-normal text-gray-400">vs previous period</span>
-            </summary>
-            <div className={tableWrapMt}>
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <SortTh label="Campaign" field="campaign_name" sort={googleCampaignSort} align="left" />
-                    <SortTh label="Spend" field="spend" sort={googleCampaignSort} />
-                    <SortTh label="Clicks" field="clicks" sort={googleCampaignSort} />
-                    <SortTh label="CTR" field="_ctr" sort={googleCampaignSort} />
-                    <SortTh label="Conv." field="conversions" sort={googleCampaignSort} />
-                    <SortTh label="CPA" field="_cpa" sort={googleCampaignSort} />
-                    <SortTh label="ROAS" field="_roas" sort={googleCampaignSort} />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
+          {heatedDrillTab === 'google' && canGoogleTab && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">Google campaigns <span className="text-xs font-normal text-gray-400">vs previous period</span></h3>
+              <div className={tableWrapMt}>
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <SortTh label="Campaign" field="campaign_name" sort={googleCampaignSort} align="left" />
+                      <SortTh label="Spend" field="spend" sort={googleCampaignSort} />
+                      <SortTh label="Clicks" field="clicks" sort={googleCampaignSort} />
+                      <SortTh label="CTR" field="_ctr" sort={googleCampaignSort} />
+                      <SortTh label="Conv." field="conversions" sort={googleCampaignSort} />
+                      <SortTh label="CPA" field="_cpa" sort={googleCampaignSort} />
+                      <SortTh label="ROAS" field="_roas" sort={googleCampaignSort} />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
                   {googleCampaignSort.sortRows(aggGoogleCampaigns.map((c: any) => ({
                     ...c,
                     _ctr: c.impressions > 0 ? c.clicks / c.impressions * 100 : 0,
@@ -1027,37 +1066,30 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
                     )
                   })}
                 </tbody>
-              </table>
+                </table>
+              </div>
             </div>
-          </details>
-        </div>
-      )}
+          )}
 
-      {/* ── GOOGLE KEYWORDS (Aggregated) ── */}
-      {(selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggKeywords.length > 0 && (
-        <div className={shellCard}>
-          <details>
-            <summary className={detailSummaryClass}>
-              <span className="text-red-600">🔑</span>
-              Google Keywords ({aggKeywords.length} keywords)
-              <span className="ml-2 text-xs font-normal text-gray-400">vs previous period</span>
-            </summary>
-            <div className={tableWrapMt}>
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <SortTh label="Keyword" field="keyword" sort={keywordSort} align="left" />
-                    <SortTh label="Campaign" field="campaign_name" sort={keywordSort} align="left" />
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Group</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Match</th>
-                    <SortTh label="Spend" field="spend" sort={keywordSort} />
-                    <SortTh label="Clicks" field="clicks" sort={keywordSort} />
-                    <SortTh label="CTR" field="_ctr" sort={keywordSort} />
-                    <SortTh label="Conv." field="conversions" sort={keywordSort} />
-                    <SortTh label="CPC" field="_cpc" sort={keywordSort} />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
+          {heatedDrillTab === 'keywords' && canKwTab && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">Google keywords <span className="text-xs font-normal text-gray-400">vs previous period</span></h3>
+              <div className={tableWrapMt}>
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <SortTh label="Keyword" field="keyword" sort={keywordSort} align="left" />
+                      <SortTh label="Campaign" field="campaign_name" sort={keywordSort} align="left" />
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Group</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Match</th>
+                      <SortTh label="Spend" field="spend" sort={keywordSort} />
+                      <SortTh label="Clicks" field="clicks" sort={keywordSort} />
+                      <SortTh label="CTR" field="_ctr" sort={keywordSort} />
+                      <SortTh label="Conv." field="conversions" sort={keywordSort} />
+                      <SortTh label="CPC" field="_cpc" sort={keywordSort} />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
                   {keywordSort.sortRows(aggKeywords.map((k: any) => ({
                     ...k,
                     _ctr: k.impressions > 0 ? k.clicks / k.impressions * 100 : 0,
@@ -1089,37 +1121,30 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
                     )
                   })}
                 </tbody>
-              </table>
+                </table>
+              </div>
             </div>
-          </details>
-        </div>
-      )}
+          )}
 
-      {/* ── GOOGLE SEARCH TERMS (Aggregated) ── */}
-      {(selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggSearchTerms.length > 0 && (
-        <div className={shellCard}>
-          <details>
-            <summary className={detailSummaryClass}>
-              <span className="text-orange-600">🔍</span>
-              Google Search Terms ({aggSearchTerms.length} terms)
-              <span className="ml-2 text-xs font-normal text-gray-400">vs previous period</span>
-            </summary>
-            <div className={tableWrapMt}>
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <SortTh label="Search Term" field="search_term" sort={searchTermSort} align="left" />
-                    <SortTh label="Campaign" field="campaign_name" sort={searchTermSort} align="left" />
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Match</th>
-                    <SortTh label="Spend" field="spend" sort={searchTermSort} />
-                    <SortTh label="Impr." field="impressions" sort={searchTermSort} />
-                    <SortTh label="Clicks" field="clicks" sort={searchTermSort} />
-                    <SortTh label="CTR" field="_ctr" sort={searchTermSort} />
-                    <SortTh label="CPC" field="_cpc" sort={searchTermSort} />
-                    <SortTh label="Conv." field="conversions" sort={searchTermSort} />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
+          {heatedDrillTab === 'search' && canSearchTab && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">Google search terms <span className="text-xs font-normal text-gray-400">vs previous period</span></h3>
+              <div className={tableWrapMt}>
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <SortTh label="Search Term" field="search_term" sort={searchTermSort} align="left" />
+                      <SortTh label="Campaign" field="campaign_name" sort={searchTermSort} align="left" />
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Match</th>
+                      <SortTh label="Spend" field="spend" sort={searchTermSort} />
+                      <SortTh label="Impr." field="impressions" sort={searchTermSort} />
+                      <SortTh label="Clicks" field="clicks" sort={searchTermSort} />
+                      <SortTh label="CTR" field="_ctr" sort={searchTermSort} />
+                      <SortTh label="CPC" field="_cpc" sort={searchTermSort} />
+                      <SortTh label="Conv." field="conversions" sort={searchTermSort} />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
                   {searchTermSort.sortRows(aggSearchTerms.map((t: any) => ({
                     ...t,
                     _ctr: t.impressions > 0 ? t.clicks / t.impressions * 100 : 0,
@@ -1153,9 +1178,10 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
                     )
                   })}
                 </tbody>
-              </table>
+                </table>
+              </div>
             </div>
-          </details>
+          )}
         </div>
       )}
     </div>

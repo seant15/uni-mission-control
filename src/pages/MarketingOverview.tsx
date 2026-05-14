@@ -52,10 +52,10 @@ function MetricCard({ title, value, change, icon: Icon, color, invertTrend = fal
   const isGood = change === undefined ? true : invertTrend ? change <= 0 : change >= 0
   const absChange = change !== undefined ? Math.abs(change) : undefined
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+    <div className="bg-white/90 rounded-xl shadow-md border border-gray-200/90 ring-1 ring-black/[0.04] p-3 sm:p-4 transition-shadow hover:shadow-lg">
       <div className="flex items-start justify-between mb-1.5 gap-1">
-        <div className={`p-1.5 rounded-md ${color}`}>
-          <Icon className="w-4 h-4 text-white" />
+        <div className={`p-1.5 rounded-lg shadow-inner ${color}`}>
+          <Icon className="w-4 h-4 text-white drop-shadow-sm" />
         </div>
         {change !== undefined && (
           <div className={`flex items-center gap-0.5 text-xs font-medium shrink-0 ${isGood ? 'text-green-600' : 'text-red-600'}`}>
@@ -462,8 +462,15 @@ export default function MarketingOverview({
             </div>
           )}
 
+          {showAgencyExtras && (
+            <>
+              <AgencyInsightPies />
+              <AgencyClientBreakdown dateRange={dateRange} selectedPlatform={selectedPlatform} section="chart" />
+            </>
+          )}
+
           {platformBreakdown.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="bg-white/90 rounded-xl shadow-md border border-gray-200/90 ring-1 ring-black/[0.04] p-4">
               <h2 className="text-base font-semibold text-gray-900 mb-3">
                 Performance by Platform — {periodLabel}
               </h2>
@@ -507,10 +514,7 @@ export default function MarketingOverview({
           )}
 
           {showAgencyExtras && (
-            <>
-              <AgencyInsightPies />
-              <AgencyClientBreakdown dateRange={dateRange} selectedPlatform={selectedPlatform} />
-            </>
+            <AgencyClientBreakdown dateRange={dateRange} selectedPlatform={selectedPlatform} section="table" />
           )}
 
           {dailyTzFootnote && (

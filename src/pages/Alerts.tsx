@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import { db } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -60,6 +61,7 @@ export default function Alerts() {
   })
   const [page,         setPage]         = useState(1)
   const [columns,      setColumns]      = useState<AlertColumnDef[]>(DEFAULT_COLS)
+  const [selectedAlertIds, setSelectedAlertIds] = useState<Set<string>>(new Set())
 
   const canManageRules = canMutateAlerts(appUser?.role)
 
@@ -96,6 +98,8 @@ export default function Alerts() {
   // Reset to page 1 when filters change
   useEffect(() => { setPage(1) }, [filters])
 
+  useEffect(() => { setSelectedAlertIds(new Set()) }, [filters])
+
   // Supabase Realtime: refresh when new alerts come in
   useEffect(() => {
     const channel = supabase
@@ -115,6 +119,103 @@ export default function Alerts() {
 
   const groups = groupAlerts(alerts)
   const visibleColumns = columns.filter(c => c.visible).map(c => c.key)
+
+  const toggleBulkOne = useCallback((id: string) => {
+    setSelectedAlertIds(prev => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  }, [])
+
+  const toggleBulkMany = useCallback((ids: string[], select: boolean) => {
+    setSelectedAlertIds(prev => {
+      const n = new Set(prev)
+      for (const id of ids) {
+        if (select) n.add(id)
+        else n.delete(id)
+      }
+      return n
+    })
+  }, [])
+
+  const alertById = useMemo(() => {
+    const m = new Map<string, Alert>()
+    for (const g of groups) {
+      for (const a of g.all_alerts) m.set(a.id, a)
+    }
+    return m
+  }, [groups])
+
+  const bulkCreateMissions = useMutation({
+    mutationFn: async () => {
+      if (!appUser?.id) throw new Error('Not signed in')
+      let created = 0
+      let skipped = 0
+      for (const id of selectedAlertIds) {
+        const alert = alertById.get(id)
+        if (!alert) continue
+        const existingId = await db.findMissionCardBySourceAlert(alert.id)
+        if (existingId) {
+          skipped++
+          continue
+        }
+        const title = `${alert.account_name || 'Account'} — ${(alert.alert_type || 'alert').replace(/_/g, ' ')}`
+        const body = [
+          alert.message,
+          alert.metric_name != null ? `${alert.metric_name}: ${alert.metric_value ?? ''} ${alert.metric_change ?? ''}`.trim() : '',
+        ].filter(Boolean).join('\n\n')
+        await db.createMissionCard({
+          title,
+          body,
+          client_id: alert.client_id ?? null,
+          platform: alert.platform ?? null,
+          priority: alert.severity === 'critical' ? 'critical' : alert.severity === 'high' ? 'high' : alert.severity === 'low' ? 'low' : 'medium',
+          source_alert_id: alert.id,
+          created_by: appUser.id,
+        })
+        created++
+      }
+      return { created, skipped }
+    },
+    onSuccess: res => {
+      queryClient.invalidateQueries({ queryKey: ['mission_cards'] })
+      queryClient.invalidateQueries({ queryKey: ['alerts'] })
+      setSelectedAlertIds(new Set())
+      toast.success(`Created ${res.created} mission card(s)${res.skipped ? ` · ${res.skipped} already had a card` : ''}`)
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const bulkDismiss = useMutation({
+    mutationFn: async () => {
+      if (!appUser?.id) throw new Error('Not signed in')
+      await Promise.all([...selectedAlertIds].map(id => db.dismissAlert(id, appUser.id)))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alerts'] })
+      queryClient.invalidateQueries({ queryKey: ['alert-counts'] })
+      queryClient.invalidateQueries({ queryKey: ['alert-open-count'] })
+      setSelectedAlertIds(new Set())
+      toast.success('Archived (dismissed) selected alerts')
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const bulkDelete = useMutation({
+    mutationFn: async () => {
+      await Promise.all([...selectedAlertIds].map(id => db.deleteAlert(id)))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alerts'] })
+      queryClient.invalidateQueries({ queryKey: ['alert-counts'] })
+      queryClient.invalidateQueries({ queryKey: ['alert-open-count'] })
+      setSelectedAlertIds(new Set())
+      toast.success('Deleted selected alerts')
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
 
   return (
     <div className="space-y-5">
@@ -148,6 +249,50 @@ export default function Alerts() {
 
           {/* Filter bar */}
           <AlertFilterBar filters={filters} onChange={setFilters} />
+
+          {canManageRules && selectedAlertIds.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-stone-200 bg-stone-50/95 px-4 py-3 text-sm text-stone-800">
+              <span className="font-medium">{selectedAlertIds.size} selected</span>
+              <span className="text-stone-300">|</span>
+              <button
+                type="button"
+                disabled={bulkCreateMissions.isPending}
+                onClick={() => bulkCreateMissions.mutate()}
+                className="px-3 py-1.5 rounded-lg bg-[var(--brand-600)] text-white text-xs font-medium hover:bg-[var(--brand-700)] disabled:opacity-50"
+              >
+                Create missions
+              </button>
+              <button
+                type="button"
+                disabled={bulkDismiss.isPending}
+                onClick={() => {
+                  if (!window.confirm(`Archive (dismiss) ${selectedAlertIds.size} alert(s)?`)) return
+                  bulkDismiss.mutate()
+                }}
+                className="px-3 py-1.5 rounded-lg border border-stone-300 bg-white text-xs font-medium hover:bg-stone-100 disabled:opacity-50"
+              >
+                Archive
+              </button>
+              <button
+                type="button"
+                disabled={bulkDelete.isPending}
+                onClick={() => {
+                  if (!window.confirm(`Permanently delete ${selectedAlertIds.size} alert(s)? This cannot be undone.`)) return
+                  bulkDelete.mutate()
+                }}
+                className="px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-800 text-xs font-medium hover:bg-red-100 disabled:opacity-50"
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedAlertIds(new Set())}
+                className="ml-auto text-xs text-stone-500 hover:text-stone-800 underline"
+              >
+                Clear selection
+              </button>
+            </div>
+          )}
 
           {/* Table header: count + column customizer */}
           <div className="flex items-center justify-between">
@@ -187,6 +332,9 @@ export default function Alerts() {
               currentUserRole={appUser?.role ?? 'client_user'}
               visibleColumns={visibleColumns}
               readOnly={!canManageRules}
+              bulkSelection={canManageRules ? selectedAlertIds : undefined}
+              onBulkToggleOne={canManageRules ? toggleBulkOne : undefined}
+              onBulkToggleMany={canManageRules ? toggleBulkMany : undefined}
             />
           )}
 

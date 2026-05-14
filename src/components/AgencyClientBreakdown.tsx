@@ -72,9 +72,11 @@ function formatCurrency(v: number) {
 type Props = {
   dateRange: CalendarDateRange
   selectedPlatform: string
+  /** `chart` = metric + bar only; `table` = account grid only; `full` = both (default). */
+  section?: 'full' | 'chart' | 'table'
 }
 
-export default function AgencyClientBreakdown({ dateRange, selectedPlatform }: Props) {
+export default function AgencyClientBreakdown({ dateRange, selectedPlatform, section = 'full' }: Props) {
   const { appUser } = useAuth()
   const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
   const [chartMetric, setChartMetric] = useState<ChartMetric>('total_spend')
@@ -182,13 +184,19 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform }: P
     else { setSortField(f); setSortDir('desc') }
   }
 
+  const showHeader = section === 'full' || section === 'chart'
+  const showChart = section === 'full' || section === 'chart'
+  const showTable = section === 'full' || section === 'table'
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Users size={16} className="text-[var(--brand-600)] shrink-0" />
-        <h2 className="text-sm font-semibold text-slate-800">Client breakdown</h2>
-        <span className="text-[11px] text-slate-500">Uses same date range &amp; platform as filters above</span>
-      </div>
+      {showHeader && (
+        <div className="flex items-center gap-2">
+          <Users size={16} className="text-[var(--brand-600)] shrink-0" />
+          <h2 className="text-sm font-semibold text-slate-800">Client breakdown</h2>
+          <span className="text-[11px] text-slate-500">Uses same date range &amp; platform as filters above</span>
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700 flex gap-2 items-center">
@@ -203,6 +211,7 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform }: P
 
       {!isLoading && (
         <>
+          {showChart && (
           <div className="flex flex-wrap items-center gap-2">
             <label htmlFor="agency-client-chart-metric" className="text-xs text-slate-600 shrink-0">
               Chart metric
@@ -221,8 +230,10 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform }: P
               Δ vs prior: {activeKpi.change >= 0 ? '+' : ''}{activeKpi.change.toFixed(1)}%
             </span>
           </div>
+          )}
 
-          <div className="rounded-lg border border-slate-200 bg-white p-3">
+          {showChart && (
+          <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
             <h3 className="text-xs font-semibold text-slate-700 mb-2">
               Top accounts by {chartLabel} — {rangeLabel}
             </h3>
@@ -250,11 +261,12 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform }: P
               <div className="h-[180px] flex items-center justify-center text-slate-400 text-sm">No client spend in range</div>
             )}
           </div>
+          )}
 
-          {sorted.length > 0 && (
-            <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          {showTable && sorted.length > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
               <div className="px-3 py-2 border-b border-slate-100 bg-slate-50/80">
-                <span className="text-xs font-semibold text-slate-700">Account table</span>
+                <span className="text-xs font-semibold text-slate-700">By account</span>
               </div>
               <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
                 <table className="w-full text-sm">

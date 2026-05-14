@@ -28,10 +28,10 @@ import { Toaster } from 'sonner'
 import { applyAccentToDocument } from './lib/themeAccent'
 
 const ANNOUNCEMENT_STYLES = {
-  info:    { bar: 'bg-[var(--brand-600)]', text: 'text-white', icon: 'text-white/80' },
-  warning: { bar: 'bg-amber-500',  text: 'text-white',          icon: 'text-amber-200' },
-  success: { bar: 'bg-green-600',  text: 'text-white',          icon: 'text-green-200' },
-  neutral: { bar: 'bg-slate-700',  text: 'text-slate-100',      icon: 'text-slate-400' },
+  info:    { bar: 'bg-[color-mix(in_oklab,var(--brand-100)_85%,white)] border-b border-[var(--brand-200)]/60', text: 'text-stone-800', icon: 'text-[var(--brand-700)]' },
+  warning: { bar: 'bg-amber-100/95 border-b border-amber-200/80', text: 'text-amber-950', icon: 'text-amber-700' },
+  success: { bar: 'bg-emerald-100/95 border-b border-emerald-200/80', text: 'text-emerald-950', icon: 'text-emerald-700' },
+  neutral: { bar: 'bg-stone-200/90 border-b border-stone-300/80', text: 'text-stone-800', icon: 'text-stone-500' },
 }
 
 function AnnouncementBanner() {
@@ -59,7 +59,7 @@ function AnnouncementBanner() {
       <p className={`flex-1 text-sm font-medium ${st.text}`}
         dangerouslySetInnerHTML={{ __html: ann.text.trim() }}
       />
-      <button onClick={() => setDismissed(true)} className={`${st.icon} hover:opacity-80`}>
+      <button onClick={() => setDismissed(true)} className={`${st.icon} hover:opacity-70 rounded-md p-0.5`}>
         <X size={15} />
       </button>
     </div>
@@ -141,7 +141,7 @@ function AppShell() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/25 to-amber-50/40">
         {mobileNavOpen && (
           <button
             type="button"
@@ -153,7 +153,9 @@ function AppShell() {
 
         <aside
           className={`
-            fixed top-0 left-0 z-50 h-full bg-slate-900 text-white flex flex-col
+            fixed top-0 left-0 z-50 h-full text-slate-100 flex flex-col
+            bg-slate-800/92 backdrop-blur-xl backdrop-saturate-150
+            border-r border-white/10 shadow-[4px_0_24px_-8px_rgba(0,0,0,0.15)]
             transition-transform duration-200 ease-out
             w-[min(16.5rem,88vw)]
             ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -161,9 +163,21 @@ function AppShell() {
             ${sidebarCollapsed ? 'lg:w-[4.25rem]' : 'lg:w-60'}
           `}
         >
-          <div className={`p-2 border-b border-slate-800 flex items-center gap-2 ${sidebarCollapsed ? 'lg:flex-col lg:items-stretch' : ''}`}>
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <img src="/uni-logo.gif" alt="UNI" className="w-9 h-9 rounded-xl object-cover flex-shrink-0" />
+          <div
+            className={`p-2 border-b border-white/10 flex items-center gap-2 ${
+              sidebarCollapsed ? 'lg:flex-col lg:items-center lg:justify-center lg:gap-2 lg:py-3' : ''
+            }`}
+          >
+            <div
+              className={`flex items-center gap-2 min-w-0 ${
+                sidebarCollapsed ? 'lg:flex-1 lg:flex-col lg:items-center lg:justify-center lg:w-full' : 'flex-1'
+              }`}
+            >
+              <img
+                src="/uni-logo.gif"
+                alt="UNI"
+                className={`w-9 h-9 rounded-xl object-cover flex-shrink-0 ${sidebarCollapsed ? 'lg:mx-auto' : ''}`}
+              />
               <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
                 <h1 className="font-bold text-[13px] tracking-tight truncate">UNI Mission Control</h1>
                 <p className="text-[9px] text-slate-400 truncate">Marketing Performance Hub</p>
@@ -173,7 +187,9 @@ function AppShell() {
               type="button"
               title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               onClick={() => setSidebarCollapsed(c => !c)}
-              className="hidden lg:flex p-1.5 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-600/90 flex-shrink-0"
+              className={`hidden lg:flex p-1.5 rounded-md text-slate-200 hover:text-white hover:bg-white/10 border border-white/15 flex-shrink-0 ${
+                sidebarCollapsed ? 'lg:mx-auto' : ''
+              }`}
             >
               {sidebarCollapsed ? <ChevronsRight size={18} aria-hidden /> : <ChevronsLeft size={18} aria-hidden />}
             </button>

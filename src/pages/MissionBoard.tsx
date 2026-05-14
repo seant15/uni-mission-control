@@ -192,7 +192,7 @@ export default function MissionBoard() {
   const savePending = modalMode === 'create' ? createMutation.isPending : saveEditMutation.isPending
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
@@ -279,17 +279,17 @@ export default function MissionBoard() {
       )}
 
       {!isLoading && (
-        <div className="flex gap-4 overflow-x-auto pb-4 min-h-[420px]">
+        <div className="flex gap-5 overflow-x-auto pb-6 min-h-[480px]">
           {MISSION_COLUMNS.map(col => (
             <div
               key={col.id}
-              className="flex-shrink-0 w-[280px] bg-slate-100/80 rounded-xl border border-slate-200 flex flex-col max-h-[70vh]"
+              className="flex-shrink-0 w-[210px] bg-slate-100/80 rounded-xl border border-slate-200 flex flex-col max-h-[70vh]"
             >
-              <div className="px-3 py-2 border-b border-slate-200 font-semibold text-sm text-slate-700 flex justify-between items-center">
+              <div className="px-3 py-2.5 border-b border-slate-200 font-semibold text-sm text-slate-700 flex justify-between items-center">
                 <span>{col.label}</span>
                 <span className="text-xs font-normal text-slate-500">{byColumn[col.id].length}</span>
               </div>
-              <div className="p-2 overflow-y-auto flex-1 space-y-2">
+              <div className="p-3 overflow-y-auto flex-1 space-y-3">
                 {byColumn[col.id].map(card => (
                   <div
                     key={card.id}

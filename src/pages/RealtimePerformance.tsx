@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Activity, AlertTriangle, ChevronDown, TrendingUp, TrendingDown,
+  Activity, ChevronDown, TrendingUp, TrendingDown,
   Minus, RefreshCw, Clock, ArrowUpDown, ArrowUp, ArrowDown, Globe, Copy, Check, MapPin
 } from 'lucide-react'
 import { db } from '../lib/api'
@@ -192,13 +192,6 @@ export default function RealtimePerformance() {
     refetchInterval: 60 * 1000,
   })
 
-  const { data: recentAlerts } = useQuery({
-    queryKey: ['recent_alerts', windowHours],
-    queryFn: () => db.getRecentAlerts(windowHours),
-    staleTime: 2 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
-  })
-
   useEffect(() => {
     if (dataUpdatedAt) setLastRefreshed(new Date(dataUpdatedAt))
   }, [dataUpdatedAt])
@@ -297,11 +290,6 @@ export default function RealtimePerformance() {
   const clientCurrencyMap = new Map<string, string>(
     (clients || []).map((c: any) => [c.id, c.currency_symbol || '$'])
   )
-
-  const alertsBySeverity = recentAlerts?.reduce((acc: any, a: any) => {
-    acc[a.severity] = (acc[a.severity] || 0) + 1
-    return acc
-  }, {}) || {}
 
   return (
     <div className="space-y-4">
@@ -554,65 +542,6 @@ export default function RealtimePerformance() {
             </div>
           )}
 
-          {/* Recent Alerts */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <AlertTriangle className="text-orange-500" size={20} />
-                Alerts — Last {windowHours}h ({recentAlerts?.length || 0} total)
-              </h3>
-              <div className="flex gap-2">
-                {['critical', 'high', 'medium', 'low'].map(sev => {
-                  const count = alertsBySeverity[sev] || 0
-                  if (!count) return null
-                  const color = sev === 'critical' ? 'bg-red-100 text-red-700' :
-                    sev === 'high' ? 'bg-orange-100 text-orange-700' :
-                    sev === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-100 text-slate-700'
-                  return (
-                    <span key={sev} className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${color}`}>
-                      {sev}: {count}
-                    </span>
-                  )
-                })}
-              </div>
-            </div>
-
-            {recentAlerts && recentAlerts.length > 0 ? (
-              <div className="space-y-2">
-                {recentAlerts.slice(0, 10).map((alert: any) => {
-                  const severityColor = alert.severity === 'critical' ? 'border-red-300 bg-red-50' :
-                    alert.severity === 'high' ? 'border-orange-300 bg-orange-50' :
-                    alert.severity === 'medium' ? 'border-yellow-300 bg-yellow-50' : 'border-slate-300 bg-slate-50'
-                  return (
-                    <div key={alert.id} className={`flex items-start gap-3 p-3 rounded-lg border ${severityColor}`}>
-                      <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-orange-500" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{alert.account_name}</span>
-                          <span className="text-xs text-gray-500 capitalize">{(alert.alert_type || '').replace(/_/g, ' ')}</span>
-                        </div>
-                        <p className="text-sm text-gray-700 mt-0.5">{alert.message}</p>
-                      </div>
-                      <span className="text-xs text-gray-400 whitespace-nowrap">
-                        {tzMode === 'utc'
-                          ? `${new Date(alert.created_at).toISOString().slice(11,19)} UTC`
-                          : new Date(alert.created_at).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  )
-                })}
-                {recentAlerts.length > 10 && (
-                  <p className="text-sm text-center text-gray-400 pt-2">
-                    +{recentAlerts.length - 10} more alerts — view all in the Alerts tab
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <p>No alerts in the last {windowHours} hours</p>
-              </div>
-            )}
-          </div>
         </>
       )}
     </div>

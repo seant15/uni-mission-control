@@ -167,7 +167,7 @@ export default function DashboardSettingsPage() {
           </button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <SettingsIcon className="text-blue-600" />
+              <SettingsIcon className="text-[var(--brand-600)]" />
               Settings
             </h1>
             <p className="text-gray-500 mt-1">Dashboard preferences and user access control</p>
@@ -181,7 +181,7 @@ export default function DashboardSettingsPage() {
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition disabled:opacity-60 disabled:cursor-not-allowed ${
               saved
                 ? 'bg-green-600 text-white'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-[var(--brand-600)] text-white hover:bg-[var(--brand-700)]'
             }`}
           >
             {saved ? <Check size={18} /> : <Save size={18} />}
@@ -196,7 +196,7 @@ export default function DashboardSettingsPage() {
           onClick={() => setActiveTab('profile')}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
             activeTab === 'profile'
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-[var(--brand-600)] text-[var(--brand-700)]'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
@@ -207,18 +207,18 @@ export default function DashboardSettingsPage() {
           onClick={() => setActiveTab('dashboard')}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
             activeTab === 'dashboard'
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-[var(--brand-600)] text-[var(--brand-700)]'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
           <SettingsIcon size={15} />
-          Performance Dashboard
+          Defaults &amp; charts
         </button>
         <button
           onClick={() => setActiveTab('users')}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
             activeTab === 'users'
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-[var(--brand-600)] text-[var(--brand-700)]'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
@@ -238,12 +238,18 @@ export default function DashboardSettingsPage() {
 
             {/* Avatar preview */}
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-2xl font-bold">
+              <div
+                className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold ${
+                  accent === 'blue'
+                    ? 'bg-gradient-to-br from-sky-400 to-blue-700'
+                    : 'bg-gradient-to-br from-[var(--brand-400)] to-[var(--brand-700)]'
+                }`}
+              >
                 {(profileName || appUser?.display_name || 'U')[0].toUpperCase()}
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-700">Profile Avatar</p>
-                <p className="text-xs text-gray-400">Your initials are used as your avatar</p>
+                <p className="text-xs text-gray-400">Initials avatar color follows the interface accent you pick under Defaults &amp; charts.</p>
               </div>
             </div>
 
@@ -254,7 +260,7 @@ export default function DashboardSettingsPage() {
                 type="text"
                 value={profileName}
                 onChange={e => setProfileName(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)] outline-none"
                 placeholder="Your name"
               />
               <p className="text-xs text-gray-400 mt-1">Shown in the sidebar and used as your avatar initial</p>
@@ -291,7 +297,7 @@ export default function DashboardSettingsPage() {
               onClick={handleProfileSave}
               disabled={profileSaving || !profileName.trim()}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition text-white font-medium ${
-                profileSaved ? 'bg-green-600' : 'bg-blue-600 hover:bg-blue-700'
+                profileSaved ? 'bg-green-600' : 'bg-[var(--brand-600)] hover:bg-[var(--brand-700)]'
               } disabled:opacity-50`}
             >
               {profileSaved ? <Check size={16} /> : <Save size={16} />}
@@ -309,6 +315,10 @@ export default function DashboardSettingsPage() {
               {saveError}
             </div>
           )}
+          <p className="text-sm text-stone-700 bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 leading-relaxed">
+            These defaults apply to the <span className="font-semibold">Account Performance</span> page (Heated / Data Analytics): business type, default chart metric, date range, chart height, table pagination, and cache behavior.
+            <span className="block mt-1 text-stone-600">Marketing Overview (agency pies and client breakdown) and Real-time Performance keep their own filters on each screen.</span>
+          </p>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             {/* Display Preferences */}
@@ -348,7 +358,7 @@ export default function DashboardSettingsPage() {
                   <select
                     value={settings.defaultBusinessType}
                     onChange={(e) => setSettings({...settings, defaultBusinessType: e.target.value as 'leadgen' | 'ecommerce'})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)]"
                   >
                     <option value="leadgen">Lead Gen</option>
                     <option value="ecommerce">eCommerce</option>
@@ -363,7 +373,7 @@ export default function DashboardSettingsPage() {
                   <select
                     value={settings.defaultDateRange}
                     onChange={(e) => setSettings({...settings, defaultDateRange: parseInt(e.target.value)})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)]"
                   >
                     <option value="7">Last 7 Days</option>
                     <option value="14">Last 14 Days</option>
@@ -380,7 +390,7 @@ export default function DashboardSettingsPage() {
                   <select
                     value={settings.defaultMetric}
                     onChange={(e) => setSettings({...settings, defaultMetric: e.target.value as any})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)]"
                   >
                     <option value="spend">Spend</option>
                     <option value="ctr">CTR</option>
@@ -405,7 +415,7 @@ export default function DashboardSettingsPage() {
                     type="number"
                     value={settings.chartHeight}
                     onChange={(e) => setSettings({...settings, chartHeight: parseInt(e.target.value)})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)]"
                     min="200"
                     max="600"
                     step="50"
@@ -422,7 +432,7 @@ export default function DashboardSettingsPage() {
                     type="checkbox"
                     checked={settings.showGridLines}
                     onChange={(e) => setSettings({...settings, showGridLines: e.target.checked})}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                    className="w-5 h-5 text-[var(--brand-600)] rounded focus:ring-2 focus:ring-[var(--brand-500)]"
                   />
                 </div>
 
@@ -435,7 +445,7 @@ export default function DashboardSettingsPage() {
                     type="checkbox"
                     checked={settings.animateChart}
                     onChange={(e) => setSettings({...settings, animateChart: e.target.checked})}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                    className="w-5 h-5 text-[var(--brand-600)] rounded focus:ring-2 focus:ring-[var(--brand-500)]"
                   />
                 </div>
               </div>
@@ -452,7 +462,7 @@ export default function DashboardSettingsPage() {
                   <select
                     value={settings.rowsPerPage}
                     onChange={(e) => setSettings({...settings, rowsPerPage: parseInt(e.target.value)})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)]"
                   >
                     <option value="25">25</option>
                     <option value="50">50</option>
@@ -471,7 +481,7 @@ export default function DashboardSettingsPage() {
                     type="checkbox"
                     checked={settings.showPlatformBadge}
                     onChange={(e) => setSettings({...settings, showPlatformBadge: e.target.checked})}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                    className="w-5 h-5 text-[var(--brand-600)] rounded focus:ring-2 focus:ring-[var(--brand-500)]"
                   />
                 </div>
               </div>
@@ -489,7 +499,7 @@ export default function DashboardSettingsPage() {
                     type="number"
                     value={settings.cacheTimeout}
                     onChange={(e) => setSettings({...settings, cacheTimeout: parseInt(e.target.value)})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)]"
                     min="1"
                     max="60"
                   />
@@ -505,7 +515,7 @@ export default function DashboardSettingsPage() {
                     type="checkbox"
                     checked={settings.autoRefresh}
                     onChange={(e) => setSettings({...settings, autoRefresh: e.target.checked})}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                    className="w-5 h-5 text-[var(--brand-600)] rounded focus:ring-2 focus:ring-[var(--brand-500)]"
                   />
                 </div>
 
@@ -518,7 +528,7 @@ export default function DashboardSettingsPage() {
                       type="number"
                       value={settings.refreshInterval}
                       onChange={(e) => setSettings({...settings, refreshInterval: parseInt(e.target.value)})}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)]"
                       min="30"
                       max="300"
                     />
@@ -547,7 +557,7 @@ export default function DashboardSettingsPage() {
                   type="checkbox"
                   checked={settings.announcementEnabled}
                   onChange={(e) => setSettings({...settings, announcementEnabled: e.target.checked})}
-                  className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                  className="w-5 h-5 text-[var(--brand-600)] rounded focus:ring-2 focus:ring-[var(--brand-500)]"
                 />
               </div>
 
@@ -556,7 +566,7 @@ export default function DashboardSettingsPage() {
                 <div className="flex gap-2">
                   {(['info', 'warning', 'success', 'neutral'] as const).map(style => {
                     const colors = {
-                      info: 'bg-blue-600 text-white',
+                      info: 'bg-stone-200 text-stone-900 border border-stone-300',
                       warning: 'bg-amber-500 text-white',
                       success: 'bg-green-600 text-white',
                       neutral: 'bg-slate-700 text-slate-100',
@@ -567,7 +577,7 @@ export default function DashboardSettingsPage() {
                         onClick={() => setSettings({...settings, announcementStyle: style})}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition ${
                           settings.announcementStyle === style
-                            ? colors[style] + ' ring-2 ring-offset-1 ring-blue-400'
+                            ? colors[style] + ' ring-2 ring-offset-1 ring-[var(--brand-400)]'
                             : colors[style] + ' opacity-50'
                         }`}
                       >
@@ -585,7 +595,7 @@ export default function DashboardSettingsPage() {
                   onChange={(e) => setSettings({...settings, announcementText: e.target.value})}
                   rows={3}
                   placeholder='e.g. 🚀 <b>Q1 Reporting Week</b> — All accounts reviewed by Friday.'
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-mono resize-y"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)] text-sm font-mono resize-y"
                 />
                 <p className="text-xs text-gray-400 mt-1">Rendered as HTML. Keep it concise — one line is best.</p>
               </div>
@@ -594,7 +604,7 @@ export default function DashboardSettingsPage() {
                 <div>
                   <p className="text-xs text-gray-500 mb-2">Preview:</p>
                   <div className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
-                    settings.announcementStyle === 'info' ? 'bg-blue-600 text-white' :
+                    settings.announcementStyle === 'info' ? 'bg-stone-100 text-stone-900 border border-stone-200' :
                     settings.announcementStyle === 'warning' ? 'bg-amber-500 text-white' :
                     settings.announcementStyle === 'success' ? 'bg-green-600 text-white' :
                     'bg-slate-700 text-slate-100'
@@ -612,7 +622,7 @@ export default function DashboardSettingsPage() {
                   type="button"
                   onClick={handleSave}
                   disabled={saving}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--brand-600)] text-white hover:bg-[var(--brand-700)] transition disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {saved ? <Check size={18} /> : <Save size={18} />}
                   {saving ? 'Saving…' : saved ? 'Saved!' : 'Save announcement & dashboard settings'}
