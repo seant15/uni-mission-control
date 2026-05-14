@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Activity, AlertTriangle, ChevronDown, TrendingUp, TrendingDown,
-  Minus, RefreshCw, Clock, ArrowUpDown, ArrowUp, ArrowDown, Globe, Copy, Check
+  Minus, RefreshCw, Clock, ArrowUpDown, ArrowUp, ArrowDown, Globe, Copy, Check, MapPin
 } from 'lucide-react'
 import { db } from '../lib/api'
 import type { HourWindow } from '../lib/api'
@@ -11,10 +11,10 @@ import { scopedClientIdFromUser } from '../lib/rbac'
 
 // Timezone display options
 type TzMode = 'utc' | 'browser' | 'account'
-const TZ_OPTIONS: { value: TzMode; label: string; emoji: string }[] = [
-  { value: 'utc',     label: 'UTC',          emoji: '🌐' },
-  { value: 'browser', label: 'My Local',     emoji: '🖥️' },
-  { value: 'account', label: 'Account Local', emoji: '📍' },
+const TZ_OPTIONS: { value: TzMode; label: string }[] = [
+  { value: 'utc',     label: 'UTC' },
+  { value: 'browser', label: 'My local' },
+  { value: 'account', label: 'Account local' },
 ]
 
 
@@ -133,7 +133,7 @@ function PlatformBadge({ platform }: { platform: string }) {
   if (!isMeta && !isGoogle) return <span className="text-xs text-gray-400">{platform}</span>
   return (
     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-      isMeta ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+      isMeta ? 'bg-violet-100 text-violet-800' : 'bg-green-100 text-green-700'
     }`}>
       {isMeta ? 'Meta' : 'Google'}
     </span>
@@ -172,7 +172,7 @@ export default function RealtimePerformance() {
   }
   const SortIcon = ({ field }: { field: RTSortField }) => {
     if (sortField !== field) return <ArrowUpDown size={12} className="text-gray-400" />
-    return sortDir === 'asc' ? <ArrowUp size={12} className="text-blue-600" /> : <ArrowDown size={12} className="text-blue-600" />
+    return sortDir === 'asc' ? <ArrowUp size={12} className="text-[var(--brand-600)]" /> : <ArrowDown size={12} className="text-[var(--brand-600)]" />
   }
 
   const { data: clients } = useQuery({
@@ -290,7 +290,7 @@ export default function RealtimePerformance() {
   }, [hourlyData?.windowStart, hourlyData?.windowEnd, tzMode])
 
   const selectedClientName = selectedClient === 'all'
-    ? 'All Clients'
+    ? 'Agency (all clients)'
     : clients?.find((c: any) => c.id === selectedClient)?.name || selectedClient
 
   // Build client_id → currency_symbol map for per-row display
@@ -304,15 +304,15 @@ export default function RealtimePerformance() {
   }, {}) || {}
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <Activity className="text-green-600" />
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+            <Activity className="text-[var(--brand-600)]" />
             Real-time Performance
           </h1>
-          <p className="text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 mt-0.5">
             Live window comparison — current vs previous {windowHours}h
           </p>
           {windowBoundsLabel && (
@@ -348,7 +348,7 @@ export default function RealtimePerformance() {
                 onClick={() => setWindowHours(opt.value)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
                   windowHours === opt.value
-                    ? 'bg-green-600 text-white'
+                    ? 'bg-[var(--brand-600)] text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
@@ -370,19 +370,19 @@ export default function RealtimePerformance() {
                 onClick={() => setTzMode(opt.value)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
                   tzMode === opt.value
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-[var(--brand-600)] text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
                 title={opt.label}
               >
-                {opt.emoji} {opt.label}
+                {opt.label}
               </button>
             ))}
             {/* Active timezone indicator */}
-            <span className="ml-2 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-xs font-mono text-blue-700">
-              {tzMode === 'utc' ? '🌐 UTC+0' :
-               tzMode === 'browser' ? `🖥️ ${new Intl.DateTimeFormat('en', { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || 'Local'}` :
-               '📍 Account TZ'}
+            <span className="ml-2 px-2 py-1 bg-[var(--brand-50)] border border-[var(--brand-100)] rounded text-xs font-mono text-[var(--brand-700)]">
+              {tzMode === 'utc' ? 'UTC+0' :
+               tzMode === 'browser' ? `${new Intl.DateTimeFormat('en', { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || 'Local'}` :
+               'Account TZ'}
             </span>
           </div>
         </div>
@@ -411,7 +411,7 @@ export default function RealtimePerformance() {
                   onClick={() => { setSelectedClient('all'); setShowClientDropdown(false) }}
                   className="w-full text-left px-4 py-2 hover:bg-gray-50"
                 >
-                  All Clients
+                  Agency (all clients)
                 </button>
                 {clients?.map((c: any) => (
                   <button
@@ -431,7 +431,7 @@ export default function RealtimePerformance() {
       {/* Loading */}
       {isLoading && (
         <div className="text-center py-12">
-          <div className="inline-block w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full animate-spin" />
+          <div className="inline-block w-8 h-8 border-4 border-[var(--brand-600)] border-t-transparent rounded-full animate-spin" />
           <div className="mt-2 text-gray-600">Loading real-time data...</div>
         </div>
       )}
@@ -514,8 +514,9 @@ export default function RealtimePerformance() {
                               {(clients as any[])?.find((c: any) => c.id === acc.client_id)?.currency || 'USD'}
                             </div>
                             {acc.account_tz && acc.account_tz !== 'advertiser_tz' && (
-                              <div className="text-[10px] text-blue-500 mt-0.5" title={acc.account_tz}>
-                                📍 {tzOffsetLabel(acc.account_tz)}
+                              <div className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-0.5" title={acc.account_tz}>
+                                <MapPin size={10} className="shrink-0 text-gray-400" aria-hidden />
+                                {tzOffsetLabel(acc.account_tz)}
                               </div>
                             )}
                           </td>
@@ -566,7 +567,7 @@ export default function RealtimePerformance() {
                   if (!count) return null
                   const color = sev === 'critical' ? 'bg-red-100 text-red-700' :
                     sev === 'high' ? 'bg-orange-100 text-orange-700' :
-                    sev === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
+                    sev === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-100 text-slate-700'
                   return (
                     <span key={sev} className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${color}`}>
                       {sev}: {count}
@@ -581,7 +582,7 @@ export default function RealtimePerformance() {
                 {recentAlerts.slice(0, 10).map((alert: any) => {
                   const severityColor = alert.severity === 'critical' ? 'border-red-300 bg-red-50' :
                     alert.severity === 'high' ? 'border-orange-300 bg-orange-50' :
-                    alert.severity === 'medium' ? 'border-yellow-300 bg-yellow-50' : 'border-blue-300 bg-blue-50'
+                    alert.severity === 'medium' ? 'border-yellow-300 bg-yellow-50' : 'border-slate-300 bg-slate-50'
                   return (
                     <div key={alert.id} className={`flex items-start gap-3 p-3 rounded-lg border ${severityColor}`}>
                       <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-orange-500" />

@@ -30,8 +30,8 @@ export default function AlertSummaryBar() {
       label: 'Assigned to Me',
       value: counts?.assigned_to_me ?? '—',
       icon:  User,
-      color: 'text-blue-700',
-      bg:    'bg-blue-50',
+      color: 'text-[var(--brand-700)]',
+      bg:    'bg-[var(--brand-50)]',
     },
     {
       label: 'Resolved Today',

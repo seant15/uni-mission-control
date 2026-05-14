@@ -192,14 +192,14 @@ export default function MissionBoard() {
   const savePending = modalMode === 'create' ? createMutation.isPending : saveEditMutation.isPending
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <LayoutGrid className="text-blue-600" />
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+            <LayoutGrid className="text-[var(--brand-600)]" />
             Mission Board
           </h1>
-          <p className="text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 mt-0.5">
             Track work from alerts and notes. Use Edit on a card to change title, notes, or column.
           </p>
         </div>
@@ -214,21 +214,21 @@ export default function MissionBoard() {
           <button
             type="button"
             onClick={openCreate}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--brand-600)] text-white text-sm font-medium hover:bg-[var(--brand-700)]"
           >
             <Plus size={16} /> New card
           </button>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2">
         <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Filters</span>
         <select
           value={filterClientId}
           onChange={e => setFilterClientId(e.target.value)}
           className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50 min-w-[140px]"
         >
-          <option value="">All clients</option>
+          <option value="">Agency (all clients)</option>
           {(clients as { id: string; name: string }[]).map(c => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
@@ -256,7 +256,7 @@ export default function MissionBoard() {
         {(filterClientId || filterPlatform || filterPriority) && (
           <button
             type="button"
-            className="text-xs text-blue-600 hover:underline"
+            className="text-xs text-[var(--brand-600)] hover:underline"
             onClick={() => { setFilterClientId(''); setFilterPlatform(''); setFilterPriority('') }}
           >
             Clear filters

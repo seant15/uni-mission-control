@@ -241,7 +241,7 @@ function AppShell() {
           </div>
         </aside>
 
-        <div className={`flex-1 flex flex-col min-w-0 w-full ${sidebarCollapsed ? 'lg:ml-[4.25rem]' : 'lg:ml-60'}`}>
+        <div className="flex-1 flex flex-col min-w-0 w-full">
           <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
             <AnnouncementBanner />
             <div className="h-12 px-4 sm:px-8 flex items-center justify-between gap-2">
