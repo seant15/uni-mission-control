@@ -157,7 +157,7 @@ function AppShell() {
             transition-transform duration-200 ease-out
             w-[min(16.5rem,88vw)]
             ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'}
-            lg:translate-x-0 lg:static lg:z-auto
+            lg:translate-x-0 lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:h-screen lg:overflow-y-auto
             ${sidebarCollapsed ? 'lg:w-[4.25rem]' : 'lg:w-60'}
           `}
         >
@@ -241,7 +241,11 @@ function AppShell() {
           </div>
         </aside>
 
-        <div className="flex-1 flex flex-col min-w-0 w-full">
+        <div
+          className={`flex-1 flex flex-col min-w-0 w-full ${
+            sidebarCollapsed ? 'lg:pl-[4.25rem]' : 'lg:pl-60'
+          }`}
+        >
           <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
             <AnnouncementBanner />
             <div className="h-12 px-4 sm:px-8 flex items-center justify-between gap-2">

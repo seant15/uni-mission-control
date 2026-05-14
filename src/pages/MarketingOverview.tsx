@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import {
   DollarSign, TrendingUp, Target, MousePointer, Eye, MousePointer2, CreditCard,
   AlertTriangle, ArrowUpRight, ArrowDownRight, AlertCircle,
-  Clock, CheckCircle, X, BarChart3, Users, ShoppingCart, ChevronDown,
+  Clock, CheckCircle, X, Users, ShoppingCart, ChevronDown,
 } from 'lucide-react'
 import { db } from '../lib/api'
 import { getDashboardSettings } from '../lib/settings'
@@ -75,7 +75,7 @@ export default function MarketingOverview({
   showAgencyExtras = false,
 }: {
   embedded?: boolean
-  /** When true (Agency View), adds client rollup, pies, daily breakdown, and AI-notes rail. */
+  /** When true (Agency View), adds client rollup, attribution pies, and AI-notes / alerts rail. */
   showAgencyExtras?: boolean
 }) {
   const { appUser } = useAuth()
@@ -206,20 +206,6 @@ export default function MarketingOverview({
   const cur = curRows ? aggregate(curRows) : null
   const prev = prevRows ? aggregate(prevRows) : null
 
-  const dailyBreakdownRows = useMemo(() => {
-    const m = new Map<string, { spend: number; revenue: number; conv: number }>()
-    for (const r of curRows as { date?: string; cost?: number; revenue?: number; conversions?: number }[]) {
-      const d = r.date
-      if (!d) continue
-      const x = m.get(d) || { spend: 0, revenue: 0, conv: 0 }
-      x.spend += Number(r.cost) || 0
-      x.revenue += Number(r.revenue) || 0
-      x.conv += Number(r.conversions) || 0
-      m.set(d, x)
-    }
-    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
-  }, [curRows])
-
   const dailyTzFootnote = useMemo(() => {
     const rows = curRows || []
     if (rows.length === 0) return null
@@ -319,7 +305,7 @@ export default function MarketingOverview({
     <div
       className={
         showAgencyExtras
-          ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_13.5rem] xl:gap-3 xl:items-start'
+          ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_15rem] xl:gap-3 xl:items-start'
           : ''
       }
     >
@@ -329,7 +315,7 @@ export default function MarketingOverview({
             <div className="min-w-0 lg:max-w-xl">
               <h1 className="text-2xl font-bold text-gray-900 tracking-tight">UNI Overview</h1>
               <p className="text-gray-500 text-sm mt-0.5 leading-snug">
-                Cross-platform roll-up{showAgencyExtras ? ' — client leaderboard, attribution pies (sample), and daily breakdown' : ''}. Same date range as Heated View.
+                Cross-platform roll-up{showAgencyExtras ? ' — client leaderboard, attribution pies (sample), and a side rail for AI notes + alerts' : ''}. Same date range as Heated View.
               </p>
             </div>
           )}
@@ -524,95 +510,12 @@ export default function MarketingOverview({
             <>
               <AgencyInsightPies />
               <AgencyClientBreakdown dateRange={dateRange} selectedPlatform={selectedPlatform} />
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3">
-                <h2 className="text-sm font-semibold text-gray-900 mb-2">Daily breakdown — {periodLabel}</h2>
-                <div className="overflow-x-auto max-h-[280px] overflow-y-auto rounded-md border border-slate-100">
-                  <table className="w-full text-xs tabular-nums">
-                    <thead className="bg-slate-50 sticky top-0">
-                      <tr>
-                        <th className="px-2 py-1.5 text-left font-medium text-slate-500">Date</th>
-                        <th className="px-2 py-1.5 text-right font-medium text-slate-500">Spend</th>
-                        <th className="px-2 py-1.5 text-right font-medium text-slate-500">Revenue</th>
-                        <th className="px-2 py-1.5 text-right font-medium text-slate-500">Conv.</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {dailyBreakdownRows.map(([d, v]) => (
-                        <tr key={d} className="text-slate-800 hover:bg-slate-50/80">
-                          <td className="px-2 py-1 whitespace-nowrap font-medium">{d}</td>
-                          <td className="px-2 py-1 text-right">{fmtMoney(v.spend)}</td>
-                          <td className="px-2 py-1 text-right text-green-700">{fmtMoney(v.revenue)}</td>
-                          <td className="px-2 py-1 text-right">{fmtMetric(v.conv)}</td>
-                        </tr>
-                      ))}
-                      {dailyBreakdownRows.length === 0 && (
-                        <tr>
-                          <td colSpan={4} className="px-2 py-6 text-center text-slate-400">No daily rows in range for current filters</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
             </>
           )}
 
           {dailyTzFootnote && (
             <p className="text-xs text-gray-500 max-w-4xl leading-relaxed">{dailyTzFootnote}</p>
           )}
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center justify-between mb-3 gap-2">
-              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                <BarChart3 size={18} className="text-orange-500" />
-                Alert Overview
-              </h2>
-              <Link to="/alerts" className="text-xs sm:text-sm text-[var(--brand-600)] hover:opacity-90 font-medium whitespace-nowrap">
-                View all alerts →
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-              <div className="bg-gray-50 rounded-lg p-2.5 text-center">
-                <div className="text-lg sm:text-xl font-bold text-gray-900">{alertSummary.total}</div>
-                <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5">Total</div>
-              </div>
-              <div className="bg-red-50 rounded-lg p-2.5 text-center">
-                <div className="text-lg sm:text-xl font-bold text-red-700">{alertSummary.new}</div>
-                <div className="text-[10px] sm:text-xs text-red-600 mt-0.5">New</div>
-              </div>
-              <div className="bg-red-50 rounded-lg p-2.5 text-center">
-                <div className="text-lg sm:text-xl font-bold text-red-700">{alertSummary.critical}</div>
-                <div className="text-[10px] sm:text-xs text-red-600 mt-0.5">Critical</div>
-              </div>
-              <div className="bg-orange-50 rounded-lg p-2.5 text-center">
-                <div className="text-lg sm:text-xl font-bold text-orange-700">{alertSummary.high}</div>
-                <div className="text-[10px] sm:text-xs text-orange-600 mt-0.5">High</div>
-              </div>
-            </div>
-
-            {recentAlerts.length > 0 ? (
-              <div className="space-y-2">
-                {recentAlerts.map(alert => (
-                  <div key={alert.id} className="flex items-start gap-3 py-2 border-b border-gray-100 last:border-0">
-                    <span className={`shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getSeverityColor(alert.severity)}`}>
-                      {alert.severity}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-800 truncate">{alert.account_name}</div>
-                      <div className="text-xs text-gray-500 truncate">{alert.message}</div>
-                    </div>
-                    <div className="shrink-0 flex items-center gap-1 text-xs text-gray-400">
-                      {getStatusIcon(alert.status)}
-                      {new Date(alert.created_at).toLocaleDateString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-6 text-gray-400 text-sm">No recent alerts</div>
-            )}
-          </div>
         </>
       )}
 
@@ -625,13 +528,70 @@ export default function MarketingOverview({
       </div>
       {showAgencyExtras && (
         <aside
-          className="hidden xl:flex flex-col rounded-xl border border-dashed border-slate-300/90 bg-gradient-to-b from-[var(--brand-50)]/90 to-white p-3 text-xs text-slate-600 sticky top-16 self-start min-h-[14rem] shadow-sm"
-          aria-label="AI notes (coming soon)"
+          className="hidden xl:flex flex-col gap-2.5 w-full min-w-0 max-h-[calc(100vh-5rem)] sticky top-16 self-start"
+          aria-label="AI notes and alerts"
         >
-          <span className="font-semibold text-[var(--brand-700)] uppercase tracking-wide text-[10px]">AI notes</span>
-          <p className="mt-2 leading-relaxed">
-            Reserved column for summaries, spend shifts, and next actions. Keeps the main grid readable on wide screens.
-          </p>
+          <div className="rounded-xl border border-dashed border-slate-300/90 bg-gradient-to-b from-[var(--brand-50)]/90 to-white p-2.5 text-[11px] text-slate-600 shadow-sm">
+            <span className="font-semibold text-[var(--brand-700)] uppercase tracking-wide text-[10px]">AI notes</span>
+            <p className="mt-1.5 leading-snug text-slate-600">
+              Reserved for auto summaries and next actions. Your notes can render above or below this block later.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm flex flex-col min-h-0 flex-1 overflow-hidden">
+            <div className="flex items-center justify-between gap-1 mb-2 shrink-0">
+              <span className="font-semibold text-slate-700 uppercase tracking-wide text-[10px]">Alerts</span>
+              <Link to="/alerts" className="text-[10px] text-[var(--brand-600)] hover:opacity-90 font-semibold whitespace-nowrap">
+                Open →
+              </Link>
+            </div>
+            <div className="grid grid-cols-4 gap-1 mb-2 shrink-0 text-center">
+              <div className="rounded-md bg-slate-50 px-0.5 py-1 border border-slate-100">
+                <div className="text-[11px] font-bold text-slate-900 leading-none">{alertSummary.total}</div>
+                <div className="text-[8px] text-slate-500 leading-tight mt-0.5">Tot</div>
+              </div>
+              <div className="rounded-md bg-red-50 px-0.5 py-1 border border-red-100">
+                <div className="text-[11px] font-bold text-red-700 leading-none">{alertSummary.new}</div>
+                <div className="text-[8px] text-red-600 leading-tight mt-0.5">New</div>
+              </div>
+              <div className="rounded-md bg-red-50 px-0.5 py-1 border border-red-100">
+                <div className="text-[11px] font-bold text-red-700 leading-none">{alertSummary.critical}</div>
+                <div className="text-[8px] text-red-600 leading-tight mt-0.5">Crit</div>
+              </div>
+              <div className="rounded-md bg-orange-50 px-0.5 py-1 border border-orange-100">
+                <div className="text-[11px] font-bold text-orange-800 leading-none">{alertSummary.high}</div>
+                <div className="text-[8px] text-orange-700 leading-tight mt-0.5">High</div>
+              </div>
+            </div>
+            <div className="overflow-y-auto min-h-0 flex-1 space-y-1.5 pr-0.5">
+              {recentAlerts.length > 0 ? (
+                recentAlerts.map(alert => (
+                  <div
+                    key={alert.id}
+                    className="rounded-lg border border-slate-100 bg-slate-50/80 p-1.5 hover:bg-slate-50 transition"
+                  >
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className={`text-[9px] font-semibold uppercase px-1 py-0 rounded ${getSeverityColor(alert.severity)}`}>
+                        {alert.severity}
+                      </span>
+                      <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
+                        {getStatusIcon(alert.status)}
+                        {new Date(alert.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                    <div className="text-[10px] font-semibold text-slate-800 truncate mt-0.5" title={alert.account_name}>
+                      {alert.account_name}
+                    </div>
+                    <p className="text-[10px] text-slate-600 leading-snug line-clamp-2 mt-0.5" title={alert.message}>
+                      {alert.message}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-[10px] text-slate-400 text-center py-3">No alerts in scope</p>
+              )}
+            </div>
+          </div>
         </aside>
       )}
     </div>

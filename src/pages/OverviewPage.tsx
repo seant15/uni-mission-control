@@ -48,7 +48,7 @@ export default function OverviewPage() {
           <div className="min-w-0">
             <h1 className="text-xl font-bold text-gray-900 tracking-tight">Overview</h1>
             <p className="text-xs text-gray-500 mt-0.5 leading-snug">
-              Agency View rolls up clients, platforms, and daily breakdown. Heated View is account-level performance. Same calendar everywhere.
+              Agency View rolls up clients and platforms. Heated View adds account-level charts, daily breakdown, and drill-down tables. Same calendar everywhere.
             </p>
           </div>
         </div>

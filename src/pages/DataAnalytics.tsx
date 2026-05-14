@@ -562,8 +562,20 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
     }
   }, [scopedClientId])
 
+  const fmtDailyMoney = (n: number) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: selectedClient === 'all' ? 'USD' : (clients?.find(c => c.id === selectedClient)?.currency || 'USD'),
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(n)
+
+  const shellCard = embedded ? 'bg-white rounded-lg shadow-sm border border-gray-200 p-3' : 'bg-white rounded-xl shadow-sm border border-gray-200 p-6'
+  const detailSummaryClass = embedded ? 'text-sm font-semibold text-gray-900 cursor-pointer flex items-center gap-2' : 'text-lg font-semibold text-gray-900 cursor-pointer flex items-center gap-2'
+  const tableWrapMt = embedded ? 'overflow-x-auto mt-2' : 'overflow-x-auto mt-4'
+
   return (
-    <div className="space-y-6">
+    <div className={embedded ? 'space-y-3' : 'space-y-6'}>
       {/* Top Header */}
       <div className="flex items-center justify-between">
         {!embedded && (
@@ -675,17 +687,19 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
           )}
 
           {/* Settings */}
-          <button
-            onClick={() => navigate('/dashboard/settings')}
-            className="ml-auto flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 text-xs"
-          >
-            <Settings size={14} /> Settings
-          </button>
+          {!embedded && (
+            <button
+              onClick={() => navigate('/dashboard/settings')}
+              className="ml-auto flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 text-xs"
+            >
+              <Settings size={14} /> Settings
+            </button>
+          )}
         </div>
       </FilterShell>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className={embedded ? 'grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3' : 'grid grid-cols-1 md:grid-cols-4 gap-4'}>
         {currentKPIs.map(kpi => {
           const isPositive = (kpi as any).invertTrend ? kpi.change <= 0 : kpi.change >= 0
           const changeColor = isPositive ? 'text-green-600' : 'text-red-600'
@@ -697,27 +711,47 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
             <div
               key={kpi.key}
               onClick={() => setSelectedMetric(kpi.key)}
-              className={`bg-white rounded-xl shadow-sm border-2 cursor-pointer transition-all ${selectedMetric === kpi.key ? 'border-[var(--brand-500)] shadow-lg scale-[1.02]' : 'border-gray-200 hover:border-gray-300 hover:shadow-md'} p-4`}
+              className={
+                embedded
+                  ? `bg-white rounded-lg shadow-sm border cursor-pointer transition p-3 ${
+                      selectedMetric === kpi.key
+                        ? 'border-[var(--brand-600)] ring-1 ring-[var(--brand-600)]/25'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`
+                  : `bg-white rounded-xl shadow-sm border-2 cursor-pointer transition-all p-4 ${
+                      selectedMetric === kpi.key
+                        ? 'border-[var(--brand-500)] shadow-lg scale-[1.02]'
+                        : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
+                    }`
+              }
             >
-              <div className="flex items-start justify-between mb-2">
+              <div className={`flex items-start justify-between ${embedded ? 'mb-1' : 'mb-2'}`}>
                 <div>
-                  <p className="text-sm text-gray-500">{kpi.title}</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{kpi.value}</p>
+                  <p className={embedded ? 'text-xs text-gray-500' : 'text-sm text-gray-500'}>{kpi.title}</p>
+                  <p className={embedded ? 'text-lg font-bold text-gray-900 mt-0.5 leading-tight' : 'text-2xl font-bold text-gray-900 mt-1'}>{kpi.value}</p>
                 </div>
-                <div className={KPI_ICON_SHELL[kpi.color] ?? 'p-3 rounded-lg bg-slate-50 text-slate-600'}>
-                  <kpi.icon size={24} />
+                <div
+                  className={
+                    embedded
+                      ? `${(KPI_ICON_SHELL[kpi.color] ?? 'p-1.5 rounded-md bg-slate-50 text-slate-600').replace('p-3', 'p-1.5')} [&_svg]:w-4 [&_svg]:h-4`
+                      : (KPI_ICON_SHELL[kpi.color] ?? 'p-3 rounded-lg bg-slate-50 text-slate-600')
+                  }
+                >
+                  <kpi.icon size={embedded ? 18 : 24} />
                 </div>
               </div>
-              <div className="flex items-center justify-between mt-2">
+              <div className={`flex items-center justify-between ${embedded ? 'mt-1' : 'mt-2'}`}>
                 {kpi.change !== undefined && (
-                  <div className={`flex items-center gap-1 text-sm font-medium ${changeColor}`}>
-                    <ArrowIcon size={14} />
-                    <span>{Math.abs(kpi.change).toFixed(1)}% vs prev period</span>
+                  <div className={`flex items-center gap-0.5 ${embedded ? 'text-xs' : 'text-sm'} font-medium ${changeColor}`}>
+                    <ArrowIcon size={embedded ? 12 : 14} />
+                    <span>{Math.abs(kpi.change).toFixed(1)}%{embedded ? '' : ' vs prev period'}</span>
                   </div>
                 )}
-                {selectedMetric === kpi.key && <div className="text-xs text-[var(--brand-600)] font-medium">↓ Chart</div>}
+                {selectedMetric === kpi.key && (
+                  <div className={`${embedded ? 'text-[10px]' : 'text-xs'} text-[var(--brand-600)] font-medium`}>{embedded ? 'Chart' : '↓ Chart'}</div>
+                )}
               </div>
-              {sparkData.length > 1 && (
+              {!embedded && sparkData.length > 1 && (
                 <div className="mt-2 -mx-1">
                   <LineChart width={140} height={36} data={sparkData}>
                     <Line type="monotone" dataKey="v" stroke={sparkColor} dot={false} strokeWidth={1.5} isAnimationActive={false} />
@@ -729,10 +763,40 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
         })}
       </div>
 
+      {embedded && dailyDataWithMetrics.length > 0 && (
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3">
+          <h2 className="text-sm font-semibold text-gray-900 mb-2">
+            Daily breakdown — {dateRange.start} → {dateRange.end}
+          </h2>
+          <div className="overflow-x-auto max-h-[260px] overflow-y-auto rounded-md border border-slate-100">
+            <table className="w-full text-xs tabular-nums">
+              <thead className="bg-slate-50 sticky top-0">
+                <tr>
+                  <th className="px-2 py-1.5 text-left font-medium text-slate-500">Date</th>
+                  <th className="px-2 py-1.5 text-right font-medium text-slate-500">Spend</th>
+                  <th className="px-2 py-1.5 text-right font-medium text-slate-500">Revenue</th>
+                  <th className="px-2 py-1.5 text-right font-medium text-slate-500">Conv.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {dailyDataWithMetrics.map(d => (
+                  <tr key={d.date} className="text-slate-800 hover:bg-slate-50/80">
+                    <td className="px-2 py-1 whitespace-nowrap font-medium">{d.date}</td>
+                    <td className="px-2 py-1 text-right">{fmtDailyMoney(d.spend)}</td>
+                    <td className="px-2 py-1 text-right text-green-700">{fmtDailyMoney(d.revenue)}</td>
+                    <td className="px-2 py-1 text-right">{d.conversions.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Dynamic Chart */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <h3 className="text-lg font-semibold text-gray-900">{currentMetricConfig.label} Trend (Daily)</h3>
+      <div className={`bg-white shadow-sm border border-gray-200 ${embedded ? 'rounded-lg p-3' : 'rounded-xl p-6'}`}>
+        <div className={`flex items-center justify-between flex-wrap gap-3 ${embedded ? 'mb-2' : 'mb-4'}`}>
+          <h3 className={embedded ? 'text-sm font-semibold text-gray-900' : 'text-lg font-semibold text-gray-900'}>{currentMetricConfig.label} Trend (Daily)</h3>
           <div className="flex items-center gap-3 flex-wrap">
             {/* Secondary metric */}
             <div className="flex items-center gap-2">
@@ -767,7 +831,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
             <p className="text-sm mt-2">{selectedClientName} | {selectedPlatform} | {dateRange.start} to {dateRange.end}</p>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={settings.chartHeight}>
+          <ResponsiveContainer width="100%" height={embedded ? 260 : settings.chartHeight}>
             <ComposedChart data={chartData}>
               <defs>
                 <linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1">
@@ -805,14 +869,14 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
 
       {/* ── META CAMPAIGN PERFORMANCE ── */}
       {(selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && aggMetaCampaigns.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className={shellCard}>
           <details open>
-            <summary className="text-lg font-semibold text-gray-900 cursor-pointer flex items-center gap-2">
+            <summary className={detailSummaryClass}>
               <BookOpen className="text-[var(--brand-600)] shrink-0" size={20} aria-hidden />
               Meta Campaigns ({aggMetaCampaigns.length})
               <span className="ml-2 text-xs font-normal text-gray-400">vs previous period</span>
             </summary>
-            <div className="overflow-x-auto mt-4">
+            <div className={tableWrapMt}>
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
@@ -898,14 +962,14 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
 
       {/* ── GOOGLE CAMPAIGN PERFORMANCE ── */}
       {(selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggGoogleCampaigns.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className={shellCard}>
           <details open>
-            <summary className="text-lg font-semibold text-gray-900 cursor-pointer flex items-center gap-2">
+            <summary className={detailSummaryClass}>
               <span className="text-red-500">🔴</span>
               Google Campaigns ({aggGoogleCampaigns.length})
               <span className="ml-2 text-xs font-normal text-gray-400">vs previous period</span>
             </summary>
-            <div className="overflow-x-auto mt-4">
+            <div className={tableWrapMt}>
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
@@ -971,14 +1035,14 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
 
       {/* ── GOOGLE KEYWORDS (Aggregated) ── */}
       {(selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggKeywords.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className={shellCard}>
           <details>
-            <summary className="text-lg font-semibold text-gray-900 cursor-pointer flex items-center gap-2">
+            <summary className={detailSummaryClass}>
               <span className="text-red-600">🔑</span>
               Google Keywords ({aggKeywords.length} keywords)
               <span className="ml-2 text-xs font-normal text-gray-400">vs previous period</span>
             </summary>
-            <div className="overflow-x-auto mt-4">
+            <div className={tableWrapMt}>
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
@@ -1033,14 +1097,14 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
 
       {/* ── GOOGLE SEARCH TERMS (Aggregated) ── */}
       {(selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggSearchTerms.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className={shellCard}>
           <details>
-            <summary className="text-lg font-semibold text-gray-900 cursor-pointer flex items-center gap-2">
+            <summary className={detailSummaryClass}>
               <span className="text-orange-600">🔍</span>
               Google Search Terms ({aggSearchTerms.length} terms)
               <span className="ml-2 text-xs font-normal text-gray-400">vs previous period</span>
             </summary>
-            <div className="overflow-x-auto mt-4">
+            <div className={tableWrapMt}>
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>

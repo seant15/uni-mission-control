@@ -30,15 +30,34 @@ export type AlertType =
   | 'cpa_above_target'
   | 'zero_spend_technical'
   | 'metrics_anomaly'
+  | 'account_delivery_stopped'
+  | 'budget_exhaustion_warning'
+  | 'budget_under_pacing'
+  | 'revenue_velocity_collapse'
+  | 'conversion_rate_collapse'
+  | 'zero_conversion_high_spend'
+  | 'roas_declining_trend'
+  | 'lead_volume_collapse'
+  | 'lead_volume_declining_trend'
+  | 'click_to_lead_rate_drop'
+  | 'cpa_critical_spike'
+  | 'creative_spend_domination'
+  | 'creative_fatigue_signal'
+  | 'creative_test_conclusion'
+  | 'week_over_week_decline'
   | 'other'
 
 export type AlertTemplateType =
+  // ── Hourly rules ────────────────────────────────────
   | 'spend_spike'
-  | 'spend_dead_zone'
+  | 'account_delivery_stopped'        // merged: spend_dead_zone + zero_impressions_sustained
   | 'ctr_cliff'
   | 'impression_collapse'
   | 'conversion_velocity_drop'
-  | 'zero_impressions_sustained'
+  | 'budget_exhaustion_warning'
+  | 'revenue_velocity_collapse'
+  | 'lead_volume_collapse'
+  // ── Daily rules ─────────────────────────────────────
   | 'zero_spend'
   | 'budget_pacing'
   | 'ctr_anomaly'
@@ -47,8 +66,24 @@ export type AlertTemplateType =
   | 'roas_below_target'
   | 'roas_critical_drop'
   | 'cpa_above_target'
-  | 'zero_spend_technical'
   | 'metrics_anomaly'
+  | 'conversion_rate_collapse'
+  | 'zero_conversion_high_spend'
+  | 'budget_under_pacing'
+  | 'cpa_critical_spike'
+  | 'click_to_lead_rate_drop'
+  | 'creative_spend_domination'
+  | 'creative_fatigue_signal'
+  | 'creative_test_conclusion'
+  // ── Trend rules (daily, multi-day window) ────────────
+  | 'roas_declining_trend'
+  | 'lead_volume_declining_trend'
+  | 'week_over_week_decline'
+  // ── Legacy (keep for existing DB rows) ──────────────
+  | 'zero_spend_technical'            // deprecated
+  | 'spend_dead_zone'                 // deprecated
+  | 'zero_impressions_sustained'      // deprecated
+  // ── Custom ──────────────────────────────────────────
   | 'custom'
 
 export type AlertSource = 'auto' | 'rule'

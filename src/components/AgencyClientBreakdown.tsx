@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   TrendingUp, DollarSign, Target, Users, AlertTriangle,
-  ArrowUpRight, ArrowDownRight, ArrowUpDown,
+  ArrowUpDown,
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { supabase } from '../lib/supabase'
@@ -203,31 +203,23 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform }: P
 
       {!isLoading && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {kpis.map(kpi => {
-              const isPos = kpi.change >= 0
-              return (
-                <div
-                  key={kpi.key}
-                  onClick={() => setChartMetric(kpi.key)}
-                  className={`bg-white rounded-lg border cursor-pointer transition p-3 ${
-                    chartMetric === kpi.key ? 'border-[var(--brand-600)] ring-1 ring-[var(--brand-600)]/30' : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-1.5">
-                    <div className={`p-1.5 rounded-md ${kpi.color}`}>
-                      <kpi.icon className="w-3.5 h-3.5 text-white" />
-                    </div>
-                    <div className={`flex items-center gap-0.5 text-[11px] font-medium ${isPos ? 'text-green-600' : 'text-red-600'}`}>
-                      {isPos ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                      {Math.abs(kpi.change).toFixed(1)}%
-                    </div>
-                  </div>
-                  <div className="text-lg font-bold text-slate-900 leading-tight">{kpi.value}</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">{kpi.label}</div>
-                </div>
-              )
-            })}
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="agency-client-chart-metric" className="text-xs text-slate-600 shrink-0">
+              Chart metric
+            </label>
+            <select
+              id="agency-client-chart-metric"
+              value={chartMetric}
+              onChange={e => setChartMetric(e.target.value as ChartMetric)}
+              className="text-xs border border-slate-200 rounded-md px-2 py-1.5 bg-white text-slate-800 min-w-[10rem]"
+            >
+              {kpis.map(k => (
+                <option key={k.key} value={k.key}>{k.label}</option>
+              ))}
+            </select>
+            <span className="text-[11px] text-slate-500 tabular-nums">
+              Δ vs prior: {activeKpi.change >= 0 ? '+' : ''}{activeKpi.change.toFixed(1)}%
+            </span>
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-white p-3">
