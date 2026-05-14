@@ -6,6 +6,7 @@ import { getDashboardSettings, saveDashboardSettings, DEFAULT_SETTINGS, Dashboar
 import UserManagement from './UserManagement'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { getStoredAccent, setStoredAccent, type AccentId } from '../lib/themeAccent'
 
 type SettingsTab = 'dashboard' | 'users' | 'profile'
 
@@ -27,6 +28,7 @@ export default function DashboardSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [accent, setAccent] = useState<AccentId>('orange')
 
   // Profile tab state
   const [profileName, setProfileName] = useState('')
@@ -37,6 +39,10 @@ export default function DashboardSettingsPage() {
   useEffect(() => {
     if (appUser) setProfileName(appUser.display_name)
   }, [appUser])
+
+  useEffect(() => {
+    setAccent(getStoredAccent())
+  }, [])
 
   // Super admins land on Performance Dashboard so the announcement + Save control are visible (URL ?tab= still wins).
   useEffect(() => {
@@ -309,6 +315,32 @@ export default function DashboardSettingsPage() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Display Preferences</h2>
               <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Interface accent
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {(['orange', 'blue'] as const).map(id => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => {
+                          setStoredAccent(id)
+                          setAccent(id)
+                        }}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium border transition ${
+                          accent === id
+                            ? 'border-[var(--brand-600)] bg-[var(--brand-50)] text-[var(--brand-700)]'
+                            : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {id === 'orange' ? 'Bright orange' : 'Blue'}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Primary buttons and nav highlights (stored in this browser).</p>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Default Business Type

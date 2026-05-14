@@ -13,12 +13,15 @@ export default function FeedbackStats({ rows }: Props) {
   const thisMonth = new Date()
   thisMonth.setDate(1)
   thisMonth.setHours(0, 0, 0, 0)
-  const resolvedThisMonth = rows.filter(
-    r => r.status === 'resolved' && new Date(r.created_at) >= thisMonth
-  ).length
+  const resolvedThisMonth = rows.filter(r => {
+    if (r.status !== 'resolved') return false
+    const ts = r.resolved_at || r.created_at
+    if (!ts) return false
+    return new Date(ts) >= thisMonth
+  }).length
 
   const tiles = [
-    { label: 'Total',           value: total,            icon: MessageSquare,  color: 'text-blue-600',   bg: 'bg-blue-50' },
+    { label: 'Total',           value: total,            icon: MessageSquare,  color: 'text-[var(--brand-600)]',   bg: 'bg-[var(--brand-50)]' },
     { label: 'New / Unresolved',value: newCount,         icon: AlertCircle,    color: 'text-amber-600',  bg: 'bg-amber-50' },
     { label: 'In Progress',     value: inProgress,       icon: Clock,          color: 'text-indigo-600', bg: 'bg-indigo-50' },
     { label: 'Resolved (month)',value: resolvedThisMonth,icon: CheckCircle2,   color: 'text-green-600',  bg: 'bg-green-50' },

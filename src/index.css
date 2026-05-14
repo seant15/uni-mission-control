@@ -9,17 +9,53 @@
   color-scheme: light dark;
 }
 
+/* Theme accent — toggled via `data-accent` on `<html>` (see `themeAccent.ts`). */
+html[data-accent='orange'] {
+  --brand-50: #fff7ed;
+  --brand-100: #ffedd5;
+  --brand-500: #f97316;
+  --brand-600: #ea580c;
+  --brand-700: #c2410c;
+}
+
+html[data-accent='blue'] {
+  --brand-50: #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-500: #3b82f6;
+  --brand-600: #2563eb;
+  --brand-700: #1d4ed8;
+}
+
+html {
+  --brand-50: #fff7ed;
+  --brand-100: #ffedd5;
+  --brand-500: #f97316;
+  --brand-600: #ea580c;
+  --brand-700: #c2410c;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
   background-color: #f8fafc;
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.05) 0px, transparent 50%),
+  background-attachment: fixed;
+}
+
+html[data-accent='orange'] body {
+  background-image:
+    radial-gradient(at 0% 0%, rgba(249, 115, 22, 0.09) 0px, transparent 52%),
+    radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(245, 158, 11, 0.06) 0px, transparent 50%);
+}
+
+html[data-accent='blue'] body {
+  background-image:
+    radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.06) 0px, transparent 50%),
     radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
     radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%),
     radial-gradient(at 0% 100%, rgba(245, 158, 11, 0.05) 0px, transparent 50%);
-  background-attachment: fixed;
 }
 
 #root {

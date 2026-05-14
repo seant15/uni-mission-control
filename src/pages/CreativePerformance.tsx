@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { db } from '../lib/api'
 import AccountDateRangePicker from '../components/AccountDateRangePicker'
+import FilterShell from '../components/FilterShell'
 import { defaultCalendarRangeLastNDays } from '../lib/dashboardDateRange'
 import { getDashboardSettings } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
@@ -38,14 +39,15 @@ function SortTh({ label, field, sort, align = 'right' }: {
 }) {
   const active = sort.sortField === field
   const Icon = !active ? ArrowUpDown : sort.sortDir === 'asc' ? ArrowUp : ArrowDown
+  const alignClass = align === 'left' ? 'text-left' : 'text-right'
   return (
-    <th className={`px-3 py-3 text-xs font-medium text-gray-500 text-${align}`}>
+    <th className={`px-3 py-3 text-xs font-medium text-gray-500 ${alignClass}`}>
       <button
         onClick={() => sort.toggle(field)}
-        className={`flex items-center gap-1 text-xs font-medium uppercase hover:text-gray-800 ${align === 'right' ? 'ml-auto' : ''} ${active ? 'text-blue-600' : 'text-gray-500'}`}
+        className={`flex items-center gap-1 text-xs font-medium uppercase hover:text-gray-800 ${align === 'right' ? 'ml-auto' : ''} ${active ? 'text-[var(--brand-600)]' : 'text-gray-500'}`}
       >
         {label}
-        <Icon size={11} className={active ? 'text-blue-600' : 'text-gray-400'} />
+        <Icon size={11} className={active ? 'text-[var(--brand-600)]' : 'text-gray-400'} />
       </button>
     </th>
   )
@@ -559,8 +561,10 @@ export default function CreativePerformance() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Creative Performance</h1>
-          <p className="text-sm text-gray-500 mt-1">Meta Ads creative analytics — {selectedClientName}</p>
+          <h1 className="text-2xl font-bold text-gray-900">Meta Ads — Creative Performance</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Creative analytics for {selectedClientName}. Google Ads and other sources will appear here when connected.
+          </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg">
           <span>{dateRange.start}</span>
@@ -590,26 +594,26 @@ export default function CreativePerformance() {
       )}
 
       {/* Filter Bar */}
-      <div className="sticky top-[52px] z-30 bg-white/95 backdrop-blur-sm shadow-md border-b border-gray-200 rounded-xl px-4 py-3">
-        <div className="flex flex-wrap items-center gap-3">
+      <FilterShell className="z-30 !top-[52px]">
+        <div className="flex flex-wrap items-center gap-2 w-full">
           {/* Client Picker */}
           {scopedClientId ? (
-            <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-700 min-w-[160px]">
+            <div className="flex items-center gap-2 px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-md text-xs text-slate-700 min-w-[140px]">
               <span className="font-medium truncate">{selectedClientName}</span>
             </div>
           ) : (
             <div className="relative">
               <button
                 onClick={() => setShowClientDrop(v => !v)}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm hover:bg-gray-100 transition-colors min-w-[160px]"
+                className="flex items-center gap-2 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-md text-xs hover:bg-gray-100 transition-colors min-w-[140px]"
               >
                 <span className="font-medium text-gray-700 truncate">{selectedClientName}</span>
                 <ChevronDown size={14} className="text-gray-500 ml-auto shrink-0" />
               </button>
               {showClientDrop && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-30 min-w-[200px] py-1">
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-30 min-w-[200px] py-1">
                   <button
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedClient === 'all' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedClient === 'all' ? 'text-[var(--brand-600)] font-medium' : 'text-gray-700'}`}
                     onClick={() => { setSelectedClient('all'); setShowClientDrop(false); setCreativePage(0) }}
                   >
                     All Clients
@@ -617,7 +621,7 @@ export default function CreativePerformance() {
                   {clients.map((c: any) => (
                     <button
                       key={c.id}
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedClient === c.id ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedClient === c.id ? 'text-[var(--brand-600)] font-medium' : 'text-gray-700'}`}
                       onClick={() => { setSelectedClient(c.id); setShowClientDrop(false); setCreativePage(0) }}
                     >
                       {c.name}
@@ -634,7 +638,7 @@ export default function CreativePerformance() {
             className="w-full sm:w-auto sm:ml-auto"
           />
         </div>
-      </div>
+      </FilterShell>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

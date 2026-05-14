@@ -12,6 +12,9 @@ import AccountDateRangePicker from '../components/AccountDateRangePicker'
 import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
+import FilterShell from '../components/FilterShell'
+import AgencyClientBreakdown from '../components/AgencyClientBreakdown'
+import AgencyInsightPies from '../components/AgencyInsightPies'
 
 interface Client {
   id: string
@@ -67,7 +70,14 @@ function MetricCard({ title, value, change, icon: Icon, color, invertTrend = fal
   )
 }
 
-export default function MarketingOverview({ embedded = false }: { embedded?: boolean }) {
+export default function MarketingOverview({
+  embedded = false,
+  showAgencyExtras = false,
+}: {
+  embedded?: boolean
+  /** When true (Agency View), adds client rollup, pies, daily breakdown, and AI-notes rail. */
+  showAgencyExtras?: boolean
+}) {
   const { appUser } = useAuth()
   const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
   const [dateRange, setDateRange] = useState(() => defaultCalendarRangeLastNDays(30))
@@ -196,6 +206,20 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
   const cur = curRows ? aggregate(curRows) : null
   const prev = prevRows ? aggregate(prevRows) : null
 
+  const dailyBreakdownRows = useMemo(() => {
+    const m = new Map<string, { spend: number; revenue: number; conv: number }>()
+    for (const r of curRows as { date?: string; cost?: number; revenue?: number; conversions?: number }[]) {
+      const d = r.date
+      if (!d) continue
+      const x = m.get(d) || { spend: 0, revenue: 0, conv: 0 }
+      x.spend += Number(r.cost) || 0
+      x.revenue += Number(r.revenue) || 0
+      x.conv += Number(r.conversions) || 0
+      m.set(d, x)
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [curRows])
+
   const dailyTzFootnote = useMemo(() => {
     const rows = curRows || []
     if (rows.length === 0) return null
@@ -275,7 +299,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
 
   const primaryLeadGen = cur && prev && (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-      <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} color="bg-blue-600" />
+      <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} color="bg-[var(--brand-600)]" />
       <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} color="bg-violet-600" />
       <MetricCard title="Leads" value={fmtMetric(cur.conversions)} change={convChange} icon={Users} color="bg-emerald-600" />
       <MetricCard title="Cost Per Lead (CPL)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} color="bg-amber-600" invertTrend />
@@ -284,7 +308,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
 
   const primaryEcom = cur && prev && (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-      <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} color="bg-blue-600" />
+      <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} color="bg-[var(--brand-600)]" />
       <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} color="bg-violet-600" />
       <MetricCard title="Purchases" value={fmtMetric(cur.conversions)} change={convChange} icon={ShoppingCart} color="bg-emerald-600" />
       <MetricCard title="ROAS" value={`${cur.roas.toFixed(2)}x`} change={roasChange} icon={TrendingUp} color="bg-amber-600" />
@@ -292,36 +316,48 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
   )
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        {!embedded && (
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">UNI Overview</h1>
-            <p className="text-gray-500 mt-1">Cross-platform performance summary — filters match Account Performance</p>
-          </div>
-        )}
-        <div className={`flex flex-wrap items-center gap-2 ${embedded ? '' : 'lg:ml-auto'}`}>
-          <div className="flex rounded-lg border border-gray-200 p-0.5">
+    <div
+      className={
+        showAgencyExtras
+          ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_13.5rem] xl:gap-3 xl:items-start'
+          : ''
+      }
+    >
+      <div className={`min-w-0 ${showAgencyExtras ? 'space-y-3' : 'space-y-4'}`}>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between lg:gap-3">
+          {!embedded && (
+            <div className="min-w-0 lg:max-w-xl">
+              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">UNI Overview</h1>
+              <p className="text-gray-500 text-sm mt-0.5 leading-snug">
+                Cross-platform roll-up{showAgencyExtras ? ' — client leaderboard, attribution pies (sample), and daily breakdown' : ''}. Same date range as Heated View.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <FilterShell>
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full">
+          <div className="flex rounded-md border border-gray-200 p-0.5 shrink-0">
             <button
               type="button"
               onClick={() => { setBusinessType('leadgen'); setBusinessTypeManual(true) }}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1 ${businessType === 'leadgen' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center gap-1 ${businessType === 'leadgen' ? 'bg-[var(--brand-600)] text-white' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <Users size={13} /> Lead Gen
             </button>
             <button
               type="button"
               onClick={() => { setBusinessType('ecommerce'); setBusinessTypeManual(true) }}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1 ${businessType === 'ecommerce' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center gap-1 ${businessType === 'ecommerce' ? 'bg-[var(--brand-600)] text-white' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <ShoppingCart size={13} /> eCommerce
             </button>
           </div>
           {businessTypeManual && (
-            <button type="button" onClick={() => setBusinessTypeManual(false)} className="text-xs text-blue-500 underline">Auto</button>
+            <button type="button" onClick={() => setBusinessTypeManual(false)} className="text-xs text-[var(--brand-600)] underline shrink-0">Auto</button>
           )}
           {scopedClientId ? (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-700 min-w-[160px]">
+            <div className="flex items-center gap-2 px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-md text-xs text-slate-700 min-w-[140px]">
               <span className="flex-1 text-left truncate">{selectedClientName}</span>
             </div>
           ) : (
@@ -329,7 +365,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
               <button
                 type="button"
                 onClick={() => setShowClientDropdown(!showClientDropdown)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm min-w-[160px]"
+                className="flex items-center gap-2 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-md text-xs min-w-[140px]"
               >
                 <span className="flex-1 text-left truncate">{selectedClientName}</span>
                 <ChevronDown size={14} />
@@ -360,21 +396,30 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
               )}
             </div>
           )}
-          <select
-            value={selectedPlatform}
-            onChange={(e) => { setSelectedPlatform(e.target.value); setSelectedAdAccount('') }}
-            className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm min-w-[140px]"
-          >
-            <option value="all">All Platforms</option>
-            {availablePlatforms.map((platform: any) => (
-              <option key={platform.id} value={platform.id}>{platform.label}</option>
+          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Platform">
+            <button
+              type="button"
+              onClick={() => { setSelectedPlatform('all'); setSelectedAdAccount('') }}
+              className={`px-2 py-1 rounded-md text-xs font-medium border transition ${selectedPlatform === 'all' ? 'bg-[var(--brand-600)] text-white border-transparent' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+            >
+              All
+            </button>
+            {availablePlatforms.map((platform: { id: string; label: string }) => (
+              <button
+                key={platform.id}
+                type="button"
+                onClick={() => { setSelectedPlatform(platform.id); setSelectedAdAccount('') }}
+                className={`px-2 py-1 rounded-md text-xs font-medium border transition ${selectedPlatform === platform.id ? 'bg-[var(--brand-600)] text-white border-transparent' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+              >
+                {platform.label}
+              </button>
             ))}
-          </select>
+          </div>
           {adAccountsFromDB && adAccountsFromDB.length > 0 && (
             <select
               value={selectedAdAccount}
               onChange={(e) => setSelectedAdAccount(e.target.value)}
-              className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm min-w-[180px]"
+              className="px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-md text-xs min-w-[160px]"
             >
               <option value="">All Accounts</option>
               {adAccountsFromDB.map((account: any) => (
@@ -384,12 +429,12 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
           )}
           <AccountDateRangePicker dateRange={dateRange} onChange={setDateRange} className="w-full sm:w-auto" />
           {selectedClient !== 'all' && (
-            <span className="px-2 py-1 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-lg text-xs font-mono font-semibold">
+            <span className="px-2 py-0.5 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md text-[11px] font-mono font-semibold">
               {clients.find(c => c.id === selectedClient)?.currency || 'USD'}
             </span>
           )}
-        </div>
-      </div>
+          </div>
+        </FilterShell>
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 text-red-700">
@@ -403,7 +448,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
 
       {isLoading && (
         <div className="text-center py-16">
-          <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <div className="inline-block w-8 h-8 border-4 border-[var(--brand-600)] border-t-transparent rounded-full animate-spin" />
           <div className="mt-2 text-gray-500">Loading metrics...</div>
         </div>
       )}
@@ -456,7 +501,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
                         <td className="px-3 py-2 text-sm text-right">{fmtMoney(p.spend)}</td>
                         <td className="px-3 py-2 text-sm text-right text-green-600 font-medium">{fmtMoney(p.revenue)}</td>
                         <td className="px-3 py-2 text-sm text-right">
-                          <span className={`font-semibold ${p.roas >= 2 ? 'text-green-600' : p.roas >= 1 ? 'text-blue-600' : 'text-red-600'}`}>
+                          <span className={`font-semibold ${p.roas >= 2 ? 'text-green-600' : p.roas >= 1 ? 'text-[var(--brand-600)]' : 'text-red-600'}`}>
                             {p.roas.toFixed(2)}x
                           </span>
                         </td>
@@ -475,6 +520,43 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
             </div>
           )}
 
+          {showAgencyExtras && (
+            <>
+              <AgencyInsightPies />
+              <AgencyClientBreakdown dateRange={dateRange} selectedPlatform={selectedPlatform} />
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3">
+                <h2 className="text-sm font-semibold text-gray-900 mb-2">Daily breakdown — {periodLabel}</h2>
+                <div className="overflow-x-auto max-h-[280px] overflow-y-auto rounded-md border border-slate-100">
+                  <table className="w-full text-xs tabular-nums">
+                    <thead className="bg-slate-50 sticky top-0">
+                      <tr>
+                        <th className="px-2 py-1.5 text-left font-medium text-slate-500">Date</th>
+                        <th className="px-2 py-1.5 text-right font-medium text-slate-500">Spend</th>
+                        <th className="px-2 py-1.5 text-right font-medium text-slate-500">Revenue</th>
+                        <th className="px-2 py-1.5 text-right font-medium text-slate-500">Conv.</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {dailyBreakdownRows.map(([d, v]) => (
+                        <tr key={d} className="text-slate-800 hover:bg-slate-50/80">
+                          <td className="px-2 py-1 whitespace-nowrap font-medium">{d}</td>
+                          <td className="px-2 py-1 text-right">{fmtMoney(v.spend)}</td>
+                          <td className="px-2 py-1 text-right text-green-700">{fmtMoney(v.revenue)}</td>
+                          <td className="px-2 py-1 text-right">{fmtMetric(v.conv)}</td>
+                        </tr>
+                      ))}
+                      {dailyBreakdownRows.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="px-2 py-6 text-center text-slate-400">No daily rows in range for current filters</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+
           {dailyTzFootnote && (
             <p className="text-xs text-gray-500 max-w-4xl leading-relaxed">{dailyTzFootnote}</p>
           )}
@@ -485,7 +567,7 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
                 <BarChart3 size={18} className="text-orange-500" />
                 Alert Overview
               </h2>
-              <Link to="/alerts" className="text-xs sm:text-sm text-blue-600 hover:text-blue-700 font-medium whitespace-nowrap">
+              <Link to="/alerts" className="text-xs sm:text-sm text-[var(--brand-600)] hover:opacity-90 font-medium whitespace-nowrap">
                 View all alerts →
               </Link>
             </div>
@@ -539,6 +621,18 @@ export default function MarketingOverview({ embedded = false }: { embedded?: boo
           <Target className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500">No data available for {periodLabel}</p>
         </div>
+      )}
+      </div>
+      {showAgencyExtras && (
+        <aside
+          className="hidden xl:flex flex-col rounded-xl border border-dashed border-slate-300/90 bg-gradient-to-b from-[var(--brand-50)]/90 to-white p-3 text-xs text-slate-600 sticky top-16 self-start min-h-[14rem] shadow-sm"
+          aria-label="AI notes (coming soon)"
+        >
+          <span className="font-semibold text-[var(--brand-700)] uppercase tracking-wide text-[10px]">AI notes</span>
+          <p className="mt-2 leading-relaxed">
+            Reserved column for summaries, spend shifts, and next actions. Keeps the main grid readable on wide screens.
+          </p>
+        </aside>
       )}
     </div>
   )

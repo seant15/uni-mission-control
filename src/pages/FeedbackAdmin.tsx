@@ -55,7 +55,10 @@ export default function FeedbackAdmin() {
     return () => { supabase.removeChannel(channel) }
   }, [queryClient])
 
-  const unresolvedCount = listRows.filter(r => r.status === 'new' || r.status === 'acknowledged').length
+  const unresolvedCount = useMemo(
+    () => data.filter(r => r.status === 'new' || r.status === 'acknowledged').length,
+    [data]
+  )
 
   if (!appUser || appUser.role !== 'super_admin') return null
 
@@ -63,7 +66,7 @@ export default function FeedbackAdmin() {
     <div className="space-y-6">
       {/* Page header */}
       <div className="flex items-center gap-3">
-        <MessageSquarePlus size={22} className="text-blue-600" />
+        <MessageSquarePlus size={22} className="text-[var(--brand-600)]" />
         <h1 className="text-xl font-bold text-gray-900">Feedback</h1>
         {unresolvedCount > 0 && (
           <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold">
@@ -73,7 +76,7 @@ export default function FeedbackAdmin() {
       </div>
 
       {/* KPI tiles */}
-      <FeedbackStats rows={listRows} />
+      <FeedbackStats rows={data} />
 
       {/* Filter bar */}
       <FeedbackFiltersBar filters={filters} onChange={setFilters} />

@@ -11,6 +11,7 @@ import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
 import AccountDateRangePicker from '../components/AccountDateRangePicker'
+import FilterShell from '../components/FilterShell'
 import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -41,14 +42,15 @@ function useTableSort(defaultField: string, defaultDir: 'asc' | 'desc' = 'desc')
 function SortTh({ label, field, sort, align = 'right' }: { label: string; field: string; sort: ReturnType<typeof useTableSort>; align?: 'left' | 'right' }) {
   const active = sort.sortField === field
   const Icon = !active ? ArrowUpDown : sort.sortDir === 'asc' ? ArrowUp : ArrowDown
+  const alignClass = align === 'left' ? 'text-left' : 'text-right'
   return (
-    <th className={`px-4 py-3 text-xs font-medium text-gray-500 text-${align}`}>
+    <th className={`px-4 py-3 text-xs font-medium text-gray-500 ${alignClass}`}>
       <button
         onClick={() => sort.toggle(field)}
-        className={`flex items-center gap-1 text-xs font-medium uppercase hover:text-gray-800 ${align === 'right' ? 'ml-auto' : ''} ${active ? 'text-blue-600' : 'text-gray-500'}`}
+        className={`flex items-center gap-1 text-xs font-medium uppercase hover:text-gray-800 ${align === 'right' ? 'ml-auto' : ''} ${active ? 'text-[var(--brand-600)]' : 'text-gray-500'}`}
       >
         {label}
-        <Icon size={11} className={active ? 'text-blue-600' : 'text-gray-400'} />
+        <Icon size={11} className={active ? 'text-[var(--brand-600)]' : 'text-gray-400'} />
       </button>
     </th>
   )
@@ -560,7 +562,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
         {!embedded && (
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <Database className="text-blue-600" />
+              <Database className="text-[var(--brand-600)]" />
               Account Performance
             </h1>
             <p className="text-gray-500 mt-1">Deep-dive performance metrics by account</p>
@@ -577,39 +579,39 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
       )}
 
       {/* ── STICKY FILTER BAR ── */}
-      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm shadow-md border-b border-gray-200 rounded-xl px-4 py-3">
-        <div className="flex items-center gap-3 flex-wrap">
+      <FilterShell className="z-40">
+        <div className="flex items-center gap-2 flex-wrap w-full">
           {/* Business Type Toggle */}
-          <div className="flex rounded-lg border border-gray-200 p-0.5">
+          <div className="flex rounded-md border border-gray-200 p-0.5 shrink-0">
             <button
               onClick={() => { setBusinessType('leadgen'); setBusinessTypeManual(true); setSelectedMetric('costperconv') }}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1 ${businessType === 'leadgen' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center gap-1 ${businessType === 'leadgen' ? 'bg-[var(--brand-600)] text-white' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <Users size={13} /> Lead Gen
             </button>
             <button
               onClick={() => { setBusinessType('ecommerce'); setBusinessTypeManual(true); setSelectedMetric('roas') }}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1 ${businessType === 'ecommerce' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center gap-1 ${businessType === 'ecommerce' ? 'bg-[var(--brand-600)] text-white' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <ShoppingCart size={13} /> eCommerce
             </button>
           </div>
           {businessTypeManual && (
-            <button onClick={() => setBusinessTypeManual(false)} className="text-xs text-blue-500 underline">Auto</button>
+            <button onClick={() => setBusinessTypeManual(false)} className="text-xs text-[var(--brand-600)] underline shrink-0">Auto</button>
           )}
 
-          <div className="w-px h-6 bg-gray-200" />
+          <div className="w-px h-6 bg-gray-200 hidden sm:block" />
 
           {/* Client Dropdown */}
           {scopedClientId ? (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-700 min-w-[180px]">
+            <div className="flex items-center gap-2 px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-md text-xs text-slate-700 min-w-[160px]">
               <span className="flex-1 text-left truncate">{selectedClientName}</span>
             </div>
           ) : (
             <div className="relative">
               <button
                 onClick={() => setShowClientDropdown(!showClientDropdown)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm min-w-[180px]"
+                className="flex items-center gap-2 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-md text-xs min-w-[160px]"
               >
                 <span className="flex-1 text-left truncate">{selectedClientName}</span>
                 <ChevronDown size={14} />
@@ -632,7 +634,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
           <select
             value={selectedPlatform}
             onChange={(e) => { setSelectedPlatform(e.target.value); setSelectedAdAccount('') }}
-            className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm min-w-[160px]"
+            className="px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-md text-xs min-w-[140px]"
           >
             <option value="all">All Platforms</option>
             {availablePlatforms.map((platform: any) => (
@@ -645,7 +647,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
             <select
               value={selectedAdAccount}
               onChange={(e) => setSelectedAdAccount(e.target.value)}
-              className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm min-w-[200px]"
+              className="px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-md text-xs min-w-[180px]"
             >
               <option value="">All Accounts</option>
               {adAccountsFromDB.map((account: any) => (
@@ -654,13 +656,13 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
             </select>
           )}
 
-          <div className="w-px h-6 bg-gray-200" />
+          <div className="w-px h-6 bg-gray-200 hidden sm:block" />
 
           <AccountDateRangePicker dateRange={dateRange} onChange={setDateRange} />
 
           {/* Currency badge */}
           {selectedClient !== 'all' && (
-            <span className="px-2 py-1 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-lg text-xs font-mono font-semibold">
+            <span className="px-2 py-0.5 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md text-[11px] font-mono font-semibold">
               {selectedClientCurrency}
             </span>
           )}
@@ -668,12 +670,12 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
           {/* Settings */}
           <button
             onClick={() => navigate('/dashboard/settings')}
-            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 text-sm"
+            className="ml-auto flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 text-xs"
           >
             <Settings size={14} /> Settings
           </button>
         </div>
-      </div>
+      </FilterShell>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -706,7 +708,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
                     <span>{Math.abs(kpi.change).toFixed(1)}% vs prev period</span>
                   </div>
                 )}
-                {selectedMetric === kpi.key && <div className="text-xs text-blue-600 font-medium">↓ Chart</div>}
+                {selectedMetric === kpi.key && <div className="text-xs text-[var(--brand-600)] font-medium">↓ Chart</div>}
               </div>
               {sparkData.length > 1 && (
                 <div className="mt-2 -mx-1">

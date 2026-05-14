@@ -25,6 +25,7 @@ import {
   canAccessSettings,
 } from './lib/rbac'
 import { Toaster } from 'sonner'
+import { applyAccentToDocument } from './lib/themeAccent'
 
 const ANNOUNCEMENT_STYLES = {
   info:    { bar: 'bg-blue-600',   text: 'text-white',          icon: 'text-blue-200' },
@@ -109,6 +110,10 @@ function AppShell() {
   }, [sidebarCollapsed])
 
   useEffect(() => {
+    applyAccentToDocument()
+  }, [])
+
+  useEffect(() => {
     if (!mobileNavOpen) return
     const onResize = () => {
       if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches) {
@@ -150,25 +155,25 @@ function AppShell() {
           className={`
             fixed top-0 left-0 z-50 h-full bg-slate-900 text-white flex flex-col
             transition-transform duration-200 ease-out
-            w-[min(18rem,88vw)]
+            w-[min(16.5rem,88vw)]
             ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'}
             lg:translate-x-0 lg:static lg:z-auto
-            ${sidebarCollapsed ? 'lg:w-[4.5rem]' : 'lg:w-72'}
+            ${sidebarCollapsed ? 'lg:w-[4.25rem]' : 'lg:w-60'}
           `}
         >
-          <div className={`p-3 border-b border-slate-800 flex items-center gap-2 ${sidebarCollapsed ? 'lg:flex-col lg:items-stretch' : ''}`}>
+          <div className={`p-2 border-b border-slate-800 flex items-center gap-2 ${sidebarCollapsed ? 'lg:flex-col lg:items-stretch' : ''}`}>
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <img src="/uni-logo.gif" alt="UNI" className="w-9 h-9 rounded-xl object-cover flex-shrink-0" />
               <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-                <h1 className="font-bold text-sm tracking-tight truncate">UNI Mission Control</h1>
-                <p className="text-[10px] text-slate-400 truncate">Marketing Performance Hub</p>
+                <h1 className="font-bold text-[13px] tracking-tight truncate">UNI Mission Control</h1>
+                <p className="text-[9px] text-slate-400 truncate">Marketing Performance Hub</p>
               </div>
             </div>
             <button
               type="button"
               title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               onClick={() => setSidebarCollapsed(c => !c)}
-              className="hidden lg:flex p-2 rounded-lg text-sky-400/90 hover:text-sky-300 hover:bg-slate-800 border border-slate-700/80 flex-shrink-0"
+              className="hidden lg:flex p-1.5 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-600/90 flex-shrink-0"
             >
               {sidebarCollapsed ? <ChevronsRight size={18} aria-hidden /> : <ChevronsLeft size={18} aria-hidden />}
             </button>
@@ -182,8 +187,8 @@ function AppShell() {
             </button>
           </div>
 
-          <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-            <div className={`text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1 px-3 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+          <nav className="flex-1 p-1.5 space-y-0 overflow-y-auto">
+            <div className={`text-[9px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5 px-2.5 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
               Main
             </div>
             <NavLink to="/" icon={LayoutDashboard} label="Overview" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
@@ -198,7 +203,7 @@ function AppShell() {
               <NavLink to="/creative-performance" icon={Layers} label="Creative Performance" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
             )}
 
-            <div className={`text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1 mt-4 px-3 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+            <div className={`text-[9px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5 mt-3 px-2.5 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
               System
             </div>
             {appUser?.role === 'super_admin' && (
@@ -209,13 +214,13 @@ function AppShell() {
             )}
           </nav>
 
-          <div className="mt-auto p-2 border-t border-slate-700 space-y-2">
-            <div className={`flex items-center gap-2 p-2 rounded-xl bg-slate-800/50 ${sidebarCollapsed ? 'lg:flex-col lg:items-center' : ''}`}>
+          <div className="mt-auto p-1.5 border-t border-slate-700 space-y-1.5">
+            <div className={`flex items-center gap-2 p-1.5 rounded-lg bg-slate-800/50 ${sidebarCollapsed ? 'lg:flex-col lg:items-center' : ''}`}>
               <Link
                 to="/dashboard/settings?tab=profile"
                 title="Edit profile"
                 onClick={() => setMobileNavOpen(false)}
-                className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-xs font-semibold hover:opacity-80 transition flex-shrink-0"
+                className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--brand-500)] to-[var(--brand-700)] flex items-center justify-center text-[11px] font-semibold hover:opacity-80 transition flex-shrink-0"
               >
                 {(appUser?.display_name || 'U')[0].toUpperCase()}
               </Link>
@@ -228,15 +233,15 @@ function AppShell() {
               type="button"
               onClick={handleSignOut}
               title="Sign out of UNI Mission Control"
-              className={`w-full flex items-center justify-center gap-2 rounded-lg py-2 px-2 text-sm font-medium text-rose-200 bg-rose-950/40 border border-rose-900/50 hover:bg-rose-900/50 hover:border-rose-700 transition ${sidebarCollapsed ? 'lg:px-0' : ''}`}
+              className={`w-full flex items-center justify-center gap-1.5 rounded-md py-1.5 px-2 text-xs font-semibold text-rose-100 bg-rose-950/55 border border-rose-800/80 hover:bg-rose-900/70 transition ${sidebarCollapsed ? 'lg:px-0' : ''}`}
             >
-              <DoorOpen size={16} className="shrink-0" aria-hidden />
+              <DoorOpen size={15} className="shrink-0" aria-hidden />
               <span className={sidebarCollapsed ? 'lg:sr-only' : ''}>Sign out</span>
             </button>
           </div>
         </aside>
 
-        <div className={`flex-1 flex flex-col min-w-0 w-full ${sidebarCollapsed ? 'lg:ml-[4.5rem]' : 'lg:ml-72'}`}>
+        <div className={`flex-1 flex flex-col min-w-0 w-full ${sidebarCollapsed ? 'lg:ml-[4.25rem]' : 'lg:ml-60'}`}>
           <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
             <AnnouncementBanner />
             <div className="h-12 px-4 sm:px-8 flex items-center justify-between gap-2">
@@ -266,11 +271,11 @@ function AppShell() {
             </div>
           </header>
 
-          <main className="p-4 sm:p-5 lg:p-6 max-w-[1600px] mx-auto w-full">
+          <main className="p-3 sm:p-4 lg:p-5 max-w-[1600px] mx-auto w-full">
             <Routes>
               <Route path="/" element={<OverviewPage />} />
-              <Route path="/clients-overview" element={<Navigate to="/?tab=by-client" replace />} />
-              <Route path="/data-analytics" element={<Navigate to="/?tab=by-account" replace />} />
+              <Route path="/clients-overview" element={<Navigate to="/?tab=agency" replace />} />
+              <Route path="/data-analytics" element={<Navigate to="/?tab=heated" replace />} />
               <Route
                 path="/mission"
                 element={
@@ -346,16 +351,16 @@ function NavLink({
       to={to}
       title={label}
       onClick={() => onNavigate?.()}
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
-        collapsed ? 'lg:justify-center lg:px-2' : ''
+      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all ${
+        collapsed ? 'lg:justify-center lg:px-1.5' : ''
       } ${
         isActive
-          ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+          ? 'bg-[var(--brand-600)] text-white shadow-md shadow-black/20'
           : 'text-slate-400 hover:text-white hover:bg-slate-800'
       }`}
     >
-      <Icon size={20} className="flex-shrink-0" />
-      <span className={`font-medium text-sm ${collapsed ? 'lg:hidden' : ''}`}>{label}</span>
+      <Icon size={18} className="flex-shrink-0" />
+      <span className={`font-medium text-[13px] ${collapsed ? 'lg:hidden' : ''}`}>{label}</span>
       {badge !== undefined && badge > 0 ? (
         <span className={`ml-auto px-1.5 py-0.5 rounded-full text-xs font-bold min-w-[20px] text-center ${
           collapsed ? 'lg:hidden' : ''
