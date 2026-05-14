@@ -187,7 +187,7 @@ export default function FeedbackWidget() {
           transition-all duration-200
           ${cooldown
             ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-xl hover:scale-105'}
+            : 'bg-[var(--brand-600)] text-white hover:bg-[var(--brand-700)] hover:shadow-xl hover:scale-105'}
         `}
       >
         <MessageSquarePlus size={18} />
@@ -258,7 +258,7 @@ export default function FeedbackWidget() {
                   setAiCategory(val)
                   categoryOverrideMutation.mutate(val)
                 }}
-                className="mt-2 w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="mt-2 w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--brand-500)] bg-white"
               >
                 {(Object.keys(CATEGORY_LABELS) as FeedbackCategory[]).map(c => (
                   <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
@@ -310,7 +310,7 @@ export default function FeedbackWidget() {
                 onChange={e => setMessage(e.target.value.slice(0, MAX_CHARS))}
                 placeholder="Describe the issue or suggestion..."
                 rows={5}
-                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
+                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-[var(--brand-500)] placeholder-gray-400"
                 style={{ minHeight: 120 }}
               />
               <p className={`text-xs text-right mt-1 ${message.length >= MAX_CHARS ? 'text-red-500' : 'text-gray-400'}`}>
@@ -338,7 +338,7 @@ export default function FeedbackWidget() {
               className={`
                 w-full py-2.5 rounded-xl text-sm font-semibold transition-all
                 ${canSubmit
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
+                  ? 'bg-[var(--brand-600)] text-white hover:bg-[var(--brand-700)] shadow-sm'
                   : 'bg-gray-100 text-gray-400 cursor-not-allowed'}
               `}
             >

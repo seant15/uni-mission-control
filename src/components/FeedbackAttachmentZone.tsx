@@ -87,13 +87,13 @@ export default function FeedbackAttachmentZone({ files, onChange, disabled }: Pr
         onClick={() => !disabled && inputRef.current?.click()}
         className={`
           border-2 border-dashed rounded-lg px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors
-          ${dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}
+          ${dragOver ? 'border-[var(--brand-500)] bg-[var(--brand-50)]' : 'border-gray-200 hover:border-gray-300'}
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
         `}
       >
         <Upload size={16} className="text-gray-400 flex-shrink-0" />
         <span className="text-xs text-gray-500">
-          Drag & drop or <span className="text-blue-600 font-medium">browse</span>
+          Drag & drop or <span className="text-[var(--brand-600)] font-medium">browse</span>
           {' '}— images & video, up to {MAX_FILES} files, {MAX_SIZE_MB} MB each
         </span>
         <input

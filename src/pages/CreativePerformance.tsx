@@ -153,7 +153,7 @@ function CreativeThumb({
           href={pl.href}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[10px] font-semibold text-blue-600 hover:underline text-center leading-tight"
+          className="text-[10px] font-semibold text-[var(--brand-600)] hover:underline text-center leading-tight"
           onClick={e => e.stopPropagation()}
         >
           {pl.label}
@@ -186,7 +186,7 @@ function CreativeThumb({
           target="_blank"
           rel="noopener noreferrer"
           title="Open post"
-          className="absolute bottom-0.5 right-0.5 p-0.5 rounded bg-white/90 text-gray-600 hover:text-blue-600 shadow-sm"
+          className="absolute bottom-0.5 right-0.5 p-0.5 rounded bg-white/90 text-gray-600 hover:text-[var(--brand-600)] shadow-sm"
           onClick={e => e.stopPropagation()}
         >
           <ExternalLink size={12} />
@@ -257,7 +257,7 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
           <div className="bg-white">
             {/* Post header */}
             <div className="flex items-center gap-2.5 px-4 pt-3 pb-2">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--brand-500)] to-[var(--brand-700)] flex items-center justify-center shrink-0">
                 <span className="text-white text-xs font-bold">Ad</span>
               </div>
               <div className="flex-1 min-w-0">
@@ -299,7 +299,7 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
                       href={pl.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:underline"
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--brand-600)] hover:underline"
                     >
                       <ExternalLink size={16} />
                       {pl.label}
@@ -335,7 +335,7 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
                   </div>
                 )
               )}
-              <div className={`absolute top-2 left-2 text-xs px-1.5 py-0.5 rounded font-medium ${isVideo ? 'bg-purple-600/80 text-white' : 'bg-blue-600/80 text-white'}`}>
+              <div className={`absolute top-2 left-2 text-xs px-1.5 py-0.5 rounded font-medium ${isVideo ? 'bg-purple-600/80 text-white' : 'bg-[var(--brand-600)]/90 text-white'}`}>
                 {isVideo ? 'VID' : 'IMG'}
               </div>
             </div>
@@ -353,7 +353,7 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
                   href={row.destination_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="shrink-0 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md hover:bg-blue-700 transition-colors"
+                  className="shrink-0 px-3 py-1.5 bg-[var(--brand-600)] text-white text-xs font-semibold rounded-md hover:bg-[var(--brand-700)] transition-colors"
                 >
                   {ctaLabel}
                 </a>
@@ -366,15 +366,15 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
 
             {/* Engagement bar (decorative) */}
             <div className="flex items-center border-t border-gray-100 px-4 py-2 gap-4">
-              <button className="flex items-center gap-1.5 text-gray-500 hover:text-blue-600 transition-colors">
+              <button className="flex items-center gap-1.5 text-gray-500 hover:text-[var(--brand-600)] transition-colors">
                 <ThumbsUp size={14} />
                 <span className="text-xs">Like</span>
               </button>
-              <button className="flex items-center gap-1.5 text-gray-500 hover:text-blue-600 transition-colors">
+              <button className="flex items-center gap-1.5 text-gray-500 hover:text-[var(--brand-600)] transition-colors">
                 <MessageCircle size={14} />
                 <span className="text-xs">Comment</span>
               </button>
-              <button className="flex items-center gap-1.5 text-gray-500 hover:text-blue-600 transition-colors">
+              <button className="flex items-center gap-1.5 text-gray-500 hover:text-[var(--brand-600)] transition-colors">
                 <Share2 size={14} />
                 <span className="text-xs">Share</span>
               </button>
@@ -443,7 +443,7 @@ function KpiCard({ label, value, icon: Icon, color }: {
   )
 }
 
-const CHART_COLORS = ['#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#14b8a6']
+const CHART_COLORS = ['#ea580c', '#f97316', '#fb923c', '#fdba74', '#c2410c', '#9a3412', '#78716c', '#ca8a04', '#16a34a', '#0d9488']
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function CreativePerformance() {
@@ -554,7 +554,7 @@ export default function CreativePerformance() {
   const isLoading = loadingCreatives || loadingAdsets
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Ad Preview Modal */}
       {selectedAd && <AdPreviewModal row={selectedAd} onClose={() => setSelectedAd(null)} />}
 
@@ -642,8 +642,8 @@ export default function CreativePerformance() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Ads with Spend" value={String(adsWithSpend)} icon={Image} color="bg-blue-500" />
-        <KpiCard label="Total Spend" value={fmt$(totalSpend)} icon={DollarSign} color="bg-indigo-500" />
+        <KpiCard label="Ads with Spend" value={String(adsWithSpend)} icon={Image} color="bg-[var(--brand-600)]" />
+        <KpiCard label="Total Spend" value={fmt$(totalSpend)} icon={DollarSign} color="bg-violet-600" />
         <KpiCard label="Portfolio ROAS" value={portfolioRoas > 0 ? fmtRoas(portfolioRoas) : '—'} icon={TrendingUp} color="bg-green-500" />
         <KpiCard label="Portfolio CPA" value={portfolioCpa > 0 ? fmt$(portfolioCpa) : '—'} icon={ShoppingCart} color="bg-orange-500" />
       </div>
@@ -665,7 +665,7 @@ export default function CreativePerformance() {
               <div className="flex gap-1 bg-gray-100 p-0.5 rounded-lg">
                 <button
                   onClick={() => setChartMode('spend')}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${chartMode === 'spend' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${chartMode === 'spend' ? 'bg-white text-[var(--brand-600)] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                   Top Spend
                 </button>
@@ -714,7 +714,7 @@ export default function CreativePerformance() {
                           {isVideo ? <Video size={18} className="text-gray-300" /> : <Image size={18} className="text-gray-300" />}
                         </div>
                       )}
-                      <div className={`absolute top-1 left-1 text-xs px-1 py-0.5 rounded font-medium ${isVideo ? 'bg-purple-600/80 text-white' : 'bg-blue-600/80 text-white'}`}>
+                      <div className={`absolute top-1 left-1 text-xs px-1 py-0.5 rounded font-medium ${isVideo ? 'bg-purple-600/80 text-white' : 'bg-[var(--brand-600)]/90 text-white'}`}>
                         {isVideo ? 'VID' : 'IMG'}
                       </div>
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100">
@@ -794,7 +794,7 @@ export default function CreativePerformance() {
                         </td>
                         <td className="px-3 py-2.5 max-w-[220px]">
                           <div className="flex items-start gap-2">
-                            <span className={`mt-0.5 shrink-0 text-xs px-1.5 py-0.5 rounded font-medium ${isVideo ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                            <span className={`mt-0.5 shrink-0 text-xs px-1.5 py-0.5 rounded font-medium ${isVideo ? 'bg-purple-100 text-purple-700' : 'bg-[var(--brand-50)] text-[var(--brand-700)]'}`}>
                               {isVideo ? 'VID' : 'IMG'}
                             </span>
                             <div className="min-w-0">
@@ -845,7 +845,7 @@ export default function CreativePerformance() {
                       <button
                         key={pg}
                         onClick={() => setCreativePage(pg)}
-                        className={`w-7 h-7 text-xs rounded-lg border transition-colors ${pg === creativePage ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 hover:bg-gray-50 text-gray-700'}`}
+                        className={`w-7 h-7 text-xs rounded-lg border transition-colors ${pg === creativePage ? 'bg-[var(--brand-600)] text-white border-[var(--brand-600)]' : 'border-gray-200 hover:bg-gray-50 text-gray-700'}`}
                       >
                         {pg + 1}
                       </button>
@@ -934,7 +934,7 @@ export default function CreativePerformance() {
                       {expanded && adsetCreatives.length > 0 && adsetCreatives.slice(0, 5).map(cr => {
                         const crRoas = cr.spend > 0 ? cr.revenue / cr.spend : 0
                         return (
-                          <tr key={`sub-${cr._key}`} className="bg-blue-50/40">
+                          <tr key={`sub-${cr._key}`} className="bg-[var(--brand-50)]/50">
                             <td className="px-3 py-2" />
                             <td colSpan={2} className="px-3 py-2">
                               <div className="flex items-center gap-2 pl-4">

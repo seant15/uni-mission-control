@@ -28,7 +28,7 @@ import { Toaster } from 'sonner'
 import { applyAccentToDocument } from './lib/themeAccent'
 
 const ANNOUNCEMENT_STYLES = {
-  info:    { bar: 'bg-blue-600',   text: 'text-white',          icon: 'text-blue-200' },
+  info:    { bar: 'bg-[var(--brand-600)]', text: 'text-white', icon: 'text-white/80' },
   warning: { bar: 'bg-amber-500',  text: 'text-white',          icon: 'text-amber-200' },
   success: { bar: 'bg-green-600',  text: 'text-white',          icon: 'text-green-200' },
   neutral: { bar: 'bg-slate-700',  text: 'text-slate-100',      icon: 'text-slate-400' },
@@ -271,7 +271,7 @@ function AppShell() {
             </div>
           </header>
 
-          <main className="p-3 sm:p-4 lg:p-5 max-w-[1600px] mx-auto w-full">
+          <main className="p-3 sm:p-4 lg:p-5 w-full min-w-0">
             <Routes>
               <Route path="/" element={<OverviewPage />} />
               <Route path="/clients-overview" element={<Navigate to="/?tab=agency" replace />} />

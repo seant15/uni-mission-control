@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Database, ChevronDown, TrendingUp, DollarSign, CreditCard,
   AlertCircle, Calendar, Settings, MousePointer2, ShoppingCart, Users,
-  ArrowUpRight, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown
+  ArrowUpRight, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown, BookOpen,
 } from 'lucide-react'
 import { db } from '../lib/api'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
@@ -498,8 +498,15 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
     return [0, Math.ceil(maxValue * 1.2)]
   }
 
+  const KPI_ICON_SHELL: Record<string, string> = {
+    blue: 'p-3 rounded-lg bg-[var(--brand-50)] text-[var(--brand-600)]',
+    violet: 'p-3 rounded-lg bg-violet-50 text-violet-600',
+    emerald: 'p-3 rounded-lg bg-emerald-50 text-emerald-600',
+    amber: 'p-3 rounded-lg bg-amber-50 text-amber-600',
+  }
+
   const metricConfig: Record<MetricKey, any> = {
-    spend: { label: 'Spend', color: '#3b82f6', formatter: (v: number) => `$${v.toFixed(2)}` },
+    spend: { label: 'Spend', color: '#ea580c', formatter: (v: number) => `$${v.toFixed(2)}` },
     ctr: { label: 'CTR', color: '#8b5cf6', formatter: (v: number) => `${v.toFixed(2)}%` },
     conversions: { label: businessType === 'leadgen' ? 'Leads' : 'Purchases', color: '#10b981', formatter: (v: number) => v.toString() },
     costperconv: { label: businessType === 'leadgen' ? 'Cost Per Lead' : 'Cost Per Purchase', color: '#f59e0b', formatter: (v: number) => `$${v.toFixed(2)}` },
@@ -690,14 +697,14 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
             <div
               key={kpi.key}
               onClick={() => setSelectedMetric(kpi.key)}
-              className={`bg-white rounded-xl shadow-sm border-2 cursor-pointer transition-all ${selectedMetric === kpi.key ? 'border-blue-500 shadow-lg scale-105' : 'border-gray-200 hover:border-gray-300 hover:shadow-md'} p-6`}
+              className={`bg-white rounded-xl shadow-sm border-2 cursor-pointer transition-all ${selectedMetric === kpi.key ? 'border-[var(--brand-500)] shadow-lg scale-[1.02]' : 'border-gray-200 hover:border-gray-300 hover:shadow-md'} p-4`}
             >
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <p className="text-sm text-gray-500">{kpi.title}</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1">{kpi.value}</p>
                 </div>
-                <div className={`p-3 rounded-lg bg-${kpi.color}-50 text-${kpi.color}-600`}>
+                <div className={KPI_ICON_SHELL[kpi.color] ?? 'p-3 rounded-lg bg-slate-50 text-slate-600'}>
                   <kpi.icon size={24} />
                 </div>
               </div>
@@ -783,7 +790,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
               />
               <Area yAxisId="left" type="monotone" dataKey={selectedMetric} stroke={currentMetricConfig.color} fillOpacity={1} fill="url(#colorMetric)" isAnimationActive={settings.animateChart} />
               {showRolling7 && (
-                <Line yAxisId="left" type="monotone" dataKey="rolling7" stroke="#6366f1" strokeDasharray="4 4" dot={false} strokeWidth={2} name="rolling7" isAnimationActive={false} />
+                <Line yAxisId="left" type="monotone" dataKey="rolling7" stroke="#a855f7" strokeDasharray="4 4" dot={false} strokeWidth={2} name="rolling7" isAnimationActive={false} />
               )}
               {secondaryMetric !== 'none' && (
                 <Line yAxisId="right" type="monotone" dataKey={secondaryMetric} stroke={metricConfig[secondaryMetric as MetricKey].color} dot={false} strokeWidth={2} isAnimationActive={false} />
@@ -801,7 +808,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <details open>
             <summary className="text-lg font-semibold text-gray-900 cursor-pointer flex items-center gap-2">
-              <span className="text-blue-500">📘</span>
+              <BookOpen className="text-[var(--brand-600)] shrink-0" size={20} aria-hidden />
               Meta Campaigns ({aggMetaCampaigns.length})
               <span className="ml-2 text-xs font-normal text-gray-400">vs previous period</span>
             </summary>
@@ -839,7 +846,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
                     const cpa = camp.conversions > 0 ? camp.spend / camp.conversions : 0
                     const freqDisplay = camp.frequency != null && camp.frequency > 0 ? camp.frequency.toFixed(2) : '—'
                     return (
-                      <tr key={camp._key} className="hover:bg-blue-50">
+                      <tr key={camp._key} className="hover:bg-slate-50">
                         <td className="px-4 py-3 font-medium max-w-[280px] truncate">{camp.campaign_name}</td>
                         <td className="px-4 py-3 text-right font-medium">
                           {selectedClientCurrencySym}{camp.spend.toFixed(2)}

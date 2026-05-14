@@ -299,7 +299,7 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform }: P
                         <td className="px-2 py-1.5 text-right tabular-nums">{a.currency_symbol}{a.total_spend.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
                         <td className="px-2 py-1.5 text-right text-emerald-700 font-medium tabular-nums">{a.currency_symbol}{a.total_revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums">
-                          <span className={`font-semibold ${a.roas >= 2 ? 'text-emerald-600' : a.roas >= 1 ? 'text-sky-600' : 'text-red-600'}`}>
+                          <span className={`font-semibold ${a.roas >= 2 ? 'text-emerald-600' : a.roas >= 1 ? 'text-[var(--brand-600)]' : 'text-red-600'}`}>
                             {a.roas.toFixed(2)}x
                           </span>
                         </td>

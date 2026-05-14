@@ -49,7 +49,7 @@ export default function AccountDateRangePicker({ dateRange, onChange, className 
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="px-2 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 text-xs font-medium inline-flex items-center gap-1"
+        className="px-2 py-1.5 bg-[var(--brand-50)] text-[var(--brand-700)] rounded-lg hover:bg-[var(--brand-100)] text-xs font-medium inline-flex items-center gap-1 border border-[var(--brand-100)]"
       >
         <Calendar size={13} /> Presets
       </button>

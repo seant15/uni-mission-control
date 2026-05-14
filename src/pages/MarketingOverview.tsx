@@ -290,7 +290,7 @@ export default function MarketingOverview({
   const getSeverityColor = (s: string) =>
     s === 'critical' ? 'bg-red-100 text-red-700' :
     s === 'high' ? 'bg-orange-100 text-orange-700' :
-    s === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
+    s === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-100 text-slate-700'
 
   const getStatusIcon = (s: string) =>
     s === 'new' ? <AlertCircle size={14} /> :
