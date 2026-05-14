@@ -1556,4 +1556,36 @@ export const db = {
         )
         if (error) throw error
     },
+
+    /**
+     * Latest row from `job_runs` for the VPS `ab_test_reports` cron (see docs/FRONTEND_DEV_ADAPTER_JOB_RUNS_RLS_2026-05-16.md).
+     * Requires migration `20260516210000_job_runs.sql` and SELECT policy for authenticated.
+     */
+    async getLastAbJobRun(): Promise<{
+        finished_at: string | null
+        duration_ms: number | null
+        exit_code: number | null
+        status: string | null
+        scope: string | null
+        meta: Record<string, unknown> | null
+        error_message: string | null
+    } | null> {
+        const { data, error } = await supabase
+            .from('job_runs')
+            .select('finished_at, duration_ms, exit_code, status, scope, meta, error_message')
+            .eq('job_name', 'ab_test_reports')
+            .order('finished_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        if (error) throw error
+        return data as {
+            finished_at: string | null
+            duration_ms: number | null
+            exit_code: number | null
+            status: string | null
+            scope: string | null
+            meta: Record<string, unknown> | null
+            error_message: string | null
+        } | null
+    },
 }

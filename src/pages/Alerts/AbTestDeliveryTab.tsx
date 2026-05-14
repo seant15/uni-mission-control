@@ -156,6 +156,13 @@ export default function AbTestDeliveryTab({ currentUserId }: Props) {
     onError: (e: Error) => toast.error(e.message),
   })
 
+  const { data: lastJob, error: jobRunError, isLoading: jobRunLoading } = useQuery({
+    queryKey: ['job-runs-last-ab'],
+    queryFn: () => db.getLastAbJobRun(),
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  })
+
   return (
     <div className="space-y-10">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -184,6 +191,68 @@ export default function AbTestDeliveryTab({ currentUserId }: Props) {
           </select>
         </div>
       </div>
+
+      <section className="rounded-xl border border-slate-200 bg-slate-50/90 p-4 text-sm text-slate-800">
+        <h3 className="font-semibold text-gray-900 mb-1">A/B reports job (VPS cron)</h3>
+        <p className="text-xs text-slate-600 mb-3">
+          Last run of <code className="rounded bg-white px-1 border border-slate-200">ab_test_reports</code> from{' '}
+          <code className="rounded bg-white px-1 border border-slate-200">job_runs</code>. Needs Supabase migration{' '}
+          <code className="rounded bg-white px-1 border border-slate-200">20260516210000_job_runs.sql</code>.
+        </p>
+        {jobRunLoading && <p className="text-slate-500">Loading last run…</p>}
+        {jobRunError && (
+          <p className="text-amber-800 text-xs">
+            {(jobRunError as Error).message}. If the table or policy is missing, apply the migrations listed in{' '}
+            <code className="rounded bg-amber-100 px-1">docs/FRONTEND_DEV_ADAPTER_JOB_RUNS_RLS_2026-05-16.md</code>.
+          </p>
+        )}
+        {!jobRunLoading && !jobRunError && !lastJob && (
+          <p className="text-slate-600 text-xs">No runs recorded yet (or no SELECT access).</p>
+        )}
+        {!jobRunLoading && lastJob && (
+          <div className="space-y-2 text-xs sm:text-sm">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <span>
+                <span className="text-slate-500">Finished:</span>{' '}
+                {lastJob.finished_at
+                  ? new Date(lastJob.finished_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+                  : '—'}
+              </span>
+              <span>
+                <span className="text-slate-500">Status:</span>{' '}
+                <span className={lastJob.status === 'failed' ? 'font-semibold text-red-700' : 'font-medium text-green-700'}>
+                  {lastJob.status ?? '—'}
+                </span>
+              </span>
+              {lastJob.scope != null && lastJob.scope !== '' && (
+                <span>
+                  <span className="text-slate-500">Scope:</span> {lastJob.scope}
+                </span>
+              )}
+              {lastJob.duration_ms != null && (
+                <span>
+                  <span className="text-slate-500">Duration:</span> {lastJob.duration_ms} ms
+                </span>
+              )}
+              {lastJob.exit_code != null && (
+                <span>
+                  <span className="text-slate-500">Exit code:</span> {lastJob.exit_code}
+                </span>
+              )}
+            </div>
+            {typeof lastJob.meta?.reports_written === 'number' && (
+              <p>
+                <span className="text-slate-500">Reports this run:</span> {lastJob.meta.reports_written}
+              </p>
+            )}
+            {lastJob.status === 'failed' && lastJob.error_message && (
+              <p className="text-red-800 break-words" title={lastJob.error_message}>
+                {lastJob.error_message.length > 280 ? `${lastJob.error_message.slice(0, 280)}…` : lastJob.error_message}
+              </p>
+            )}
+          </div>
+        )}
+      </section>
 
       {errConfigs && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
