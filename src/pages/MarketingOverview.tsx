@@ -334,7 +334,7 @@ export default function MarketingOverview({
             <div className="min-w-0 lg:max-w-xl">
               <h1 className="text-2xl font-bold text-gray-900 tracking-tight">UNI Overview</h1>
               <p className="text-gray-500 text-sm mt-0.5 leading-snug">
-                Cross-platform roll-up{showAgencyExtras ? ' — client leaderboard, attribution pies (sample), and a side rail for AI notes + alerts' : ''}. Same date range as Heated View.
+                Cross-platform roll-up{showAgencyExtras ? ' — client leaderboard, platform attribution from synced rows, and a side rail for AI notes + alerts' : ''}. Same date range as Heated View.
               </p>
             </div>
           )}
