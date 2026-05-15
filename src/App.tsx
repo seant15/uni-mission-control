@@ -257,7 +257,7 @@ function AppShell() {
           </div>
 
           <nav className="flex-1 p-1.5 space-y-0 overflow-y-auto">
-            <div className={`text-[9px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5 px-2.5 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+            <div className={`uni-sidebar-nav-label text-[9px] uppercase tracking-wider mb-0.5 px-2.5 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
               Main
             </div>
             <NavLink to="/" icon={LayoutDashboard} label="Overview" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
@@ -273,7 +273,7 @@ function AppShell() {
             )}
 
             <div className={`mt-5 pt-3 border-t border-white/10 ${sidebarCollapsed ? 'lg:hidden' : ''}`} aria-hidden />
-            <div className={`text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5 px-2.5 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+            <div className={`uni-sidebar-nav-label text-[9px] uppercase tracking-wider mb-0.5 px-2.5 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
               System
             </div>
             {appUser?.role === 'super_admin' && (
@@ -299,8 +299,14 @@ function AppShell() {
                 {(appUser?.display_name || 'U')[0].toUpperCase()}
               </Link>
               <div className={`flex-1 min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-                <p className="text-sm font-semibold text-stone-900 truncate tracking-tight">{appUser?.display_name || 'User'}</p>
-                <p className="text-[11px] text-stone-600 capitalize leading-tight font-medium">{effRole.replace('_', ' ')}</p>
+                <Link
+                  to="/dashboard/settings?tab=profile"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="uni-sidebar-footer-link text-sm truncate tracking-tight block"
+                >
+                  {appUser?.display_name || 'User'}
+                </Link>
+                <p className="text-[11px] text-stone-500 capitalize leading-tight">{effRole.replace('_', ' ')}</p>
               </div>
             </div>
             <button
@@ -334,7 +340,7 @@ function AppShell() {
                 >
                   <Menu size={20} />
                 </button>
-                <span className="text-sm sm:text-[13px] font-bold text-[var(--brand-700)] tracking-wide uppercase truncate select-none drop-shadow-sm">
+                <span className="uni-sidebar-brand-title text-sm sm:text-[13px] tracking-wide uppercase truncate select-none">
                   {brandTitle}
                 </span>
               </div>
@@ -438,8 +444,8 @@ function NavLink({
         collapsed ? 'lg:justify-center lg:px-1.5' : ''
       } ${
         isActive
-          ? 'bg-[var(--brand-600)] text-white shadow-md shadow-black/20'
-          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          ? 'uni-sidebar-nav-link-active bg-[var(--brand-600)] shadow-md shadow-black/20'
+          : 'uni-sidebar-nav-link hover:bg-slate-800/80'
       }`}
     >
       <Icon size={18} className="flex-shrink-0" />

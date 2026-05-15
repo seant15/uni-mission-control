@@ -279,6 +279,71 @@ export const db = {
     },
 
     /**
+     * Device / age / gender / demographic slices from daily_performance_breakdown.
+     */
+    async getPerformanceBreakdown(
+        filters: PerformanceFilters & { dimension: 'device' | 'age' | 'gender' | 'demographic' },
+    ) {
+        const f = applyPerformanceClientScope(filters)
+        const plat = f.platform && f.platform !== 'all' ? f.platform : null
+
+        let query = supabase
+            .from('daily_performance_breakdown')
+            .select(
+                'client_id, date, platform, ad_account_id, dimension, dimension_value, cost, revenue, impressions, clicks, conversions',
+            )
+
+        if (f.clientId && f.clientId !== 'all') {
+            query = query.eq('client_id', f.clientId)
+        } else {
+            const activeIds = await cachedActiveClientIds()
+            if (activeIds.length === 0) return []
+            query = query.in('client_id', activeIds)
+        }
+
+        if (plat) query = query.eq('platform', plat)
+        if (f.adAccountId) query = query.eq('ad_account_id', f.adAccountId)
+        if (f.startDate) query = query.gte('date', f.startDate)
+        if (f.endDate) query = query.lte('date', f.endDate)
+        query = query.eq('dimension', filters.dimension).order('date', { ascending: false }).limit(20000)
+
+        const { data, error } = await query
+        if (error) throw error
+        return data || []
+    },
+
+    /**
+     * On-demand Meta/Google breakdown backfill (Vercel /api when deployed; no-op if route missing).
+     */
+    async requestPerformanceBreakdownSync(params: {
+        startDate: string
+        endDate: string
+        clientId?: string
+    }): Promise<{ ok: boolean; rows?: number; message?: string }> {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) {
+            return { ok: false, message: 'Not signed in' }
+        }
+        try {
+            const res = await fetch('/api/sync-performance-breakdowns', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify(params),
+            })
+            const body = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                return { ok: false, message: (body as { error?: string }).error || res.statusText }
+            }
+            return { ok: true, rows: (body as { rows?: number }).rows, message: (body as { message?: string }).message }
+        } catch (e) {
+            return { ok: false, message: e instanceof Error ? e.message : 'Sync request failed' }
+        }
+    },
+
+    /**
      * Fetch all clients (lightweight)
      */
     async getClients(opts?: { scopedClientId?: string }) {

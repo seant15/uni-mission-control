@@ -490,7 +490,12 @@ export default function MarketingOverview({
 
           {showAgencyExtras && (
             <>
-              <AgencyInsightPies dailyRows={curRows} />
+              <AgencyInsightPies
+                dailyRows={curRows}
+                dateRange={dateRange}
+                selectedClient={selectedClient}
+                selectedPlatform={selectedPlatform}
+              />
               <AgencyClientBreakdown dateRange={dateRange} selectedPlatform={selectedPlatform} section="chart" />
             </>
           )}

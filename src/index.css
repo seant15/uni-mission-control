@@ -36,19 +36,71 @@ html {
   --brand-700: #c2410c;
 }
 
-/* Sidebar brand — high contrast + warm glow (Mission Control shell) */
+/* Sidebar brand — rainbow dashboard title + muted secondary nav */
+@keyframes uni-rainbow-shift {
+  to {
+    background-position: 200% center;
+  }
+}
+
 .uni-sidebar-brand-title {
-  color: #ffffff;
-  text-shadow:
-    0 0 16px rgba(249, 115, 22, 1),
-    0 0 36px rgba(234, 88, 12, 0.65),
-    0 1px 3px rgba(0, 0, 0, 0.65);
+  font-family: var(--uni-font-display, 'Syne', system-ui, sans-serif);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(
+    90deg,
+    #f43f5e,
+    #f97316,
+    #eab308,
+    #22c55e,
+    #06b6d4,
+    #8b5cf6,
+    #ec4899,
+    #f43f5e
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: uni-rainbow-shift 7s linear infinite;
+  text-shadow: none;
 }
 
 .uni-sidebar-brand-subtitle {
-  color: #ffedd5;
+  color: #94a3b8;
   font-weight: 500;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  text-shadow: none;
+}
+
+.uni-sidebar-nav-label {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.uni-sidebar-nav-link {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.uni-sidebar-nav-link:hover {
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.uni-sidebar-nav-link-active {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.uni-sidebar-footer-link {
+  color: #475569;
+  font-weight: 600;
+}
+
+.uni-sidebar-footer-link:hover {
+  color: #1e293b;
+  font-weight: 700;
 }
 
 body {
