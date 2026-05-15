@@ -8,6 +8,8 @@ import { db } from '../lib/api'
 import type { HourWindow } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
+import PlatformBadge from '../components/PlatformBadge'
+import RealtimeRhythmChart from '../components/RealtimeRhythmChart'
 
 // Timezone display options
 type TzMode = 'utc' | 'browser' | 'account'
@@ -125,21 +127,6 @@ function AccountIdCell({ id }: { id: string }) {
   )
 }
 
-// Platform badge
-function PlatformBadge({ platform }: { platform: string }) {
-  if (!platform) return null
-  const isMeta = platform === 'meta_ads'
-  const isGoogle = platform === 'google_ads'
-  if (!isMeta && !isGoogle) return <span className="text-xs text-gray-400">{platform}</span>
-  return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-      isMeta ? 'bg-violet-100 text-violet-800' : 'bg-green-100 text-green-700'
-    }`}>
-      {isMeta ? 'Meta' : 'Google'}
-    </span>
-  )
-}
-
 type RTSortField = 'spend' | 'conversions' | 'roas' | 'client_name'
 type RTSortDir = 'asc' | 'desc'
 
@@ -254,7 +241,43 @@ export default function RealtimePerformance() {
     entry.prev.revenue += r.revenue || 0
   })
 
-  const accounts = Array.from(accountMap.values()).sort((a, b) => {
+  const accounts = Array.from(accountMap.values())
+
+  const clientGroups = useMemo(() => {
+    const map = new Map<string, {
+      client_id: string
+      client_name: string
+      accounts: typeof accounts
+      cur: ReturnType<typeof aggregateRows>
+      prev: ReturnType<typeof aggregateRows>
+    }>()
+    for (const acc of accounts) {
+      if (!map.has(acc.client_id)) {
+        map.set(acc.client_id, {
+          client_id: acc.client_id,
+          client_name: acc.client_name,
+          accounts: [],
+          cur: { impressions: 0, clicks: 0, conversions: 0, cost: 0, revenue: 0 },
+          prev: { impressions: 0, clicks: 0, conversions: 0, cost: 0, revenue: 0 },
+        })
+      }
+      const g = map.get(acc.client_id)!
+      g.accounts.push(acc)
+      g.cur.impressions += acc.cur.impressions
+      g.cur.clicks += acc.cur.clicks
+      g.cur.conversions += acc.cur.conversions
+      g.cur.cost += acc.cur.cost
+      g.cur.revenue += acc.cur.revenue
+      g.prev.impressions += acc.prev.impressions
+      g.prev.clicks += acc.prev.clicks
+      g.prev.conversions += acc.prev.conversions
+      g.prev.cost += acc.prev.cost
+      g.prev.revenue += acc.prev.revenue
+    }
+    return Array.from(map.values())
+  }, [accounts])
+
+  const sortedClientGroups = [...clientGroups].sort((a, b) => {
     let av: number, bv: number
     if (sortField === 'client_name') {
       return sortDir === 'asc'
@@ -263,7 +286,10 @@ export default function RealtimePerformance() {
     }
     if (sortField === 'spend') { av = a.cur.cost; bv = b.cur.cost }
     else if (sortField === 'conversions') { av = a.cur.conversions; bv = b.cur.conversions }
-    else { av = a.cur.cost > 0 ? a.cur.revenue / a.cur.cost : 0; bv = b.cur.cost > 0 ? b.cur.revenue / b.cur.cost : 0 }
+    else {
+      av = a.cur.cost > 0 ? a.cur.revenue / a.cur.cost : 0
+      bv = b.cur.cost > 0 ? b.cur.revenue / b.cur.cost : 0
+    }
     return sortDir === 'asc' ? av - bv : bv - av
   })
 
@@ -477,11 +503,18 @@ export default function RealtimePerformance() {
             })}
           </div>
 
-          {/* Per-Account Comparison Table */}
-          {accounts.length > 0 && (
+          <RealtimeRhythmChart
+            rows={[...currentRows, ...previousRows]}
+            tzMode={tzMode}
+            accountTzHint={reportingTzChip.kind === 'single' ? reportingTzChip.tz : null}
+            selectedClient={selectedClient}
+          />
+
+          {/* Per-client → per-account comparison */}
+          {sortedClientGroups.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Per-Account Comparison — Current {windowHours}h vs Previous {windowHours}h
+                Per-client comparison — Current {windowHours}h vs Previous {windowHours}h
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -515,44 +548,64 @@ export default function RealtimePerformance() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {accounts.map(acc => {
+                    {sortedClientGroups.flatMap(group => {
+                      const curRoasG = group.cur.cost > 0 ? group.cur.revenue / group.cur.cost : 0
+                      const prevRoasG = group.prev.cost > 0 ? group.prev.revenue / group.prev.cost : 0
+                      const sym = clientCurrencyMap.get(group.client_id) || '$'
+                      const clientRow = (
+                        <tr key={`${group.client_id}-client`} className="bg-slate-50/90">
+                          <td className="px-4 py-2 text-xs text-slate-500" colSpan={2}>Client</td>
+                          <td className="px-4 py-2 font-semibold text-gray-900">{group.client_name}</td>
+                          <td className="px-4 py-2 text-right font-semibold">{sym}{group.cur.cost.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right"><PctBadge change={pctChange(group.cur.cost, group.prev.cost)} /></td>
+                          <td className="px-4 py-2 text-right font-semibold">{group.cur.conversions}</td>
+                          <td className="px-4 py-2 text-right"><PctBadge change={pctChange(group.cur.conversions, group.prev.conversions)} /></td>
+                          <td className="px-4 py-2 text-right font-semibold">{curRoasG > 0 ? `${curRoasG.toFixed(2)}x` : '—'}</td>
+                          <td className="px-4 py-2 text-right">
+                            {curRoasG > 0 || prevRoasG > 0 ? <PctBadge change={pctChange(curRoasG, prevRoasG)} /> : '—'}
+                          </td>
+                        </tr>
+                      )
+                      const accountRows = [...group.accounts]
+                        .sort((a, b) => b.cur.cost - a.cur.cost)
+                        .map(acc => {
                       const curRoasAcc = acc.cur.cost > 0 ? acc.cur.revenue / acc.cur.cost : 0
                       const prevRoasAcc = acc.prev.cost > 0 ? acc.prev.revenue / acc.prev.cost : 0
                       return (
-                        <tr key={acc.account_id + acc.platform} className="hover:bg-gray-50">
-                          <td className="px-4 py-3"><AccountIdCell id={acc.account_id} /></td>
-                          <td className="px-4 py-3"><PlatformBadge platform={acc.platform} /></td>
-                          <td className="px-4 py-3 font-medium">
-                            <div>{acc.client_name}</div>
-                            <div className="text-[10px] font-mono text-gray-400 mt-0.5">
-                              {(clients as any[])?.find((c: any) => c.id === acc.client_id)?.currency || 'USD'}
-                            </div>
-                            {acc.account_tz && acc.account_tz !== 'advertiser_tz' && (
-                              <div className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-0.5" title={acc.account_tz}>
+                        <tr key={acc.account_id + acc.platform} className="hover:bg-gray-50/80">
+                          <td className="px-4 py-2 pl-8"><AccountIdCell id={acc.account_id} /></td>
+                          <td className="px-4 py-2"><PlatformBadge platform={acc.platform} /></td>
+                          <td className="px-4 py-2 text-xs text-gray-500">
+                            {acc.account_tz && acc.account_tz !== 'advertiser_tz' ? (
+                              <span className="inline-flex items-center gap-0.5" title={acc.account_tz}>
                                 <MapPin size={10} className="shrink-0 text-gray-400" aria-hidden />
                                 {tzOffsetLabel(acc.account_tz)}
-                              </div>
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-4 py-2 text-right">
                             {clientCurrencyMap.get(acc.client_id) || '$'}{acc.cur.cost.toFixed(2)}
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-4 py-2 text-right">
                             <PctBadge change={pctChange(acc.cur.cost, acc.prev.cost)} />
                           </td>
-                          <td className="px-4 py-3 text-right">{acc.cur.conversions}</td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-4 py-2 text-right">{acc.cur.conversions}</td>
+                          <td className="px-4 py-2 text-right">
                             <PctBadge change={pctChange(acc.cur.conversions, acc.prev.conversions)} />
                           </td>
-                          <td className="px-4 py-3 text-right">{curRoasAcc > 0 ? `${curRoasAcc.toFixed(2)}x` : '-'}</td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-4 py-2 text-right">{curRoasAcc > 0 ? `${curRoasAcc.toFixed(2)}x` : '-'}</td>
+                          <td className="px-4 py-2 text-right">
                             {curRoasAcc > 0 || prevRoasAcc > 0
                               ? <PctBadge change={pctChange(curRoasAcc, prevRoasAcc)} />
                               : <span className="text-gray-400">-</span>
                             }
                           </td>
                         </tr>
-                      )
+                        )
+                      })
+                      return [clientRow, ...accountRows]
                     })}
                   </tbody>
                 </table>
@@ -573,3 +626,4 @@ export default function RealtimePerformance() {
     </div>
   )
 }
+

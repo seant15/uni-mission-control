@@ -25,13 +25,13 @@ export default function AgencySwitcher({ collapsed }: { collapsed?: boolean }) {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="uni-sidebar-control mt-1.5 w-full flex items-start gap-1.5 rounded-lg border border-white/25 bg-white/10 px-2 py-1.5 hover:bg-white/15 transition"
+        className="uni-sidebar-control-shell mt-1.5 w-full flex items-start gap-1.5 rounded-lg border px-2 py-1.5 transition"
         aria-expanded={open}
         aria-haspopup="listbox"
         title="Switch agency account (clients and users under this org)"
       >
         <Building2 size={14} className="shrink-0 text-orange-300 mt-0.5" aria-hidden />
-        <span className="uni-sidebar-control-label flex-1 min-w-0">{label}</span>
+        <span className="flex-1 min-w-0">{label}</span>
         <ChevronDown size={13} className="shrink-0 opacity-80" aria-hidden />
       </button>
       {open && (

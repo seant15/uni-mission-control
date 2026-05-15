@@ -7,7 +7,11 @@ import {
   ArrowUpRight, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown, BookOpen,
 } from 'lucide-react'
 import MetaAdSetPerformanceTable from '../components/MetaAdSetPerformanceTable'
+import AgencyInsightPies from '../components/AgencyInsightPies'
+import OverviewAiNotesRail from '../components/OverviewAiNotesRail'
+import PlatformBadge from '../components/PlatformBadge'
 import { db } from '../lib/api'
+import { splitShopifyAndAdsRevenue } from '../lib/shopifyMetrics'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { useUiDensity } from '../contexts/UiDensityContext'
@@ -163,7 +167,13 @@ function PctBadge({ current, previous, invertTrend = false }: { current: number;
   )
 }
 
-export default function DataAnalytics({ embedded = false }: { embedded?: boolean }) {
+export default function DataAnalytics({
+  embedded = false,
+  showHeatedRail = false,
+}: {
+  embedded?: boolean
+  showHeatedRail?: boolean
+}) {
   const navigate = useNavigate()
   const { appUser } = useAuth()
   const uiDensity = useUiDensity()
@@ -330,6 +340,29 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
     enabled: (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && !!previousPeriodRange.start,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
+  })
+
+  const { data: metaAdsetsForCount = [] } = useQuery({
+    queryKey: ['meta_adsets_count', selectedClient, selectedAdAccount, dateRange, scopedClientId ?? ''],
+    queryFn: () => db.getMetaAdsets({
+      clientId: selectedClient,
+      adAccountId: selectedAdAccount || undefined,
+      startDate: dateRange.start,
+      endDate: dateRange.end,
+      scopedClientId: scopedClientId || undefined,
+    }),
+    enabled:
+      (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') &&
+      !!dateRange.start &&
+      !!dateRange.end,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: alertsRaw } = useQuery({
+    queryKey: ['uni_alerts_heated'],
+    queryFn: db.getAlertSummary,
+    enabled: showHeatedRail,
+    staleTime: 2 * 60 * 1000,
   })
 
   // Google campaigns
@@ -504,7 +537,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
       const revenue = Number(day.revenue) || 0
       const conversions = Number(day.conversions) || 0
       if (!map.has(key)) {
-        map.set(key, { date: day.date, platform: platLabel, spend: 0, revenue: 0, conversions: 0 })
+        map.set(key, { date: day.date, platform: platLabel, platformId: platKey, spend: 0, revenue: 0, conversions: 0 })
       }
       const e = map.get(key)!
       e.spend += cost
@@ -621,8 +654,39 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
   const canGoogleTab = (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggGoogleCampaigns.length > 0
   const canKwTab = (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggKeywords.length > 0
   const canSearchTab = (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggSearchTerms.length > 0
+  const metaAdsetCount = Array.isArray(metaAdsetsForCount) ? metaAdsetsForCount.length : 0
   const canAdsetsTab =
-    (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && !!dateRange.start && !!dateRange.end
+    (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') &&
+    !!dateRange.start &&
+    !!dateRange.end
+
+  const shopifySplit = useMemo(() => splitShopifyAndAdsRevenue(performanceData), [performanceData])
+  const prevShopifySplit = useMemo(
+    () => splitShopifyAndAdsRevenue(previousPerformanceData),
+    [previousPerformanceData],
+  )
+  const shopifySalesChange = calculateChange(shopifySplit.shopifyReal, prevShopifySplit.shopifyReal)
+
+  const heatedAlerts = useMemo(() => {
+    if (!showHeatedRail || !alertsRaw) return []
+    return alertsRaw.filter((a: { client_id?: string }) => {
+      if (selectedClient === 'all') return true
+      return a.client_id === selectedClient
+    })
+  }, [alertsRaw, selectedClient, showHeatedRail])
+
+  const heatedAlertSummary = useMemo(() => {
+    return heatedAlerts.reduce(
+      (acc, a: { status?: string; severity?: string }) => {
+        acc.total++
+        if (a.status === 'new') acc.new++
+        if (a.severity === 'critical') acc.critical++
+        if (a.severity === 'high') acc.high++
+        return acc
+      },
+      { total: 0, new: 0, critical: 0, high: 0 },
+    )
+  }, [heatedAlerts])
 
   useEffect(() => {
     const ok =
@@ -641,7 +705,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
     else if (canAdsetsTab) setHeatedDrillTab('adsets')
   }, [heatedDrillTab, canDailyTab, canMetaTab, canGoogleTab, canKwTab, canSearchTab, canAdsetsTab])
 
-  return (
+  const mainContent = (
     <div className={rootStack}>
       {/* Top Header */}
       <div className="flex items-center justify-between">
@@ -830,6 +894,43 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
         })}
       </div>
 
+      {businessType === 'ecommerce' && (
+        <div className={embedded ? 'grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'}>
+          <div className={`bg-white shadow-sm border border-gray-200 ${embedded ? 'rounded-lg p-3' : 'rounded-xl p-4'}`}>
+            <div className="flex items-start justify-between mb-1 gap-1">
+              <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-600 shrink-0">
+                <ShoppingCart className="w-4 h-4" />
+              </div>
+              {shopifySalesChange !== undefined && (
+                <div className={`text-xs font-medium shrink-0 ${shopifySalesChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {shopifySalesChange >= 0 ? '+' : ''}{shopifySalesChange.toFixed(1)}%
+                </div>
+              )}
+            </div>
+            <div className={embedded ? 'text-lg font-bold text-gray-900' : 'text-2xl font-bold text-gray-900'}>
+              ${shopifySplit.shopifyReal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-xs text-gray-500 mt-0.5">Shopify Real Sales</div>
+          </div>
+          <div className={`bg-white shadow-sm border border-gray-200 ${embedded ? 'rounded-lg p-3' : 'rounded-xl p-4'}`}>
+            <div className="flex items-start justify-between mb-1 gap-1">
+              <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-600 shrink-0">
+                <TrendingUp className="w-4 h-4" />
+              </div>
+            </div>
+            <div className={embedded ? 'text-lg font-bold text-gray-900' : 'text-2xl font-bold text-gray-900'}>
+              ${totals.revenue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              {shopifySplit.adsPctOfShopify != null && shopifySplit.shopifyReal > 0 && (
+                <span className="ml-1.5 text-sm font-semibold text-emerald-700">
+                  ({shopifySplit.adsPctOfShopify.toFixed(0)}% of Shopify)
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-gray-500 mt-0.5">Total Revenue (ads-reported + store)</div>
+          </div>
+        </div>
+      )}
+
       {/* Dynamic Chart */}
       <div className={`bg-white shadow-sm border border-gray-200 ${embedded ? 'rounded-lg p-3' : 'rounded-xl p-6'}`}>
         <div className={`flex items-center justify-between flex-wrap gap-3 ${embedded ? 'mb-2' : 'mb-4'}`}>
@@ -904,6 +1005,15 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
         )}
       </div>
 
+      {performanceData.length > 0 && dateRange.start && dateRange.end && (
+        <AgencyInsightPies
+          dailyRows={performanceData}
+          dateRange={dateRange}
+          selectedClient={selectedClient}
+          selectedPlatform={selectedPlatform}
+        />
+      )}
+
       {performanceData.length > 0 && (
         <div className={shellCard}>
           <p className="text-xs text-stone-500 mb-2">Switch report. Tabs with no rows for the current filters are disabled.</p>
@@ -911,10 +1021,10 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
             {([
               { id: 'daily' as const, label: 'Daily breakdown', disabled: !canDailyTab },
               { id: 'meta' as const, label: 'Meta campaigns' + (aggMetaCampaigns.length ? ` (${aggMetaCampaigns.length})` : ''), disabled: !canMetaTab },
+              { id: 'adsets' as const, label: 'Meta ad sets' + (metaAdsetCount ? ` (${metaAdsetCount})` : ''), disabled: !canAdsetsTab },
               { id: 'google' as const, label: 'Google campaigns' + (aggGoogleCampaigns.length ? ` (${aggGoogleCampaigns.length})` : ''), disabled: !canGoogleTab },
               { id: 'keywords' as const, label: 'Google keywords' + (aggKeywords.length ? ` (${aggKeywords.length})` : ''), disabled: !canKwTab },
               { id: 'search' as const, label: 'Search terms' + (aggSearchTerms.length ? ` (${aggSearchTerms.length})` : ''), disabled: !canSearchTab },
-              { id: 'adsets' as const, label: 'Meta ad sets', disabled: !canAdsetsTab },
             ] as const).map(tab => (
               <button
                 key={tab.id}
@@ -955,7 +1065,9 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
                       <tr key={`${d.date}-${d.platform ?? ''}`} className="text-slate-800 hover:bg-slate-50/80">
                         <td className="px-2 py-1 whitespace-nowrap font-medium">{d.date}</td>
                         {showPlatformInDailyDrill && (
-                          <td className="px-2 py-1 capitalize text-slate-600">{d.platform}</td>
+                          <td className="px-2 py-1">
+                            <PlatformBadge platform={d.platformId || d.platform} />
+                          </td>
                         )}
                         <td className="px-2 py-1 text-right">{fmtDailyMoney(d.spend)}</td>
                         <td className="px-2 py-1 text-right text-green-700">{fmtDailyMoney(d.revenue)}</td>
@@ -1251,4 +1363,18 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
       )}
     </div>
   )
+
+  if (!showHeatedRail) return mainContent
+
+  return (
+    <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_15rem] xl:gap-3 xl:items-start">
+      {mainContent}
+      <OverviewAiNotesRail
+        alerts={heatedAlerts.slice(0, 5)}
+        alertSummary={heatedAlertSummary}
+      />
+    </div>
+  )
 }
+
+

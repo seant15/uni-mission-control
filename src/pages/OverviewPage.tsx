@@ -77,7 +77,7 @@ export default function OverviewPage() {
       </div>
 
       {tab === 'agency' && <MarketingOverview embedded showAgencyExtras />}
-      {tab === 'heated' && <DataAnalytics embedded />}
+      {tab === 'heated' && <DataAnalytics embedded showHeatedRail />}
     </div>
   )
 }

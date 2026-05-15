@@ -14,6 +14,10 @@ import Login from './pages/Login'
 import BottomRightAssistDock from './components/BottomRightAssistDock'
 import ShellPreviewControl from './components/ShellPreviewControl'
 import AgencySwitcher from './components/AgencySwitcher'
+import UserAvatar from './components/UserAvatar'
+import AvatarPickerModal from './components/AvatarPickerModal'
+import { supabase } from './lib/supabase'
+import type { AvatarPresetId } from './lib/avatarPresets'
 import MissionBoard from './pages/MissionBoard'
 import { RoleGuard } from './components/RoleGuard'
 import { getDashboardSettings, GLOBAL_ANNOUNCEMENT_QUERY_KEY, APP_SHELL_SETTINGS_QUERY_KEY } from './lib/settings'
@@ -95,7 +99,8 @@ function App() {
 }
 
 function AppShell() {
-  const { appUser, signOut, user } = useAuth()
+  const { appUser, signOut, user, refreshAppUser } = useAuth()
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const effRole = normalizeRole(appUser?.role)
@@ -194,19 +199,19 @@ function AppShell() {
             bg-slate-800/92 backdrop-blur-xl backdrop-saturate-150
             border-r border-white/10 shadow-[4px_0_24px_-8px_rgba(0,0,0,0.15)]
             transition-transform duration-200 ease-out
-            w-[min(16.5rem,88vw)]
+            w-[min(19rem,92vw)]
             ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'}
             lg:translate-x-0 lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:h-screen lg:overflow-y-auto
-            ${sidebarCollapsed ? 'lg:w-[4.25rem]' : 'lg:w-60'}
+            ${sidebarCollapsed ? 'lg:w-[4.25rem]' : 'lg:w-[18.5rem]'}
           `}
         >
           <div
-            className={`p-2 border-b border-white/10 flex items-center gap-2 ${
+            className={`uni-sidebar-shell uni-sidebar-brand-block p-2 border-b border-white/10 flex items-center gap-2 ${
               sidebarCollapsed ? 'lg:flex-col lg:items-center lg:justify-center lg:gap-2 lg:py-3' : ''
             }`}
           >
             <div
-              className={`flex items-center gap-2 min-w-0 ${
+              className={`flex items-center gap-2.5 min-w-0 px-1 ${
                 sidebarCollapsed ? 'lg:flex-1 lg:flex-col lg:items-center lg:justify-center lg:w-full' : 'flex-1'
               }`}
             >
@@ -217,9 +222,9 @@ function AppShell() {
                   const el = e.target as HTMLImageElement
                   if (el.src.indexOf('/uni-logo.gif') === -1) el.src = '/uni-logo.gif'
                 }}
-                className={`w-9 h-9 rounded-xl object-cover flex-shrink-0 ring-1 ring-white/20 ${sidebarCollapsed ? 'lg:mx-auto' : ''}`}
+                className={`w-9 h-9 rounded-xl object-cover flex-shrink-0 ring-1 ring-white/20 ${sidebarCollapsed ? 'lg:mx-auto' : 'mx-0.5'}`}
               />
-              <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+              <div className={`min-w-0 flex-1 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
                 <h1 className="uni-sidebar-brand-title text-[12px] sm:text-[13px]">
                   {brandTitle}
                 </h1>
@@ -290,14 +295,29 @@ function AppShell() {
                 sidebarCollapsed ? 'lg:flex-col lg:items-center' : ''
               }`}
             >
-              <Link
-                to="/dashboard/settings?tab=profile"
-                title="Edit profile"
-                onClick={() => setMobileNavOpen(false)}
-                className="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--brand-400)] to-[var(--brand-700)] flex items-center justify-center text-white text-[11px] font-semibold shadow-md shadow-black/20 hover:brightness-110 transition flex-shrink-0 ring-2 ring-orange-200/60"
+              <button
+                type="button"
+                title="Choose avatar"
+                onClick={() => setAvatarPickerOpen(true)}
+                className="rounded-full flex-shrink-0 ring-2 ring-orange-200/60 hover:brightness-110 transition"
               >
-                {(appUser?.display_name || 'U')[0].toUpperCase()}
-              </Link>
+                <UserAvatar
+                  displayName={appUser?.display_name}
+                  avatarPreset={appUser?.avatar_preset}
+                  size="md"
+                />
+              </button>
+              <AvatarPickerModal
+                open={avatarPickerOpen}
+                currentPreset={appUser?.avatar_preset}
+                displayName={appUser?.display_name}
+                onClose={() => setAvatarPickerOpen(false)}
+                onSelect={async (presetId: AvatarPresetId) => {
+                  if (!appUser?.id) return
+                  await supabase.from('app_users').update({ avatar_preset: presetId }).eq('id', appUser.id)
+                  await refreshAppUser()
+                }}
+              />
               <div className={`flex-1 min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
                 <Link
                   to="/dashboard/settings?tab=profile"
@@ -325,7 +345,7 @@ function AppShell() {
 
         <div
           className={`flex-1 flex flex-col min-w-0 w-full ${
-            sidebarCollapsed ? 'lg:pl-[4.25rem]' : 'lg:pl-60'
+            sidebarCollapsed ? 'lg:pl-[4.25rem]' : 'lg:pl-[18.5rem]'
           }`}
         >
           <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">

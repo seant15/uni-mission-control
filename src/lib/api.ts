@@ -320,6 +320,9 @@ export const db = {
         endDate: string
         clientId?: string
     }): Promise<{ ok: boolean; rows?: number; message?: string }> {
+        if ((import.meta as any).env.VITE_ENABLE_BREAKDOWN_SYNC !== 'true') {
+            return { ok: false, message: 'On-demand sync disabled; use sync_performance_breakdowns.py' }
+        }
         const { data: { session } } = await supabase.auth.getSession()
         if (!session?.access_token) {
             return { ok: false, message: 'Not signed in' }

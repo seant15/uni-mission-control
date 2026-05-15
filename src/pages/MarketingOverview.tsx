@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef, useMemo, type ComponentType } from 'react'
+﻿import { useState, useEffect, useRef, useMemo, type ComponentType } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import {
   DollarSign, TrendingUp, Target, MousePointer, Eye, MousePointer2, CreditCard,
-  AlertTriangle, ArrowUpRight, ArrowDownRight, AlertCircle,
-  Clock, CheckCircle, X, Users, ShoppingCart, ChevronDown,
+  AlertTriangle, ArrowUpRight, ArrowDownRight,
+  Users, ShoppingCart, ChevronDown,
 } from 'lucide-react'
 import { db } from '../lib/api'
 import { getDashboardSettings } from '../lib/settings'
@@ -15,8 +14,9 @@ import { useDensityStackGap } from '../contexts/UiDensityContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
 import FilterShell from '../components/FilterShell'
 import AgencyClientBreakdown from '../components/AgencyClientBreakdown'
-import AgencyInsightPies from '../components/AgencyInsightPies'
+import PlatformBadge from '../components/PlatformBadge'
 import AlertSystemGuideLink from '../components/AlertSystemGuideLink'
+import { splitShopifyAndAdsRevenue } from '../lib/shopifyMetrics'
 
 interface Client {
   id: string
@@ -211,18 +211,6 @@ export default function MarketingOverview({
   const isLoading = loadingDailyCur || loadingDailyPrev
   const error = errDailyCur
 
-  const { data: alertsRaw } = useQuery({
-    queryKey: ['uni_alerts'],
-    queryFn: db.getAlertSummary,
-    staleTime: 2 * 60 * 1000,
-    refetchOnMount: 'always',
-  })
-
-  const alertsData = alertsRaw?.filter(a => {
-    if (selectedClient === 'all') return true
-    return a.client_id === selectedClient
-  })
-
   const cur = curRows ? aggregate(curRows) : null
   const prev = prevRows ? aggregate(prevRows) : null
 
@@ -274,34 +262,15 @@ export default function MarketingOverview({
       })).sort((a: any, b: any) => b.spend - a.spend)
     : []
 
-  const alertSummary = alertsData?.reduce(
-    (acc, a) => {
-      acc.total++
-      if (a.status === 'new') acc.new++
-      if (a.severity === 'critical') acc.critical++
-      if (a.severity === 'high') acc.high++
-      return acc
-    },
-    { total: 0, new: 0, critical: 0, high: 0 }
-  ) || { total: 0, new: 0, critical: 0, high: 0 }
-
-  const recentAlerts = alertsData?.slice(0, 5) || []
-
   const periodLabel = `${dateRange.start} → ${dateRange.end}`
 
   const selectedClientName = selectedClient === 'all'
     ? 'All Clients'
     : clients.find(c => c.id === selectedClient)?.name || 'Unknown'
 
-  const getSeverityColor = (s: string) =>
-    s === 'critical' ? 'bg-red-100 text-red-700' :
-    s === 'high' ? 'bg-orange-100 text-orange-700' :
-    s === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-100 text-slate-700'
+  const showAgencyRollup = showAgencyExtras && selectedClient === 'all' && !scopedClientId
 
-  const getStatusIcon = (s: string) =>
-    s === 'new' ? <AlertCircle size={14} /> :
-    s === 'in_progress' ? <Clock size={14} /> :
-    s === 'resolved' ? <CheckCircle size={14} /> : <X size={14} />
+  const shopifySplit = useMemo(() => splitShopifyAndAdsRevenue(curRows || []), [curRows])
 
   const primaryLeadGen = cur && prev && (
     <div className={`grid grid-cols-2 md:grid-cols-4 ${densityStackGap}`}>
@@ -322,20 +291,13 @@ export default function MarketingOverview({
   )
 
   return (
-    <div
-      className={
-        showAgencyExtras
-          ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_15rem] xl:gap-3 xl:items-start'
-          : ''
-      }
-    >
-      <div className={`min-w-0 ${showAgencyExtras ? 'space-y-3' : 'space-y-4'}`}>
+    <div className={`min-w-0 ${showAgencyExtras ? 'space-y-3' : 'space-y-4'}`}>
         <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between lg:gap-3">
           {!embedded && (
             <div className="min-w-0 lg:max-w-xl">
               <h1 className="text-2xl font-bold text-gray-900 tracking-tight">UNI Overview</h1>
               <p className="text-gray-500 text-sm mt-0.5 leading-snug">
-                Cross-platform roll-up{showAgencyExtras ? ' — client leaderboard, platform attribution from synced rows, and a side rail for AI notes + alerts' : ''}. Same date range as Heated View.
+                Cross-platform roll-up{showAgencyExtras ? ' — client leaderboard and platform attribution from synced rows' : ''}. Same date range as Heated View; AI notes live on Heated View.
               </p>
             </div>
           )}
@@ -477,8 +439,35 @@ export default function MarketingOverview({
           </div>
 
           {businessType === 'ecommerce' && (
-            <div className={`grid grid-cols-1 md:grid-cols-2 ${densityStackGap}`}>
-              <MetricCard title="Total Revenue" value={fmtMoney(cur.revenue)} change={revChange} icon={TrendingUp} tone="emerald" />
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 ${densityStackGap}`}>
+              <MetricCard
+                title="Shopify Real Sales"
+                value={fmtMoney(shopifySplit.shopifyReal)}
+                change={prev ? pctChange(shopifySplit.shopifyReal, splitShopifyAndAdsRevenue(prevRows || []).shopifyReal) : undefined}
+                icon={ShoppingCart}
+                tone="emerald"
+              />
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+                <div className="flex items-start justify-between mb-1 gap-1">
+                  <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-600 shrink-0">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                  {revChange !== undefined && (
+                    <div className={`text-xs font-medium shrink-0 ${revChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {revChange >= 0 ? '+' : ''}{revChange.toFixed(1)}%
+                    </div>
+                  )}
+                </div>
+                <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">
+                  {fmtMoney(cur.revenue)}
+                  {shopifySplit.adsPctOfShopify != null && shopifySplit.shopifyReal > 0 && (
+                    <span className="ml-1.5 text-sm font-semibold text-emerald-700">
+                      ({shopifySplit.adsPctOfShopify.toFixed(0)}% of Shopify)
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">Total Revenue (ads-reported + store)</div>
+              </div>
               <MetricCard title="CPA (Cost Per Acquisition)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} tone="amber" invertTrend />
             </div>
           )}
@@ -488,16 +477,8 @@ export default function MarketingOverview({
             </div>
           )}
 
-          {showAgencyExtras && (
-            <>
-              <AgencyInsightPies
-                dailyRows={curRows}
-                dateRange={dateRange}
-                selectedClient={selectedClient}
-                selectedPlatform={selectedPlatform}
-              />
-              <AgencyClientBreakdown dateRange={dateRange} selectedPlatform={selectedPlatform} section="chart" />
-            </>
+          {showAgencyRollup && (
+            <AgencyClientBreakdown dateRange={dateRange} selectedPlatform={selectedPlatform} section="chart" />
           )}
 
           {platformBreakdown.length > 0 && (
@@ -521,7 +502,9 @@ export default function MarketingOverview({
                   <tbody className="divide-y divide-gray-100">
                     {(platformBreakdown as any[]).map((p, i) => (
                       <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 text-sm font-medium capitalize">{p.platform.replace(/_/g, ' ')}</td>
+                        <td className="px-3 py-2 text-sm">
+                          <PlatformBadge platform={p.platform} />
+                        </td>
                         <td className="px-3 py-2 text-sm text-right">{fmtMoney(p.spend)}</td>
                         <td className="px-3 py-2 text-sm text-right text-green-600 font-medium">{fmtMoney(p.revenue)}</td>
                         <td className="px-3 py-2 text-sm text-right">
@@ -544,7 +527,7 @@ export default function MarketingOverview({
             </div>
           )}
 
-          {showAgencyExtras && (
+          {showAgencyRollup && (
             <AgencyClientBreakdown dateRange={dateRange} selectedPlatform={selectedPlatform} section="table" />
           )}
 
@@ -560,77 +543,7 @@ export default function MarketingOverview({
           <p className="text-gray-500">No data available for {periodLabel}</p>
         </div>
       )}
-      </div>
-      {showAgencyExtras && (
-        <aside
-          className="hidden xl:flex flex-col gap-2.5 w-full min-w-0 max-h-[calc(100vh-5rem)] sticky top-16 self-start"
-          aria-label="AI notes and alerts"
-        >
-          <div className="rounded-xl border border-dashed border-slate-300/90 bg-gradient-to-b from-[var(--brand-50)]/90 to-white p-2.5 text-[11px] text-slate-600 shadow-sm">
-            <span className="font-semibold text-[var(--brand-700)] uppercase tracking-wide text-[10px]">AI notes</span>
-            <p className="mt-1.5 leading-snug text-slate-600">
-              Reserved for auto summaries and next actions. Your notes can render above or below this block later.
-            </p>
-          </div>
-
-          <AlertSystemGuideLink variant="rail" />
-
-          <div className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm flex flex-col min-h-0 flex-1 overflow-hidden">
-            <div className="flex items-center justify-between gap-1 mb-2 shrink-0">
-              <span className="font-semibold text-slate-700 uppercase tracking-wide text-[10px]">Alerts</span>
-              <Link to="/alerts" className="text-[10px] text-[var(--brand-600)] hover:opacity-90 font-semibold whitespace-nowrap">
-                Open →
-              </Link>
-            </div>
-            <div className="grid grid-cols-4 gap-1 mb-2 shrink-0 text-center">
-              <div className="rounded-md bg-slate-50 px-0.5 py-1 border border-slate-100">
-                <div className="text-[11px] font-bold text-slate-900 leading-none">{alertSummary.total}</div>
-                <div className="text-[8px] text-slate-500 leading-tight mt-0.5">Tot</div>
-              </div>
-              <div className="rounded-md bg-red-50 px-0.5 py-1 border border-red-100">
-                <div className="text-[11px] font-bold text-red-700 leading-none">{alertSummary.new}</div>
-                <div className="text-[8px] text-red-600 leading-tight mt-0.5">New</div>
-              </div>
-              <div className="rounded-md bg-red-50 px-0.5 py-1 border border-red-100">
-                <div className="text-[11px] font-bold text-red-700 leading-none">{alertSummary.critical}</div>
-                <div className="text-[8px] text-red-600 leading-tight mt-0.5">Crit</div>
-              </div>
-              <div className="rounded-md bg-orange-50 px-0.5 py-1 border border-orange-100">
-                <div className="text-[11px] font-bold text-orange-800 leading-none">{alertSummary.high}</div>
-                <div className="text-[8px] text-orange-700 leading-tight mt-0.5">High</div>
-              </div>
-            </div>
-            <div className="overflow-y-auto min-h-0 flex-1 space-y-1.5 pr-0.5">
-              {recentAlerts.length > 0 ? (
-                recentAlerts.map(alert => (
-                  <div
-                    key={alert.id}
-                    className="rounded-lg border border-slate-100 bg-slate-50/80 p-1.5 hover:bg-slate-50 transition"
-                  >
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <span className={`text-[9px] font-semibold uppercase px-1 py-0 rounded ${getSeverityColor(alert.severity)}`}>
-                        {alert.severity}
-                      </span>
-                      <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
-                        {getStatusIcon(alert.status)}
-                        {new Date(alert.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                      </span>
-                    </div>
-                    <div className="text-[10px] font-semibold text-slate-800 truncate mt-0.5" title={alert.account_name}>
-                      {alert.account_name}
-                    </div>
-                    <p className="text-[10px] text-slate-600 leading-snug line-clamp-2 mt-0.5" title={alert.message}>
-                      {alert.message}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-[10px] text-slate-400 text-center py-3">No alerts in scope</p>
-              )}
-            </div>
-          </div>
-        </aside>
-      )}
     </div>
   )
 }
+

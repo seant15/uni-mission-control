@@ -19,6 +19,7 @@ interface AppUser {
     | 'client_user'
   primary_client_id?: string | null
   agency_id?: string | null
+  avatar_preset?: string | null
 }
 
 interface AuthContextValue {
@@ -28,6 +29,7 @@ interface AuthContextValue {
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
+  refreshAppUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -108,8 +110,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authSignOut()
   }
 
+  async function refreshAppUser() {
+    if (user?.id) await loadAppUser(user.id)
+  }
+
   return (
-    <AuthContext.Provider value={{ session, user, appUser, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ session, user, appUser, loading, signIn, signOut, refreshAppUser }}>
       {children}
     </AuthContext.Provider>
   )

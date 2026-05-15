@@ -43,10 +43,18 @@ html {
   }
 }
 
+.uni-sidebar-shell {
+  padding-top: 0.5rem;
+}
+
+.uni-sidebar-brand-block {
+  padding: 0.35rem 0.5rem 0.25rem;
+}
+
 .uni-sidebar-brand-title {
-  font-family: var(--uni-font-display, 'Syne', system-ui, sans-serif);
+  font-family: 'Inter', system-ui, sans-serif;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   line-height: 1.2;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -85,20 +93,23 @@ html {
   word-break: break-word;
 }
 
-/* Sidebar clickable controls (agency switcher, shell preview) */
-.uni-sidebar-control {
+/* Sidebar clickable controls (agency switcher, shell preview) — beige on dark shell */
+.uni-sidebar-control-shell {
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 11px;
   font-weight: 600;
   line-height: 1.35;
-  color: #f1f5f9;
+  color: #334155;
   letter-spacing: 0;
   white-space: normal;
   text-align: left;
+  background: #f5f0e8;
+  border-color: #e7e0d4 !important;
 }
 
-.uni-sidebar-control:hover {
-  color: #ffffff;
+.uni-sidebar-control-shell:hover {
+  color: #0f172a;
+  background: #ebe4d8;
 }
 
 .uni-sidebar-control-label {
