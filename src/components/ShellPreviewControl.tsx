@@ -56,12 +56,12 @@ export default function ShellPreviewControl({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="mt-1 w-full flex items-center justify-between gap-1 rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-left text-[10px] font-medium text-slate-200 hover:bg-white/10 hover:text-white transition"
+        className="uni-sidebar-control mt-1 w-full flex items-start justify-between gap-1 rounded-lg border border-white/25 bg-white/10 px-2 py-1.5 hover:bg-white/15 transition"
         aria-expanded={open}
         aria-haspopup="listbox"
         title="Preview shell branding as another user (sidebar + header only)"
       >
-        <span className="truncate">Shell: {activeLabel}</span>
+        <span className="uni-sidebar-control-label min-w-0 flex-1">Shell: {activeLabel}</span>
         <ChevronDown size={14} className="shrink-0 opacity-80" aria-hidden />
       </button>
       {open && (

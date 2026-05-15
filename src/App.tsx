@@ -220,10 +220,10 @@ function AppShell() {
                 className={`w-9 h-9 rounded-xl object-cover flex-shrink-0 ring-1 ring-white/20 ${sidebarCollapsed ? 'lg:mx-auto' : ''}`}
               />
               <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-                <h1 className="uni-sidebar-brand-title font-bold text-[13px] tracking-tight truncate leading-tight">
+                <h1 className="uni-sidebar-brand-title text-[12px] sm:text-[13px]">
                   {brandTitle}
                 </h1>
-                <p className="uni-sidebar-brand-subtitle text-[10px] truncate leading-snug mt-0.5">{brandSubtitle}</p>
+                <p className="uni-sidebar-brand-subtitle text-[10px] mt-0.5">{brandSubtitle}</p>
                 {appUser?.role === 'super_admin' && (
                   <>
                     <AgencySwitcher collapsed={sidebarCollapsed} />
