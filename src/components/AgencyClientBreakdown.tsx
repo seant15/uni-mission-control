@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { db } from '../lib/api'
+import { useAgency } from '../contexts/AgencyContext'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
 import type { CalendarDateRange } from '../lib/dashboardDateRange'
@@ -42,20 +43,30 @@ function aggregateByClient(rows: any[], clients: any[]) {
     const roas = spend > 0 ? revenue / spend : 0
     const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0
 
-    const platSpend = cd.reduce((acc: any, r) => {
+    const platSpend = cd.reduce((acc: Record<string, number>, r) => {
       const p = r.platform || 'Unknown'
       acc[p] = (acc[p] || 0) + (Number(r.cost) || 0)
       return acc
     }, {})
-    const platform = Object.keys(platSpend).length
-      ? Object.keys(platSpend).reduce((a, b) => platSpend[a] > platSpend[b] ? a : b)
-      : 'Unknown'
+    const platRev = cd.reduce((acc: Record<string, number>, r) => {
+      const p = r.platform || 'Unknown'
+      acc[p] = (acc[p] || 0) + (Number(r.revenue) || 0)
+      return acc
+    }, {})
+    const spendKeys = Object.keys(platSpend).filter(k => platSpend[k] > 0)
+    const revKeys = Object.keys(platRev).filter(k => platRev[k] > 0)
+    const dominantKey = spendKeys.length
+      ? spendKeys.reduce((a, b) => (platSpend[a] > platSpend[b] ? a : b))
+      : revKeys.length
+        ? revKeys.reduce((a, b) => (platRev[a] > platRev[b] ? a : b))
+        : 'Unknown'
+    const platform = PLATFORM_DISPLAY[dominantKey] || dominantKey
 
     const sym = client.currency_symbol || '$'
     return {
       id: client.id,
       account_name: client.name,
-      platform: PLATFORM_DISPLAY[platform] || platform,
+      platform,
       total_spend: spend,
       total_revenue: revenue,
       roas,
@@ -65,7 +76,7 @@ function aggregateByClient(rows: any[], clients: any[]) {
       currency: client.currency || 'USD',
       currency_symbol: sym,
     }
-  }).filter(a => a.total_spend > 0)
+  }).filter(a => a.total_spend > 0 || a.total_revenue > 0 || a.conversions > 0)
 }
 
 function formatCurrency(v: number) {
@@ -81,6 +92,7 @@ type Props = {
 
 export default function AgencyClientBreakdown({ dateRange, selectedPlatform, section = 'full' }: Props) {
   const { appUser } = useAuth()
+  const { currentAgencyId } = useAgency()
   const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
   const [chartMetric, setChartMetric] = useState<ChartMetric>('total_spend')
   const [sortField, setSortField] = useState<SortField>('total_spend')
@@ -111,18 +123,18 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform, sec
   }
 
   const { data: clients = [], isLoading: cLoading, error: cError } = useQuery({
-    queryKey: ['agency-co-clients', scopedClientId ?? 'all'],
+    queryKey: ['agency-co-clients', scopedClientId ?? 'all', currentAgencyId ?? 'all'],
     queryFn: () => db.getClients(scopedClientId ? { scopedClientId } : undefined),
   })
 
   const { data: curRows, isLoading: perfLoading, error: perfError } = useQuery({
-    queryKey: ['agency-co-cur', dateRange.start, dateRange.end, selectedPlatform, scopedClientId ?? 'all'],
+    queryKey: ['agency-co-cur', dateRange.start, dateRange.end, selectedPlatform, scopedClientId ?? 'all', currentAgencyId ?? 'all'],
     queryFn: () => fetchPerf(dateRange.start, dateRange.end),
     enabled: !!dateRange.start && !!dateRange.end,
   })
 
   const { data: prevRows } = useQuery({
-    queryKey: ['agency-co-prev', previousRange.start, previousRange.end, selectedPlatform, scopedClientId ?? 'all'],
+    queryKey: ['agency-co-prev', previousRange.start, previousRange.end, selectedPlatform, scopedClientId ?? 'all', currentAgencyId ?? 'all'],
     queryFn: () => fetchPerf(previousRange.start, previousRange.end),
     enabled: !!previousRange.start && !!previousRange.end,
   })
@@ -193,8 +205,9 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform, sec
       {showHeader && (
         <div className="flex items-center gap-2">
           <Users size={16} className="text-[var(--brand-600)] shrink-0" />
-          <h2 className="text-sm font-semibold text-slate-800">Client breakdown</h2>
-          <span className="text-[11px] text-slate-500">Uses same date range &amp; platform as filters above</span>
+          <h2 className="uni-card-title text-sm">Client breakdown</h2>
+          <span className="uni-badge-live">Warehouse · live</span>
+          <span className="uni-panel-muted">Same date range &amp; platform as filters above</span>
         </div>
       )}
 
@@ -233,8 +246,8 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform, sec
           )}
 
           {showChart && (
-          <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-            <h3 className="text-xs font-semibold text-slate-700 mb-2">
+          <div className="uni-card uni-card-body">
+            <h3 className="uni-card-title text-xs mb-2">
               Top accounts by {chartLabel} — {rangeLabel}
             </h3>
             {chartData.length > 0 ? (
@@ -264,9 +277,9 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform, sec
           )}
 
           {showTable && sorted.length > 0 && (
-            <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
-              <div className="px-3 py-2 border-b border-slate-100 bg-slate-50/80">
-                <span className="text-xs font-semibold text-slate-700">By account</span>
+            <div className="uni-card overflow-hidden">
+              <div className="uni-card-header py-2">
+                <span className="uni-table-head">By account</span>
               </div>
               <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
                 <table className="w-full text-sm">

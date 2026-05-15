@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UNI Alert Intelligence — System Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #080c10;
+    --surface:  #0d1318;
+    --card:     #111820;
+    --border:   #1e2d3a;
+    --border2:  #263545;
+    --text:     #c8d8e8;
+    --muted:    #556a7a;
+    --dim:      #2a3d4d;
+
+    --green:    #00e5a0;
+    --green-bg: rgba(0,229,160,.08);
+    --yellow:   #f5c542;
+    --yellow-bg:rgba(245,197,66,.08);
+    --red:      #ff4d6d;
+    --red-bg:   rgba(255,77,109,.08);
+    --blue:     #3db8ff;
+    --blue-bg:  rgba(61,184,255,.08);
+    --orange:   #ff8c42;
+    --orange-bg:rgba(255,140,66,.08);
+    --purple:   #b48eff;
+    --purple-bg:rgba(180,142,255,.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 0 0 80px;
+  }
+
+  /* ── noise texture overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+  /* ── HEADER ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 36px 0 28px;
+    margin-bottom: 40px;
+  }
+  .header-top {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 20px; flex-wrap: wrap;
+  }
+  .header-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    color: var(--green); letter-spacing: .14em; text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 32px; font-weight: 800;
+    color: #fff; line-height: 1.1;
+    letter-spacing: -.02em;
+  }
+  h1 span { color: var(--green); }
+  .header-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; color: var(--muted);
+    margin-top: 10px;
+  }
+  .stat-row {
+    display: flex; gap: 28px; flex-wrap: wrap;
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+  .stat { display: flex; flex-direction: column; gap: 4px; }
+  .stat-val {
+    font-family: 'Syne', sans-serif;
+    font-size: 24px; font-weight: 700; color: #fff;
+  }
+  .stat-val.green { color: var(--green); }
+  .stat-val.yellow { color: var(--yellow); }
+  .stat-val.red { color: var(--red); }
+  .stat-lbl {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .1em;
+  }
+
+  /* ── SECTION TITLE ── */
+  .section-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    color: var(--muted); letter-spacing: .14em; text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* ── PIPELINE FLOW ── */
+  .pipeline {
+    display: flex; align-items: stretch; gap: 0;
+    margin-bottom: 48px; overflow-x: auto;
+  }
+  .pipe-step {
+    flex: 1; min-width: 140px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-right: none;
+    padding: 18px 16px;
+    position: relative;
+  }
+  .pipe-step:last-child { border-right: 1px solid var(--border); border-radius: 0 6px 6px 0; }
+  .pipe-step:first-child { border-radius: 6px 0 0 6px; }
+  .pipe-step::after {
+    content: '→';
+    position: absolute; right: -12px; top: 50%; transform: translateY(-50%);
+    color: var(--border2); font-size: 16px; z-index: 2;
+  }
+  .pipe-step:last-child::after { display: none; }
+  .pipe-icon { font-size: 18px; margin-bottom: 8px; }
+  .pipe-name { font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .pipe-desc { font-size: 11px; color: var(--muted); }
+  .pipe-badge {
+    display: inline-block; margin-top: 8px;
+    font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500;
+    padding: 2px 8px; border-radius: 3px;
+  }
+  .badge-green { background: var(--green-bg); color: var(--green); border: 1px solid rgba(0,229,160,.2); }
+  .badge-yellow { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(245,197,66,.2); }
+  .badge-purple { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(180,142,255,.2); }
+
+  /* ── LAYER CARD ── */
+  .layer-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    background: var(--surface);
+  }
+  .layer-header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+  }
+  .layer-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; font-weight: 500; letter-spacing: .05em;
+    padding: 4px 12px; border-radius: 4px; white-space: nowrap;
+  }
+  .layer-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 15px; font-weight: 700; color: #fff; flex: 1;
+  }
+  .layer-runner {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; color: var(--muted);
+    text-align: right;
+  }
+  .layer-runner span { display: block; }
+
+  /* ── ALERT TABLE ── */
+  .alert-table { width: 100%; border-collapse: collapse; }
+  .alert-table th {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    color: var(--muted); text-transform: uppercase; letter-spacing: .1em;
+    padding: 10px 20px; text-align: left;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+  }
+  .alert-table td {
+    padding: 13px 20px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .alert-table tr:last-child td { border-bottom: none; }
+  .alert-table tr:hover td { background: rgba(255,255,255,.02); }
+
+  .alert-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px; font-weight: 500; color: #fff;
+    white-space: nowrap;
+  }
+  .alert-desc { font-size: 12px; color: var(--text); margin-top: 2px; }
+  .alert-threshold {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; color: var(--blue);
+  }
+
+  /* ── STATUS PILL ── */
+  .status {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    padding: 3px 10px; border-radius: 20px; white-space: nowrap;
+  }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .s-live { background: var(--green-bg); color: var(--green); border: 1px solid rgba(0,229,160,.2); }
+  .s-live .status-dot { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+  .s-new { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(61,184,255,.2); }
+  .s-new .status-dot { background: var(--blue); }
+  .s-partial { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(245,197,66,.2); }
+  .s-partial .status-dot { background: var(--yellow); }
+  .s-todo { background: rgba(255,255,255,.04); color: var(--muted); border: 1px solid var(--border2); }
+  .s-todo .status-dot { background: var(--muted); }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; box-shadow: 0 0 6px var(--green); }
+    50% { opacity: .5; box-shadow: 0 0 2px var(--green); }
+  }
+
+  /* ── SEVERITY TAG ── */
+  .sev {
+    font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500;
+    padding: 2px 8px; border-radius: 3px; white-space: nowrap;
+  }
+  .sev-crit { background: var(--red-bg); color: var(--red); border: 1px solid rgba(255,77,109,.2); }
+  .sev-high { background: var(--orange-bg); color: var(--orange); border: 1px solid rgba(255,140,66,.2); }
+  .sev-med  { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(245,197,66,.2); }
+  .sev-low  { background: rgba(255,255,255,.04); color: var(--muted); border: 1px solid var(--border2); }
+
+  /* ── TABLE TAGS ── */
+  .db-tag {
+    display: inline-block;
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    padding: 2px 7px; border-radius: 3px;
+    background: var(--blue-bg); color: var(--blue);
+    border: 1px solid rgba(61,184,255,.15);
+    white-space: nowrap; margin: 1px 2px;
+  }
+
+  /* ── COUNT BADGE ── */
+  .count-badge {
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    padding: 2px 8px; border-radius: 3px;
+    background: rgba(255,255,255,.06); color: var(--text);
+    white-space: nowrap;
+  }
+  .count-high { background: rgba(255,77,109,.1); color: var(--red); }
+
+  /* ── ISSUE CHIPS ── */
+  .issues { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .issue-chip {
+    font-size: 10px; font-family: 'DM Mono', monospace;
+    padding: 2px 8px; border-radius: 3px;
+    background: var(--yellow-bg); color: var(--yellow);
+    border: 1px solid rgba(245,197,66,.2);
+  }
+  .issue-chip.ok {
+    background: var(--green-bg); color: var(--green);
+    border: 1px solid rgba(0,229,160,.2);
+  }
+  .issue-chip.crit {
+    background: var(--red-bg); color: var(--red);
+    border: 1px solid rgba(255,77,109,.2);
+  }
+
+  /* ── ISSUES SECTION ── */
+  .issues-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    margin-bottom: 40px;
+  }
+  @media (max-width: 640px) { .issues-grid { grid-template-columns: 1fr; } }
+  .issue-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 18px;
+  }
+  .issue-card.warn { border-color: rgba(245,197,66,.25); }
+  .issue-card.crit { border-color: rgba(255,77,109,.25); }
+  .issue-card.info { border-color: rgba(61,184,255,.2); }
+  .issue-card-title {
+    font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: #fff;
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  }
+  .issue-card-icon { font-size: 15px; }
+  .issue-card p { font-size: 12px; color: var(--muted); line-height: 1.7; }
+  .issue-card code {
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    background: var(--card); padding: 1px 5px; border-radius: 3px; color: var(--blue);
+  }
+
+  /* ── RECO CARDS ── */
+  .reco-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+    margin-bottom: 40px;
+  }
+  @media (max-width: 800px) { .reco-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 500px) { .reco-grid { grid-template-columns: 1fr; } }
+  .reco-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 18px;
+    display: flex; flex-direction: column; gap: 10px;
+    transition: border-color .2s;
+  }
+  .reco-card:hover { border-color: var(--border2); }
+  .reco-num {
+    font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted);
+  }
+  .reco-title {
+    font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; color: #fff;
+    line-height: 1.3;
+  }
+  .reco-body { font-size: 12px; color: var(--muted); line-height: 1.7; flex: 1; }
+  .reco-impact {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    padding: 3px 9px; border-radius: 3px; display: inline-block; width: fit-content;
+  }
+
+  /* ── FOOTER ── */
+  .footer {
+    margin-top: 60px; padding-top: 24px;
+    border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+  }
+  .footer-logo {
+    font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 800;
+    color: var(--muted); letter-spacing: -.01em;
+  }
+  .footer-logo span { color: var(--green); }
+  .footer-meta { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--dim); }
+
+  hr.divider {
+    border: none; border-top: 1px solid var(--border);
+    margin: 40px 0;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ══ HEADER ══ -->
+  <header>
+    <div class="header-top">
+      <div>
+        <div class="header-label">UNI Marketing Agency · Internal Ops</div>
+        <h1>Alert Intelligence<br><span>System Map</span></h1>
+        <div class="header-meta">Generated 2026-04-01 · uni-mission-control · Supabase: jcghdthij</div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat">
+        <div class="stat-val red">339</div>
+        <div class="stat-lbl">Open Alerts (7d)</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val yellow">5</div>
+        <div class="stat-lbl">Alert Types Active</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val green">4</div>
+        <div class="stat-lbl">Layer 2+ New Today</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">15 / 18</div>
+        <div class="stat-lbl">Clients w/ Baselines</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">27d</div>
+        <div class="stat-lbl">Avg Baseline Window</div>
+      </div>
+    </div>
+  </header>
+
+
+  <!-- ══ PIPELINE FLOW ══ -->
+  <div class="section-title">数据流向</div>
+  <div class="pipeline">
+    <div class="pipe-step">
+      <div class="pipe-icon">📡</div>
+      <div class="pipe-name">Google / Meta APIs</div>
+      <div class="pipe-desc">广告平台原始数据</div>
+      <div class="pipe-badge badge-green">Live</div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-icon">⚙️</div>
+      <div class="pipe-name">VPS Sync Agent</div>
+      <div class="pipe-desc">每小时拉取 & 写入</div>
+      <div class="pipe-badge badge-green">Running</div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-icon">🗄️</div>
+      <div class="pipe-name">Supabase</div>
+      <div class="pipe-desc">daily_performance<br>account_daily_baselines</div>
+      <div class="pipe-badge badge-green">Live DB</div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-icon">🧠</div>
+      <div class="pipe-name">Alert Engine</div>
+      <div class="pipe-desc">VPS (L0/1) hourly<br>Scripts (L2+) 2:20 AM</div>
+      <div class="pipe-badge badge-yellow">2-tier</div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-icon">📊</div>
+      <div class="pipe-name">Dashboard</div>
+      <div class="pipe-desc">uni-mission-control<br>Alerts tab</div>
+      <div class="pipe-badge badge-purple">React UI</div>
+    </div>
+  </div>
+
+
+  <!-- ══ LAYER 0 ══ -->
+  <div class="section-title">Alert Layers</div>
+
+  <div class="layer-card">
+    <div class="layer-header">
+      <div class="layer-badge badge-green">LAYER 0</div>
+      <div class="layer-name">账户健康 — Account Health</div>
+      <div class="layer-runner">
+        <span>🟢 VPS OpenClaw</span>
+        <span>每小时触发</span>
+      </div>
+    </div>
+    <table class="alert-table">
+      <thead>
+        <tr>
+          <th style="width:180px">警报名称</th>
+          <th>触发条件</th>
+          <th style="width:100px">严重级别</th>
+          <th style="width:130px">状态</th>
+          <th>Supabase 表</th>
+          <th style="width:140px">7日触发次数</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div class="alert-name">zero_spend</div>
+            <div class="alert-desc">当日零花费</div>
+          </td>
+          <td>
+            <div class="alert-threshold">cost == 0 但昨天有花费</div>
+            <div class="alert-desc" style="margin-top:4px">账户昨日活跃，今日无任何支出</div>
+          </td>
+          <td><span class="sev sev-crit">CRITICAL</span></td>
+          <td><span class="status s-live"><span class="status-dot"></span>Live</span></td>
+          <td>
+            <span class="db-tag">alerts</span>
+            <span class="db-tag">daily_performance</span>
+          </td>
+          <td><span class="count-badge count-high">84 次</span></td>
+        </tr>
+        <tr>
+          <td>
+            <div class="alert-name">under_pacing</div>
+            <div class="alert-desc">严重欠投</div>
+          </td>
+          <td>
+            <div class="alert-threshold">当日花费 &lt; 预期节奏 × 10%</div>
+            <div class="alert-desc" style="margin-top:4px">基于当前时段推算 EOD 花费</div>
+          </td>
+          <td><span class="sev sev-crit">CRITICAL</span></td>
+          <td><span class="status s-live"><span class="status-dot"></span>Live</span></td>
+          <td>
+            <span class="db-tag">alerts</span>
+            <span class="db-tag">account_daily_baselines</span>
+          </td>
+          <td>
+            <span class="count-badge count-high">121 次</span>
+            <div class="issues" style="margin-top:6px">
+              <span class="issue-chip crit">与 zero_spend 重叠触发</span>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="alert-name">over_pacing</div>
+            <div class="alert-desc">预算超速</div>
+          </td>
+          <td>
+            <div class="alert-threshold">当日花费 &gt; 预期节奏 × 115%</div>
+          </td>
+          <td><span class="sev sev-high">HIGH</span></td>
+          <td><span class="status s-live"><span class="status-dot"></span>Live</span></td>
+          <td>
+            <span class="db-tag">alerts</span>
+            <span class="db-tag">account_daily_baselines</span>
+          </td>
+          <td><span class="count-badge count-high">71 次</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+
+  <!-- ══ LAYER 1 ══ -->
+  <div class="layer-card">
+    <div class="layer-header">
+      <div class="layer-badge badge-green">LAYER 1</div>
+      <div class="layer-name">当日热信号 — Same-day Signals</div>
+      <div class="layer-runner">
+        <span>🟢 VPS OpenClaw</span>
+        <span>每小时触发</span>
+      </div>
+    </div>
+    <table class="alert-table">
+      <thead>
+        <tr>
+          <th style="width:180px">警报名称</th>
+          <th>触发条件</th>
+          <th style="width:100px">严重级别</th>
+          <th style="width:130px">状态</th>
+          <th>Supabase 表</th>
+          <th style="width:140px">7日触发次数</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div class="alert-name">conversion_drop</div>
+            <div class="alert-desc">当日零转化</div>
+          </td>
+          <td>
+            <div class="alert-threshold">当日 conversions == 0，有花费，且 avg_CPA &gt; 0</div>
+          </td>
+          <td><span class="sev sev-high">HIGH</span></td>
+          <td><span class="status s-live"><span class="status-dot"></span>Live</span></td>
+          <td>
+            <span class="db-tag">alerts</span>
+            <span class="db-tag">account_daily_baselines</span>
+          </td>
+          <td><span class="count-badge count-high">49 次</span></td>
+        </tr>
+        <tr>
+          <td>
+            <div class="alert-name">ctr_decline</div>
+            <div class="alert-desc">CTR 当日下滑</div>
+          </td>
+          <td>
+            <div class="alert-threshold">当日 CTR &lt; 历史基准某阈值</div>
+          </td>
+          <td><span class="sev sev-med">MEDIUM</span></td>
+          <td>
+            <span class="status s-partial"><span class="status-dot"></span>Partial</span>
+            <div class="issues" style="margin-top:6px">
+              <span class="issue-chip">Meta CTR 口径问题</span>
+            </div>
+          </td>
+          <td>
+            <span class="db-tag">alerts</span>
+            <span class="db-tag">account_daily_baselines</span>
+          </td>
+          <td><span class="count-badge">14 次</span></td>
+        </tr>
+        <tr>
+          <td>
+            <div class="alert-name">impression_collapse</div>
+            <div class="alert-desc">零展示但有花费</div>
+          </td>
+          <td>
+            <div class="alert-threshold">impressions == 0 且 cost &gt; 0</div>
+            <div class="alert-desc" style="margin-top:4px">广告被拒或受众问题</div>
+          </td>
+          <td><span class="sev sev-crit">CRITICAL</span></td>
+          <td>
+            <span class="status s-todo"><span class="status-dot"></span>未实现</span>
+          </td>
+          <td>
+            <span class="db-tag">alerts</span>
+            <span class="db-tag">daily_performance</span>
+          </td>
+          <td><span class="count-badge">0 次</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+
+  <!-- ══ LAYER 2 ══ -->
+  <div class="layer-card">
+    <div class="layer-header">
+      <div class="layer-badge" style="background:var(--blue-bg);color:var(--blue);border:1px solid rgba(61,184,255,.2)">LAYER 2</div>
+      <div class="layer-name">趋势表现 — Rolling Performance (2–7天)</div>
+      <div class="layer-runner">
+        <span>🔵 scripts/intelligence/evaluate_rules.py</span>
+        <span>每晚 2:20 AM · 今日首跑 ✓</span>
+      </div>
+    </div>
+    <table class="alert-table">
+      <thead>
+        <tr>
+          <th style="width:180px">警报名称</th>
+          <th>触发条件</th>
+          <th style="width:100px">严重级别</th>
+          <th style="width:130px">状态</th>
+          <th>Supabase 表</th>
+          <th style="width:140px">今日触发</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div class="alert-name">roas_drop</div>
+            <div class="alert-desc">ROAS 趋势下降</div>
+          </td>
+          <td>
+            <div class="alert-threshold">近3日均值 ROAS &lt; 14日基准 × 70%</div>
+            <div class="alert-desc" style="margin-top:4px">用 ≥48h 前数据，规避转化延迟</div>
+          </td>
+          <td><span class="sev sev-high">HIGH</span></td>
+          <td><span class="status s-new"><span class="status-dot"></span>新上线</span></td>
+          <td>
+            <span class="db-tag">alerts</span>
+            <span class="db-tag">account_daily_baselines</span>
+            <span class="db-tag">daily_performance</span>
+          </td>
+          <td><span class="count-badge" style="background:var(--blue-bg);color:var(--blue)">7 客户</span></td>
+        </tr>
+        <tr>
+          <td>
+            <div class="alert-name">cpa_spike</div>
+            <div class="alert-desc">CPA 趋势飙升</div>
+          </td>
+          <td>
+            <div class="alert-threshold">近3日均值 CPA &gt; 14日基准 × 140%</div>
+          </td>
+          <td><span class="sev sev-high">HIGH</span></td>
+          <td><span class="status s-new"><span class="status-dot"></span>新上线</span></td>
+          <td>
+            <span class="db-tag">alerts</span>
+            <span class="db-tag">account_daily_baselines</span>
+            <span class="db-tag">daily_performance</span>
+          </td>
+          <td><span class="count-badge" style="background:var(--blue-bg);color:var(--blue)">2 客户</span></td>
+        </tr>
+        <tr>
+          <td>
+            <div class="alert-name">no_conversion_48h</div>
+            <div class="alert-desc">持续48h零转化</div>
+          </td>
+          <td>
+            <div class="alert-threshold">48h 转化 = 0，有花费，且 avg_conv ≥ 0.3/日</div>
+            <div class="alert-desc" style="margin-top:4px">低转化量账户排除在外</div>
+          </td>
+          <td><span class="sev sev-crit">CRITICAL</span></td>
+          <td><span class="status s-new"><span class="status-dot"></span>新上线</span></td>
+          <td>
+            <span class="db-tag">alerts</span>
+            <span class="db-tag">account_daily_baselines</span>
+            <span class="db-tag">daily_performance</span>
+          </td>
+          <td><span class="count-badge" style="background:var(--blue-bg);color:var(--blue)">2 客户</span></td>
+        </tr>
+        <tr>
+          <td>
+            <div class="alert-name">landing_page_failure</div>
+            <div class="alert-desc">着陆页失效</div>
+          </td>
+          <td>
+            <div class="alert-threshold">CTR ≥ 基准×85% 但 CVR &lt; 基准×60%</div>
+            <div class="alert-desc" style="margin-top:4px">流量到了，页面没转化 = 落地页问题</div>
+          </td>
+          <td><span class="sev sev-crit">CRITICAL</span></td>
+          <td><span class="status s-new"><span class="status-dot"></span>新上线</span></td>
+          <td>
+            <span class="db-tag">alerts</span>
+            <span class="db-tag">account_daily_baselines</span>
+            <span class="db-tag">daily_performance</span>
+          </td>
+          <td><span class="count-badge" style="background:var(--blue-bg);color:var(--blue)">6 客户</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+
+  <!-- ══ LAYER X ══ -->
+  <div class="layer-card">
+    <div class="layer-header">
+      <div class="layer-badge" style="background:var(--purple-bg);color:var(--purple);border:1px solid rgba(180,142,255,.2)">LAYER X</div>
+      <div class="layer-name">跨平台关联 — Cross-Platform Correlation</div>
+      <div class="layer-runner">
+        <span>🔵 scripts/intelligence/evaluate_rules.py</span>
+        <span>每晚 2:20 AM</span>
+      </div>
+    </div>
+    <table class="alert-table">
+      <thead>
+        <tr>
+          <th style="width:180px">警报名称</th>
+          <th>触发条件</th>
+          <th style="width:100px">严重级别</th>
+          <th style="width:130px">状态</th>
+          <th>Supabase 表</th>
+          <th style="width:140px">今日触发</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div class="alert-name">cross_platform</div>
+            <div class="alert-desc">双平台同时ROAS下降</div>
+          </td>
+          <td>
+            <div class="alert-threshold">Google + Meta 同时 ROAS &lt; 基准×70%</div>
+            <div class="alert-desc" style="margin-top:4px">通常指外部原因：网站宕机、Pixel失效、市场变化</div>
+          </td>
+          <td><span class="sev sev-crit">CRITICAL</span></td>
+          <td><span class="status s-new"><span class="status-dot"></span>新上线</span></td>
+          <td>
+            <span class="db-tag">alerts</span>
+            <span class="db-tag">account_daily_baselines</span>
+            <span class="db-tag">daily_performance</span>
+          </td>
+          <td><span class="count-badge" style="background:var(--purple-bg);color:var(--purple)">2 客户</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+
+  <!-- ══ NOT YET BUILT ══ -->
+  <div class="layer-card" style="opacity:.7">
+    <div class="layer-header">
+      <div class="layer-badge" style="background:rgba(255,255,255,.04);color:var(--muted);border:1px solid var(--border2)">待建设</div>
+      <div class="layer-name">规划中的高级警报 — Future Alerts</div>
+      <div class="layer-runner">
+        <span style="color:var(--muted)">⏸ 需要额外数据字段</span>
+      </div>
+    </div>
+    <table class="alert-table">
+      <thead>
+        <tr>
+          <th style="width:180px">警报名称</th>
+          <th>触发条件</th>
+          <th style="width:100px">严重级别</th>
+          <th style="width:180px">阻塞原因</th>
+          <th>优先级</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="alert-name">creative_fatigue</div><div class="alert-desc">素材疲劳</div></td>
+          <td><div class="alert-desc">同一素材 frequency &gt; 3.5，CTR 连续3天下滑</div></td>
+          <td><span class="sev sev-high">HIGH</span></td>
+          <td><div class="issues"><span class="issue-chip">需要 Meta frequency 字段</span></div></td>
+          <td><span class="sev" style="background:var(--orange-bg);color:var(--orange);border:1px solid rgba(255,140,66,.2)">高</span></td>
+        </tr>
+        <tr>
+          <td><div class="alert-name">cpc_spike</div><div class="alert-desc">CPC 飙升</div></td>
+          <td><div class="alert-desc">近3日 CPC &gt; 14日基准 × 150%</div></td>
+          <td><span class="sev sev-high">HIGH</span></td>
+          <td><div class="issues"><span class="issue-chip">需要 daily_performance.cpc 字段</span></div></td>
+          <td><span class="sev" style="background:var(--orange-bg);color:var(--orange);border:1px solid rgba(255,140,66,.2)">高</span></td>
+        </tr>
+        <tr>
+          <td><div class="alert-name">audience_saturation</div><div class="alert-desc">受众饱和</div></td>
+          <td><div class="alert-desc">CPM 连续上升 &gt;5天，frequency 高</div></td>
+          <td><span class="sev sev-med">MEDIUM</span></td>
+          <td><div class="issues"><span class="issue-chip">需要 daily_performance.cpm 字段</span></div></td>
+          <td><span class="sev sev-med">中</span></td>
+        </tr>
+        <tr>
+          <td><div class="alert-name">hook_rate_low</div><div class="alert-desc">视频钩子失效</div></td>
+          <td><div class="alert-desc">Meta 3s 播放率 &lt; 基准 × 60%</div></td>
+          <td><span class="sev sev-med">MEDIUM</span></td>
+          <td><div class="issues"><span class="issue-chip">需要 Meta 视频指标</span></div></td>
+          <td><span class="sev sev-low">低</span></td>
+        </tr>
+        <tr>
+          <td><div class="alert-name">schedule_anomaly</div><div class="alert-desc">排期异常</div></td>
+          <td><div class="alert-desc">非工作时间花费 &gt; 预期 × 200%（需要分时数据）</div></td>
+          <td><span class="sev sev-med">MEDIUM</span></td>
+          <td><div class="issues"><span class="issue-chip">需要 hourly_performance 表</span></div></td>
+          <td><span class="sev sev-low">低</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+
+  <hr class="divider">
+
+  <!-- ══ KNOWN ISSUES ══ -->
+  <div class="section-title">已知问题 & 需要处理</div>
+  <div class="issues-grid">
+    <div class="issue-card crit">
+      <div class="issue-card-title"><span class="issue-card-icon">🔴</span>Layer 0/1 跨日重复触发</div>
+      <p>VPS 每天重新触发同一问题，无跨日去重。<code>zero_spend</code> + <code>under_pacing</code> 可在同一账户同时触发（是同一件事）。7天 339 条，实际独立问题约 35 个。<br><br><strong>建议：</strong>在 VPS 评估脚本加 <code>resolved_at IS NULL</code> 检查，已有未解决的同类警报就不重发。</p>
+    </div>
+    <div class="issue-card warn">
+      <div class="issue-card-title"><span class="issue-card-icon">⚠️</span>Meta CTR 口径变更 2026-03</div>
+      <p>Meta 2026年3月起 CTR = 链接点击数（不再包含所有点击）。基准里的历史 CTR 数据包含旧口径，导致 <code>ctr_decline</code> 可能误报。<br><br><strong>建议：</strong>Meta CTR 基准只使用 2026-03-01 之后的数据计算。已在 <code>update_baselines.py</code> 中标记 <code>baseline_cutoff_date</code>。</p>
+    </div>
+    <div class="issue-card warn">
+      <div class="issue-card-title"><span class="issue-card-icon">⚠️</span>PROD 账户疑似测试账户</div>
+      <p><code>PROD</code> 客户日均预期 $992，连续 7 天 $0 花费，Google + Meta 同时为零。如果是测试账户应从警报中排除，否则这是一个真实的严重问题。<br><br><strong>建议：</strong>在 <code>clients</code> 表加 <code>is_active</code> 字段，或人工确认 PROD 状态。</p>
+    </div>
+    <div class="issue-card warn">
+      <div class="issue-card-title"><span class="issue-card-icon">⚠️</span>3 个客户无 Baselines</div>
+      <p>18 个客户中 3 个没有 <code>account_daily_baselines</code> 数据，导致所有 Layer 2+ 警报对这些客户无效。<br><br><strong>建议：</strong>检查这 3 个客户的 <code>daily_performance</code> 数据是否正常同步，数据少于 7 天则 Layer 2 不触发。</p>
+    </div>
+    <div class="issue-card info">
+      <div class="issue-card-title"><span class="issue-card-icon">ℹ️</span>转化延迟 Window</div>
+      <p>Layer 2 所有检查都用 ≥48h 前的数据，规避 Meta 24-72h 转化回传延迟。这意味着最新问题最快 48h 后才被 Layer 2 捕获，Layer 0/1 负责实时补位。<br><br>这是设计行为，不是问题。</p>
+    </div>
+    <div class="issue-card info">
+      <div class="issue-card-title"><span class="issue-card-icon">ℹ️</span>无季节性抑制</div>
+      <p>黑五、重大节假日、主动暂停投放期间，系统仍会触发 <code>zero_spend</code> 和 <code>under_pacing</code>。目前只能手动 resolve/ignore。<br><br><strong>建议：</strong>增加 <code>suppression_windows</code> 表，让账户经理提前标记已知的暂停窗口。</p>
+    </div>
+  </div>
+
+
+  <!-- ══ RECOMMENDATIONS ══ -->
+  <hr class="divider">
+  <div class="section-title">建设建议 — 辅助人工 Media Buying</div>
+  <div class="reco-grid">
+    <div class="reco-card">
+      <div class="reco-num">REC-01</div>
+      <div class="reco-title">警报 → 行动 标准SOP映射</div>
+      <div class="reco-body">每种 alert_type 关联一个固定 SOP（排查步骤 + 负责人 + 响应时限）。Account manager 看到警报就知道该做什么，不用从头分析。比如 <code>landing_page_failure</code> → 检查 PageSpeed + 表单 → 通知 Web 团队 → 4h内响应。</div>
+      <div class="reco-impact badge-green" style="padding:3px 9px;display:inline-block;font-family:'DM Mono',monospace;font-size:10px">影响：减少响应时间 60%</div>
+    </div>
+    <div class="reco-card">
+      <div class="reco-num">REC-02</div>
+      <div class="reco-title">Auto-Resolve 自动关闭逻辑</div>
+      <div class="reco-body">如果昨日触发 <code>under_pacing</code>，但今日花费已恢复正常，自动将该警报标记为 resolved。目前警报只会堆积不会自动清零，导致 Dashboard 噪音极大，AM 容易产生"警报疲劳"。</div>
+      <div class="reco-impact badge-yellow" style="padding:3px 9px;display:inline-block;font-family:'DM Mono',monospace;font-size:10px">影响：噪音减少 ~80%</div>
+    </div>
+    <div class="reco-card">
+      <div class="reco-num">REC-03</div>
+      <div class="reco-title">客户级别阈值自定义</div>
+      <div class="reco-body">不同客户风险容忍度不同。预算小的客户 CPA 波动天然更大。在 <code>clients</code> 表加 <code>roas_threshold_override</code>、<code>cpa_threshold_override</code> 字段，让 AM 针对每个客户调整触发敏感度。</div>
+      <div class="reco-impact" style="background:var(--orange-bg);color:var(--orange);border:1px solid rgba(255,140,66,.2);padding:3px 9px;display:inline-block;font-family:'DM Mono',monospace;font-size:10px">影响：减少误报</div>
+    </div>
+    <div class="reco-card">
+      <div class="reco-num">REC-04</div>
+      <div class="reco-title">Weekly Digest 周报摘要</div>
+      <div class="reco-body">每周一自动生成一份"上周警报摘要"——哪个客户警报最多、哪类问题最频繁、哪些连续3周都在触发。帮助团队识别慢性病（不是应急处理），推动策略层面的优化决策。</div>
+      <div class="reco-impact badge-green" style="padding:3px 9px;display:inline-block;font-family:'DM Mono',monospace;font-size:10px">影响：发现慢性问题</div>
+    </div>
+    <div class="reco-card">
+      <div class="reco-num">REC-05</div>
+      <div class="reco-title">Suppression Windows 暂停窗口</div>
+      <div class="reco-body">增加 <code>suppression_windows</code> 表（client_id, start_date, end_date, reason）。AM 提前标记"这个客户本周暂停投放做落地页改版"，系统在这段时间内自动抑制该客户的 zero_spend 和 under_pacing 警报。</div>
+      <div class="reco-impact badge-yellow" style="padding:3px 9px;display:inline-block;font-family:'DM Mono',monospace;font-size:10px">影响：消除已知场景噪音</div>
+    </div>
+    <div class="reco-card">
+      <div class="reco-num">REC-06</div>
+      <div class="reco-title">cpc_spike / creative_fatigue 优先</div>
+      <div class="reco-body">这两个是 Media Buyer 最高频手动检查的问题，但目前完全没有自动化。需要在 VPS sync 脚本里加 <code>cpc</code> 和 Meta <code>frequency</code> 字段的拉取，数据到位后 Layer 2 可以立刻添加这两个检查，对日常工作帮助最大。</div>
+      <div class="reco-impact" style="background:var(--purple-bg);color:var(--purple);border:1px solid rgba(180,142,255,.2);padding:3px 9px;display:inline-block;font-family:'DM Mono',monospace;font-size:10px">影响：减少人工巡检</div>
+    </div>
+  </div>
+
+
+  <!-- ══ FOOTER ══ -->
+  <div class="footer">
+    <div class="footer-logo">UNI <span>Mission Control</span></div>
+    <div class="footer-meta">Alert Intelligence System Map · 2026-04-01 · Generated by Claude</div>
+  </div>
+
+</div>
+</body>
+</html>

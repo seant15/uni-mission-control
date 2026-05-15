@@ -1,14 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
-
-type Dim = 'platforms' | 'devices' | 'ages' | 'demographics'
-
-const DIM_LABELS: Record<Dim, string> = {
-  platforms: 'Platforms',
-  devices: 'Devices',
-  ages: 'Age bands',
-  demographics: 'Demographics',
-}
 
 type DailyRow = {
   platform?: string | null
@@ -17,7 +8,24 @@ type DailyRow = {
   conversions?: number | null
 }
 
+const CHART_COLORS = [
+  'var(--uni-chart-1)',
+  'var(--uni-chart-2)',
+  'var(--uni-chart-3)',
+  'var(--uni-chart-4)',
+  'var(--uni-chart-5)',
+  'var(--uni-chart-6)',
+]
+
 function labelPlatform(raw: string) {
+  const key = raw.toLowerCase()
+  const labels: Record<string, string> = {
+    meta_ads: 'Meta Ads',
+    google_ads: 'Google Ads',
+    shopify: 'Shopify',
+    tiktok_ads: 'TikTok Ads',
+  }
+  if (labels[key]) return labels[key]
   const s = raw.replace(/_/g, ' ')
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Unknown'
 }
@@ -44,146 +52,116 @@ function aggregatePlatformSlices(rows: DailyRow[]) {
     .sort((a, b) => b.value - a.value)
 
   const revSlices = [...map.values()]
-    .map(x => ({ name: `${labelPlatform(x.key)} · rev`, value: toRevPct(x.revenue) }))
+    .map(x => ({ name: labelPlatform(x.key), value: toRevPct(x.revenue) }))
     .filter(x => x.value > 0)
     .sort((a, b) => b.value - a.value)
 
   return { spendSlices, revSlices, spendTotal, revTotal }
 }
 
-function mockSlices(dim: Dim): { name: string; value: number }[] {
-  switch (dim) {
-    case 'devices':
-      return [
-        { name: 'Mobile', value: 68 },
-        { name: 'Desktop', value: 27 },
-        { name: 'Tablet', value: 5 },
-      ]
-    case 'ages':
-      return [
-        { name: '18–24', value: 22 },
-        { name: '25–34', value: 35 },
-        { name: '35–44', value: 28 },
-        { name: '45+', value: 15 },
-      ]
-    case 'demographics':
-      return [
-        { name: 'Segment A', value: 40 },
-        { name: 'Segment B', value: 33 },
-        { name: 'Segment C', value: 27 },
-      ]
-    default:
-      return [{ name: 'Other', value: 100 }]
-  }
-}
-
-const COL_A = ['#ea580c', '#fb923c', '#fdba74', '#fed7aa', '#c2410c', '#15803d', '#0ea5e9']
-const COL_B = ['#0ea5e9', '#38bdf8', '#7dd3fc', '#0369a1', '#0284c7', '#16a34a', '#a855f7']
-
 type Props = {
-  /** Current filtered daily rows (same grain as overview charts). When set, Platforms uses real spend/revenue share. */
+  /** Filtered daily rows from db.getDailyPerformance (ads + Shopify merge + hourly fill). */
   dailyRows?: DailyRow[]
 }
 
 export default function AgencyInsightPies({ dailyRows = [] }: Props) {
-  const [dim, setDim] = useState<Dim>('platforms')
-
   const platformAgg = useMemo(() => aggregatePlatformSlices(dailyRows), [dailyRows])
+  const hasRows = dailyRows.length > 0
+  const hasSpend = platformAgg.spendTotal > 0
+  const hasRevenue = platformAgg.revTotal > 0
 
-  const left = useMemo(() => {
-    if (dim === 'platforms') {
-      if (dailyRows.length > 0) {
-        const s = platformAgg.spendSlices
-        return s.length > 0 ? s : [{ name: 'No spend', value: 100 }]
-      }
-      return [{ name: 'No rows in range', value: 100 }]
-    }
-    return mockSlices(dim)
-  }, [dim, dailyRows.length, platformAgg.spendSlices])
+  const spendSlices = useMemo(() => {
+    if (!hasRows) return [{ name: 'No data', value: 100 }]
+    const s = platformAgg.spendSlices
+    return s.length > 0 ? s : [{ name: 'No ad spend', value: 100 }]
+  }, [hasRows, platformAgg.spendSlices])
 
-  const right = useMemo(() => {
-    if (dim === 'platforms') {
-      if (dailyRows.length > 0) {
-        const s = platformAgg.revSlices
-        return s.length > 0 ? s : [{ name: 'No revenue', value: 100 }]
-      }
-      return [{ name: 'No rows in range', value: 100 }]
-    }
-    const base = mockSlices(dim)
-    return base.map((r, i) => ({
-      name: `${r.name} · rev`,
-      value: Math.max(1, Math.round(r.value * (0.7 + (i % 3) * 0.1))),
-    }))
-  }, [dim, dailyRows.length, platformAgg.revSlices])
-
-  const platformsLive = dim === 'platforms' && dailyRows.length > 0
+  const revSlices = useMemo(() => {
+    if (!hasRows) return [{ name: 'No data', value: 100 }]
+    const s = platformAgg.revSlices
+    return s.length > 0 ? s : [{ name: 'No revenue', value: 100 }]
+  }, [hasRows, platformAgg.revSlices])
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-sm font-semibold text-slate-800">Spend &amp; revenue attribution</h3>
-        <div className="flex flex-wrap gap-1">
-          {(Object.keys(DIM_LABELS) as Dim[]).map(d => {
-            const liveOnly = d === 'platforms'
-            return (
-              <button
-                key={d}
-                type="button"
-                disabled={!liveOnly}
-                title={liveOnly ? undefined : 'Warehouse breakdown not synced yet'}
-                onClick={() => liveOnly && setDim(d)}
-                className={`px-2 py-1 rounded-md text-[11px] font-medium border transition ${
-                  !liveOnly
-                    ? 'opacity-40 cursor-not-allowed border-slate-100 text-slate-400'
-                    : dim === d
-                      ? 'border-[var(--brand-600)] bg-[var(--brand-50)] text-[var(--brand-700)]'
-                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {DIM_LABELS[d]}
-              </button>
-            )
-          })}
+    <div className="uni-card">
+      <div className="uni-card-header flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="uni-section-label mb-2">Attribution</p>
+          <h3 className="uni-card-title">Spend &amp; revenue by platform</h3>
         </div>
+        <span className="uni-badge-live">Warehouse · live</span>
       </div>
-      <p className="text-[11px] text-slate-500 leading-snug">
-        Spend and revenue share from synced daily rows (Meta, Google, Shopify store revenue, and other connected platforms).
-      </p>
-      {!platformsLive && (
-        <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-2 py-1.5">
-          No rows in the selected date range — run marketing and Shopify sync to populate breakdown.
+      <div className="uni-card-body space-y-3">
+        <p className="uni-panel-muted">
+          Shares from synced daily_performance plus Shopify store revenue (hourly gap-fill when daily lags).
+          Device, age, and demographic splits are not in the warehouse yet.
         </p>
-      )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="min-h-[200px]">
-          <p className="text-xs font-medium text-slate-600 mb-1 text-center">Spend share{platformsLive ? '' : ' (sample)'}</p>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={left} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={2}>
-                {left.map((_, i) => (
-                  <Cell key={i} fill={COL_A[i % COL_A.length]} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(v: number) => [`${v}%`, 'Share']} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="min-h-[200px]">
-          <p className="text-xs font-medium text-slate-600 mb-1 text-center">
-            Revenue share{platformsLive ? '' : ' (sample)'}
+        {!hasRows && (
+          <p className="uni-callout-warn">
+            No rows in the selected date range. Run marketing sync and{' '}
+            <code className="font-mono text-[10px]">sync_shopify_data.py --backfill-days 7</code> to populate.
           </p>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={right} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={2}>
-                {right.map((_, i) => (
-                  <Cell key={i} fill={COL_B[i % COL_B.length]} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(v: number) => [`${v}%`, 'Share']} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-            </PieChart>
-          </ResponsiveContainer>
+        )}
+        {hasRows && !hasSpend && hasRevenue && (
+          <p className="uni-callout-warn">
+            Spend share is empty but revenue exists (e.g. Shopify-only). Revenue pie reflects store orders.
+          </p>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="min-h-[200px]">
+            <p className="uni-table-head mb-2 text-center">Spend share</p>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie
+                  data={spendSlices}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={44}
+                  outerRadius={72}
+                  paddingAngle={2}
+                >
+                  {spendSlices.map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v: number) => [`${v}%`, 'Share']} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="min-h-[200px]">
+            <p className="uni-table-head mb-2 text-center">Revenue share</p>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie
+                  data={revSlices}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={44}
+                  outerRadius={72}
+                  paddingAngle={2}
+                >
+                  {revSlices.map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v: number) => [`${v}%`, 'Share']} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1 pt-1 border-t border-[var(--uni-border)]">
+          <span className="uni-pill uni-pill-active cursor-default">Platforms</span>
+          {(['Devices', 'Age bands', 'Demographics'] as const).map(label => (
+            <span key={label} className="uni-pill opacity-50 cursor-not-allowed" title="Not synced to warehouse yet">
+              {label}
+            </span>
+          ))}
         </div>
       </div>
     </div>
