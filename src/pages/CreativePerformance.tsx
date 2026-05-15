@@ -3,12 +3,13 @@ import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
   Image, Video, DollarSign, TrendingUp, ShoppingCart, MousePointer2,
-  ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight, ExternalLink,
+  ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ExternalLink,
   X, ThumbsUp, MessageCircle, Share2, Globe, AlertTriangle
 } from 'lucide-react'
 import { db } from '../lib/api'
 import AccountDateRangePicker from '../components/AccountDateRangePicker'
 import FilterShell from '../components/FilterShell'
+import MetaAdSetPerformanceTable from '../components/MetaAdSetPerformanceTable'
 import { defaultCalendarRangeLastNDays, CREATIVE_DATE_PRESETS } from '../lib/dashboardDateRange'
 import { getDashboardSettings } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
@@ -102,29 +103,6 @@ function aggregateCreatives(rows: any[]): any[] {
     if (!entry.destination_url && row.destination_url) entry.destination_url = row.destination_url
     if (!entry.instagram_permalink_url && row.instagram_permalink_url) entry.instagram_permalink_url = row.instagram_permalink_url
     if (!entry.facebook_post_url && row.facebook_post_url) entry.facebook_post_url = row.facebook_post_url
-  }
-  return Array.from(map.values()).sort((a, b) => b.spend - a.spend)
-}
-
-function aggregateAdSets(rows: any[]): any[] {
-  const map = new Map<string, any>()
-  for (const row of rows) {
-    const key = row.ad_set_id || row.ad_set_name || 'unknown'
-    if (!map.has(key)) {
-      map.set(key, {
-        _key: key,
-        ad_set_id: row.ad_set_id,
-        ad_set_name: row.ad_set_name,
-        campaign_name: row.campaign_name,
-        spend: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0,
-      })
-    }
-    const entry = map.get(key)!
-    entry.spend += Number(row.spend) || 0
-    entry.impressions += Number(row.impressions) || 0
-    entry.clicks += Number(row.clicks) || 0
-    entry.conversions += Number(row.conversions) || 0
-    entry.revenue += Number(row.revenue) || 0
   }
   return Array.from(map.values()).sort((a, b) => b.spend - a.spend)
 }
@@ -481,10 +459,11 @@ export default function CreativePerformance() {
   const [searchParams] = useSearchParams()
   const clientFromUrl = searchParams.get('client')
   const [selectedClient, setSelectedClient] = useState<string>('all')
+  const [selectedPlatform] = useState<string>('meta_ads')
+  const [selectedAdAccount, setSelectedAdAccount] = useState<string>('')
   const [dateRange, setDateRange] = useState(() => defaultCalendarRangeLastNDays(30))
   const [showClientDrop, setShowClientDrop] = useState(false)
   const [creativePage, setCreativePage] = useState(0)
-  const [expandedAdSets, setExpandedAdSets] = useState<Set<string>>(new Set())
   const [chartMode, setChartMode] = useState<'spend' | 'roas'>('spend')
   const [selectedAd, setSelectedAd] = useState<any>(null)
   const [failedThumbKeys, setFailedThumbKeys] = useState<Set<string>>(() => new Set())
@@ -521,12 +500,22 @@ export default function CreativePerformance() {
   }, [])
 
   const creativeSort = useTableSort('spend')
-  const adsetSort = useTableSort('spend')
 
   // Clients
   const { data: clients = [] } = useQuery({
     queryKey: ['clients', scopedClientId ?? 'all'],
     queryFn: () => db.getClients(scopedClientId ? { scopedClientId } : undefined),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: adAccountsFromDB } = useQuery({
+    queryKey: ['ad_accounts', selectedClient, selectedPlatform, scopedClientId ?? ''],
+    queryFn: () =>
+      db.getAdAccounts({
+        clientId: selectedClient,
+        platform: selectedPlatform,
+        scopedClientId: scopedClientId || undefined,
+      }),
     staleTime: 5 * 60 * 1000,
   })
 
@@ -542,21 +531,8 @@ export default function CreativePerformance() {
     staleTime: 5 * 60 * 1000,
   })
 
-  // Ad Set data
-  const { data: rawAdsets = [], isLoading: loadingAdsets } = useQuery({
-    queryKey: ['meta-adsets', selectedClient, dateRange.start, dateRange.end, scopedClientId ?? ''],
-    queryFn: () => db.getMetaAdsets({
-      clientId: selectedClient === 'all' ? undefined : selectedClient,
-      startDate: dateRange.start,
-      endDate: dateRange.end,
-      scopedClientId: scopedClientId || undefined,
-    }),
-    staleTime: 5 * 60 * 1000,
-  })
-
   // Aggregate
   const allCreatives = aggregateCreatives(rawCreatives as any[])
-  const allAdSets = aggregateAdSets(rawAdsets as any[])
 
   const thumbWithUrlCount = useMemo(
     () => allCreatives.filter((r: any) => r.thumbnail_url || r.image_url).length,
@@ -603,7 +579,7 @@ export default function CreativePerformance() {
     [creativeTypePie]
   )
 
-  const isLoading = loadingCreatives || loadingAdsets
+  const isLoading = loadingCreatives
 
   return (
     <div className="space-y-4">
@@ -684,6 +660,26 @@ export default function CreativePerformance() {
             </div>
           )}
 
+          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Platform">
+            <button
+              type="button"
+              className="px-2 py-1 rounded-md text-xs font-medium border bg-[var(--brand-600)] text-white border-transparent"
+            >
+              Meta Ads
+            </button>
+          </div>
+          {adAccountsFromDB && adAccountsFromDB.length > 0 && (
+            <select
+              value={selectedAdAccount}
+              onChange={e => { setSelectedAdAccount(e.target.value); setCreativePage(0) }}
+              className="px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-md text-xs min-w-[160px]"
+            >
+              <option value="">All Accounts</option>
+              {adAccountsFromDB.map((account: any) => (
+                <option key={account.id} value={account.id}>{account.label}</option>
+              ))}
+            </select>
+          )}
           <AccountDateRangePicker
             dateRange={dateRange}
             onChange={d => { setDateRange(d); setCreativePage(0) }}
@@ -701,8 +697,9 @@ export default function CreativePerformance() {
         <KpiCard label="Portfolio CPA" value={portfolioCpa > 0 ? fmt$(portfolioCpa) : '—'} icon={ShoppingCart} color="bg-orange-500" />
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {!isLoading && creativeTypePie.length > 0 && totalPieSpend > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 h-full">
           <h2 className="text-sm font-semibold text-gray-700 mb-1">Creative mix by type (spend-weighted)</h2>
           <p className="text-xs text-gray-500 mb-3">Video vs image vs catalog-style CTAs vs text-only rows in the current date range.</p>
           <div className="h-[240px] w-full max-w-lg mx-auto">
@@ -744,7 +741,7 @@ export default function CreativePerformance() {
           : Math.max(...chartData.map(r => r.spend > 0 ? r.revenue / r.spend : 0), 1)
 
         return (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 h-full">
             {/* Header + toggle */}
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-sm font-semibold text-gray-700">Top Creatives</h2>
@@ -824,6 +821,7 @@ export default function CreativePerformance() {
           </div>
         )
       })()}
+      </div>
 
       {/* Creative Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -958,109 +956,14 @@ export default function CreativePerformance() {
         )}
       </div>
 
-      {/* Ad Set Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-700">Ad Set Performance</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{allAdSets.length} ad sets</p>
-        </div>
-
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12 text-gray-400 text-sm">Loading...</div>
-        ) : allAdSets.length === 0 ? (
-          <div className="flex items-center justify-center py-12 text-gray-400 text-sm">No ad set data</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-3 py-3 w-8" />
-                  <SortTh label="Ad Set" field="ad_set_name" sort={adsetSort} align="left" />
-                  <SortTh label="Campaign" field="campaign_name" sort={adsetSort} align="left" />
-                  <SortTh label="Spend" field="spend" sort={adsetSort} />
-                  <SortTh label="Impressions" field="impressions" sort={adsetSort} />
-                  <SortTh label="Clicks" field="clicks" sort={adsetSort} />
-                  <SortTh label="Conversions" field="conversions" sort={adsetSort} />
-                  <SortTh label="Revenue" field="revenue" sort={adsetSort} />
-                  <SortTh label="ROAS" field="roas" sort={adsetSort} />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {adsetSort.sortRows(allAdSets).map(row => {
-                  const roas = row.spend > 0 ? row.revenue / row.spend : 0
-                  const expanded = expandedAdSets.has(row._key)
-                  // Creatives in this ad set
-                  const adsetCreatives = allCreatives.filter(c => c.ad_set_id === row.ad_set_id || c.ad_set_name === row.ad_set_name)
-
-                  return (
-                    <>
-                      <tr key={row._key} className="hover:bg-gray-50/50 transition-colors">
-                        <td className="px-3 py-2.5">
-                          {adsetCreatives.length > 0 && (
-                            <button
-                              onClick={() => setExpandedAdSets(prev => {
-                                const next = new Set(prev)
-                                next.has(row._key) ? next.delete(row._key) : next.add(row._key)
-                                return next
-                              })}
-                              className="p-0.5 text-gray-400 hover:text-gray-600"
-                            >
-                              {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                            </button>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 font-medium text-gray-900 text-xs max-w-[200px] truncate">{row.ad_set_name || row.ad_set_id}</td>
-                        <td className="px-3 py-2.5 text-xs text-gray-500 max-w-[180px] truncate">{row.campaign_name}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-xs font-semibold text-gray-900">{fmt$(row.spend)}</td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-600">{fmtN(row.impressions)}</td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-600">{fmtN(row.clicks)}</td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-600">{row.conversions > 0 ? fmtN(row.conversions) : '—'}</td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-600">{row.revenue > 0 ? fmt$(row.revenue) : '—'}</td>
-                        <td className="px-3 py-2.5 text-right text-xs">
-                          {roas > 0 ? (
-                            <span className={`font-semibold ${roas >= 3 ? 'text-green-600' : roas >= 1.5 ? 'text-yellow-600' : 'text-red-500'}`}>
-                              {fmtRoas(roas)}
-                            </span>
-                          ) : '—'}
-                        </td>
-                      </tr>
-                      {expanded && adsetCreatives.length > 0 && adsetCreatives.slice(0, 5).map(cr => {
-                        const crRoas = cr.spend > 0 ? cr.revenue / cr.spend : 0
-                        return (
-                          <tr key={`sub-${cr._key}`} className="bg-[var(--brand-50)]/50">
-                            <td className="px-3 py-2" />
-                            <td colSpan={2} className="px-3 py-2">
-                              <div className="flex items-center gap-2 pl-4">
-                                <CreativeThumb row={cr} adKey={cr._key} onImageError={reportThumbFail} />
-                                <div className="min-w-0">
-                                  <p className="text-xs font-medium text-gray-700 truncate">{cr.ad_name || cr.ad_id}</p>
-                                  {cr.headline && <p className="text-xs text-gray-400 truncate">{cr.headline}</p>}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-3 py-2 text-right font-mono text-xs text-gray-700">{fmt$(cr.spend)}</td>
-                            <td className="px-3 py-2 text-right text-xs text-gray-500">{fmtN(cr.impressions)}</td>
-                            <td className="px-3 py-2 text-right text-xs text-gray-500">{fmtN(cr.clicks)}</td>
-                            <td className="px-3 py-2 text-right text-xs text-gray-500">{cr.conversions > 0 ? fmtN(cr.conversions) : '—'}</td>
-                            <td className="px-3 py-2 text-right text-xs text-gray-500">{cr.revenue > 0 ? fmt$(cr.revenue) : '—'}</td>
-                            <td className="px-3 py-2 text-right text-xs">
-                              {crRoas > 0 ? (
-                                <span className={`font-semibold ${crRoas >= 3 ? 'text-green-600' : crRoas >= 1.5 ? 'text-yellow-600' : 'text-red-500'}`}>
-                                  {fmtRoas(crRoas)}
-                                </span>
-                              ) : '—'}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <MetaAdSetPerformanceTable
+        className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
+        clientId={selectedClient}
+        startDate={dateRange.start}
+        endDate={dateRange.end}
+        scopedClientId={scopedClientId || undefined}
+        nestedCreatives={allCreatives}
+      />
     </div>
   )
 }

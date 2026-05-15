@@ -5,8 +5,7 @@ import {
   ArrowUpDown,
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { supabase } from '../lib/supabase'
-import { ACTIVE_CLIENT_STATUSES } from '../lib/api'
+import { db } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
 import type { CalendarDateRange } from '../lib/dashboardDateRange'
@@ -19,8 +18,12 @@ type SortDir = 'asc' | 'desc'
 const COLORS = ['#ea580c', '#f97316', '#fb923c', '#fdba74', '#0ea5e9', '#38bdf8', '#22c55e', '#a855f7']
 
 const PLATFORM_DISPLAY: Record<string, string> = {
-  meta_ads: 'Meta Ads', google_ads: 'Google Ads', tiktok_ads: 'TikTok Ads',
-  linkedin_ads: 'LinkedIn Ads', twitter_ads: 'Twitter Ads',
+  meta_ads: 'Meta Ads',
+  google_ads: 'Google Ads',
+  tiktok_ads: 'TikTok Ads',
+  linkedin_ads: 'LinkedIn Ads',
+  twitter_ads: 'Twitter Ads',
+  shopify: 'Shopify',
 }
 
 function pct(cur: number, prev: number) {
@@ -89,30 +92,27 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform, sec
   )
 
   const fetchPerf = async (start: string, end: string) => {
-    const { data: act, error: e1 } = await supabase.from('clients').select('id').in('status', [...ACTIVE_CLIENT_STATUSES])
-    if (e1) throw new Error(e1.message)
-    const activeIds = ((act ?? []).map(c => c.id)).filter(id => !scopedClientId || id === scopedClientId)
-    if (activeIds.length === 0) return []
-
-    let q = supabase.from('daily_performance')
-      .select('client_id, cost, revenue, impressions, clicks, conversions, platform')
-      .gte('date', start).lte('date', end)
-      .in('client_id', activeIds)
-    if (selectedPlatform !== 'all') q = q.eq('platform', selectedPlatform)
-    const { data, error } = await q
-    if (error) throw new Error(error.message)
-    return data || []
+    const rows = await db.getDailyPerformance({
+      clientId: 'all',
+      platform: selectedPlatform,
+      startDate: start,
+      endDate: end,
+      scopedClientId: scopedClientId || undefined,
+    })
+    return rows.map((r: any) => ({
+      client_id: r.client_id,
+      cost: r.cost,
+      revenue: r.revenue,
+      impressions: r.impressions,
+      clicks: r.clicks,
+      conversions: r.conversions,
+      platform: r.platform,
+    }))
   }
 
   const { data: clients = [], isLoading: cLoading, error: cError } = useQuery({
     queryKey: ['agency-co-clients', scopedClientId ?? 'all'],
-    queryFn: async () => {
-      let q = supabase.from('clients').select('id, name, status, business_type, currency, currency_symbol').in('status', [...ACTIVE_CLIENT_STATUSES]).order('name')
-      if (scopedClientId) q = q.eq('id', scopedClientId)
-      const { data, error } = await q
-      if (error) throw new Error(error.message)
-      return data || []
-    },
+    queryFn: () => db.getClients(scopedClientId ? { scopedClientId } : undefined),
   })
 
   const { data: curRows, isLoading: perfLoading, error: perfError } = useQuery({

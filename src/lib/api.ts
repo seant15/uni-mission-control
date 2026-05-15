@@ -18,28 +18,26 @@ import type {
 import type { MissionCardRow, MissionColumn } from '../types/mission'
 import type { ClientAbTestConfig, ClientAlertDelivery } from '../types/abTestDelivery'
 import { mockTasks } from './mock-data'
+import { getScopedAgencyId, peekActiveClientIdsCache, storeActiveClientIdsCache } from './agencyScope'
 
 const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
-
-let activeClientIdsCache: { ids: string[]; at: number } | null = null
-const ACTIVE_CLIENT_CACHE_MS = 45_000
 
 /** Matches common DB casing for active clients (shared by dropdowns + perf scoping). */
 export const ACTIVE_CLIENT_STATUSES = ['active', 'Active', 'ACTIVE'] as const
 
-/** IDs of active clients — cached for list + performance queries. */
+/** IDs of active clients — cached for list + performance queries (respects agency switcher). */
 async function cachedActiveClientIds(): Promise<string[]> {
-    const now = Date.now()
-    if (activeClientIdsCache && now - activeClientIdsCache.at < ACTIVE_CLIENT_CACHE_MS) {
-        return activeClientIdsCache.ids
-    }
-    const { data, error } = await supabase
-        .from('clients')
-        .select('id')
-        .in('status', [...ACTIVE_CLIENT_STATUSES])
+    const cached = peekActiveClientIdsCache()
+    if (cached) return cached
+
+    const agencyId = getScopedAgencyId()
+    let q = supabase.from('clients').select('id').in('status', [...ACTIVE_CLIENT_STATUSES])
+    if (agencyId) q = q.eq('agency_id', agencyId)
+
+    const { data, error } = await q
     if (error) throw error
     const ids = (data ?? []).map((r: { id: string }) => r.id).filter(Boolean)
-    activeClientIdsCache = { ids, at: now }
+    storeActiveClientIdsCache(ids)
     return ids
 }
 
@@ -284,13 +282,16 @@ export const db = {
      * Fetch all clients (lightweight)
      */
     async getClients(opts?: { scopedClientId?: string }) {
+        const agencyId = getScopedAgencyId()
         let q = supabase
             .from('clients')
-            .select('id, name, business_type, currency, currency_symbol, meta_ad_account_id, google_ads_customer_id')
+            .select('id, name, business_type, currency, currency_symbol, meta_ad_account_id, google_ads_customer_id, agency_id, status')
             .in('status', [...ACTIVE_CLIENT_STATUSES])
             .order('name')
         if (opts?.scopedClientId) {
             q = q.eq('id', opts.scopedClientId)
+        } else if (agencyId) {
+            q = q.eq('agency_id', agencyId)
         }
         const { data, error } = await q
         if (error) throw error

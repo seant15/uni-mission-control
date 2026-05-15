@@ -18,6 +18,7 @@ interface AppUser {
     | 'client'
     | 'client_user'
   primary_client_id?: string | null
+  agency_id?: string | null
 }
 
 interface AuthContextValue {

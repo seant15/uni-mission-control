@@ -13,6 +13,7 @@ import FeedbackAdmin from './pages/FeedbackAdmin'
 import Login from './pages/Login'
 import BottomRightAssistDock from './components/BottomRightAssistDock'
 import ShellPreviewControl from './components/ShellPreviewControl'
+import AgencySwitcher from './components/AgencySwitcher'
 import MissionBoard from './pages/MissionBoard'
 import { RoleGuard } from './components/RoleGuard'
 import { getDashboardSettings, GLOBAL_ANNOUNCEMENT_QUERY_KEY, APP_SHELL_SETTINGS_QUERY_KEY } from './lib/settings'
@@ -224,11 +225,14 @@ function AppShell() {
                 </h1>
                 <p className="uni-sidebar-brand-subtitle text-[10px] truncate leading-snug mt-0.5">{brandSubtitle}</p>
                 {appUser?.role === 'super_admin' && (
-                  <ShellPreviewControl
-                    collapsed={sidebarCollapsed}
-                    isSuperAdmin
-                    currentUserId={user?.id}
-                  />
+                  <>
+                    <AgencySwitcher collapsed={sidebarCollapsed} />
+                    <ShellPreviewControl
+                      collapsed={sidebarCollapsed}
+                      isSuperAdmin
+                      currentUserId={user?.id}
+                    />
+                  </>
                 )}
               </div>
             </div>

@@ -123,30 +123,35 @@ export default function AgencyInsightPies({ dailyRows = [] }: Props) {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-sm font-semibold text-slate-800">Spend &amp; revenue attribution</h3>
         <div className="flex flex-wrap gap-1">
-          {(Object.keys(DIM_LABELS) as Dim[]).map(d => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => setDim(d)}
-              className={`px-2 py-1 rounded-md text-[11px] font-medium border transition ${
-                dim === d
-                  ? 'border-[var(--brand-600)] bg-[var(--brand-50)] text-[var(--brand-700)]'
-                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {DIM_LABELS[d]}
-            </button>
-          ))}
+          {(Object.keys(DIM_LABELS) as Dim[]).map(d => {
+            const liveOnly = d === 'platforms'
+            return (
+              <button
+                key={d}
+                type="button"
+                disabled={!liveOnly}
+                title={liveOnly ? undefined : 'Warehouse breakdown not synced yet'}
+                onClick={() => liveOnly && setDim(d)}
+                className={`px-2 py-1 rounded-md text-[11px] font-medium border transition ${
+                  !liveOnly
+                    ? 'opacity-40 cursor-not-allowed border-slate-100 text-slate-400'
+                    : dim === d
+                      ? 'border-[var(--brand-600)] bg-[var(--brand-50)] text-[var(--brand-700)]'
+                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {DIM_LABELS[d]}
+              </button>
+            )
+          })}
         </div>
       </div>
       <p className="text-[11px] text-slate-500 leading-snug">
-        {platformsLive
-          ? 'Platforms: spend and revenue share from synced daily rows (ads + Shopify store revenue where present).'
-          : 'Platforms uses live data when the overview has rows; other dimensions are illustrative until warehouse breakdowns exist.'}
+        Spend and revenue share from synced daily rows (Meta, Google, Shopify store revenue, and other connected platforms).
       </p>
-      {!platformsLive && dim !== 'platforms' && (
+      {!platformsLive && (
         <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-2 py-1.5">
-          Preview only — not connected to your warehouse yet.
+          No rows in the selected date range — run marketing and Shopify sync to populate breakdown.
         </p>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

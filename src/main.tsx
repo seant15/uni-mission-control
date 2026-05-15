@@ -1,6 +1,7 @@
 import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './contexts/AuthContext'
+import { AgencyProvider } from './contexts/AgencyContext'
 import App from './App.tsx'
 import './index.css'
 import { applyAccentToDocument } from './lib/themeAccent'
@@ -30,7 +31,9 @@ if (!supabaseUrl || !supabaseKey) {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <App />
+      <AgencyProvider>
+        <App />
+      </AgencyProvider>
     </AuthProvider>
   </QueryClientProvider>,
 )

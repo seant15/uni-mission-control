@@ -1,17 +1,17 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   Database, ChevronDown, TrendingUp, DollarSign, CreditCard,
   AlertCircle, Calendar, Settings, MousePointer2, ShoppingCart, Users,
   ArrowUpRight, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown, BookOpen,
-  Layers,
 } from 'lucide-react'
+import MetaAdSetPerformanceTable from '../components/MetaAdSetPerformanceTable'
 import { db } from '../lib/api'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { useUiDensity } from '../contexts/UiDensityContext'
-import { scopedClientIdFromUser, canAccessCreative } from '../lib/rbac'
+import { scopedClientIdFromUser } from '../lib/rbac'
 import AccountDateRangePicker from '../components/AccountDateRangePicker'
 import FilterShell from '../components/FilterShell'
 import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
@@ -189,7 +189,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>('roas')
   const [secondaryMetric, setSecondaryMetric] = useState<MetricKey | 'none'>('none')
   const [showRolling7, setShowRolling7] = useState(false)
-  type HeatedDrillTab = 'daily' | 'meta' | 'google' | 'keywords' | 'search'
+  type HeatedDrillTab = 'daily' | 'meta' | 'google' | 'keywords' | 'search' | 'adsets'
   const [heatedDrillTab, setHeatedDrillTab] = useState<HeatedDrillTab>('daily')
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
 
@@ -487,6 +487,37 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
     return acc
   }, []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
+  const showPlatformInDailyDrill = selectedPlatform === 'all'
+  const dailyDrillTableRows = useMemo(() => {
+    if (!showPlatformInDailyDrill) {
+      return dailyDataWithMetrics.map(d => ({
+        ...d,
+        platform: selectedPlatform.replace(/_/g, ' '),
+      }))
+    }
+    const map = new Map<string, any>()
+    for (const day of performanceData) {
+      const platKey = day.platform || 'unknown'
+      const platLabel = platKey.replace(/_/g, ' ')
+      const key = `${day.date}|${platKey}`
+      const cost = Number(day.cost) || 0
+      const revenue = Number(day.revenue) || 0
+      const conversions = Number(day.conversions) || 0
+      if (!map.has(key)) {
+        map.set(key, { date: day.date, platform: platLabel, spend: 0, revenue: 0, conversions: 0 })
+      }
+      const e = map.get(key)!
+      e.spend += cost
+      e.revenue += revenue
+      e.conversions += conversions
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      const byDate = b.date.localeCompare(a.date)
+      if (byDate !== 0) return byDate
+      return String(a.platform).localeCompare(String(b.platform))
+    })
+  }, [performanceData, dailyDataWithMetrics, selectedPlatform, showPlatformInDailyDrill])
+
   // 7-day rolling avg
   const chartData = dailyDataWithMetrics.map((d, i) => {
     const window = dailyDataWithMetrics.slice(Math.max(0, i - 6), i + 1)
@@ -590,6 +621,8 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
   const canGoogleTab = (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggGoogleCampaigns.length > 0
   const canKwTab = (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggKeywords.length > 0
   const canSearchTab = (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggSearchTerms.length > 0
+  const canAdsetsTab =
+    (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && !!dateRange.start && !!dateRange.end
 
   useEffect(() => {
     const ok =
@@ -597,14 +630,16 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
       (heatedDrillTab === 'meta' && canMetaTab) ||
       (heatedDrillTab === 'google' && canGoogleTab) ||
       (heatedDrillTab === 'keywords' && canKwTab) ||
-      (heatedDrillTab === 'search' && canSearchTab)
+      (heatedDrillTab === 'search' && canSearchTab) ||
+      (heatedDrillTab === 'adsets' && canAdsetsTab)
     if (ok) return
     if (canDailyTab) setHeatedDrillTab('daily')
     else if (canMetaTab) setHeatedDrillTab('meta')
     else if (canGoogleTab) setHeatedDrillTab('google')
     else if (canKwTab) setHeatedDrillTab('keywords')
     else if (canSearchTab) setHeatedDrillTab('search')
-  }, [heatedDrillTab, canDailyTab, canMetaTab, canGoogleTab, canKwTab, canSearchTab])
+    else if (canAdsetsTab) setHeatedDrillTab('adsets')
+  }, [heatedDrillTab, canDailyTab, canMetaTab, canGoogleTab, canKwTab, canSearchTab, canAdsetsTab])
 
   return (
     <div className={rootStack}>
@@ -879,6 +914,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
               { id: 'google' as const, label: 'Google campaigns' + (aggGoogleCampaigns.length ? ` (${aggGoogleCampaigns.length})` : ''), disabled: !canGoogleTab },
               { id: 'keywords' as const, label: 'Google keywords' + (aggKeywords.length ? ` (${aggKeywords.length})` : ''), disabled: !canKwTab },
               { id: 'search' as const, label: 'Search terms' + (aggSearchTerms.length ? ` (${aggSearchTerms.length})` : ''), disabled: !canSearchTab },
+              { id: 'adsets' as const, label: 'Meta ad sets', disabled: !canAdsetsTab },
             ] as const).map(tab => (
               <button
                 key={tab.id}
@@ -896,22 +932,6 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
                 {tab.label}
               </button>
             ))}
-            {canAccessCreative(appUser?.role) && (
-              <button
-                type="button"
-                onClick={() =>
-                  navigate(
-                    selectedClient && selectedClient !== 'all'
-                      ? `/creative-performance?client=${encodeURIComponent(selectedClient)}`
-                      : '/creative-performance'
-                  )
-                }
-                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-violet-200 text-violet-800 bg-violet-50 hover:bg-violet-100 transition flex items-center gap-1.5"
-              >
-                <Layers size={14} aria-hidden />
-                Meta assets
-              </button>
-            )}
           </div>
 
           {heatedDrillTab === 'daily' && canDailyTab && (
@@ -922,15 +942,21 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
                   <thead className="bg-slate-50 sticky top-0">
                     <tr>
                       <th className="px-2 py-1.5 text-left font-medium text-slate-500">Date</th>
+                      {showPlatformInDailyDrill && (
+                        <th className="px-2 py-1.5 text-left font-medium text-slate-500">Platform</th>
+                      )}
                       <th className="px-2 py-1.5 text-right font-medium text-slate-500">Spend</th>
                       <th className="px-2 py-1.5 text-right font-medium text-slate-500">Revenue</th>
                       <th className="px-2 py-1.5 text-right font-medium text-slate-500">Conv.</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {dailyDataWithMetrics.map(d => (
-                      <tr key={d.date} className="text-slate-800 hover:bg-slate-50/80">
+                    {dailyDrillTableRows.map(d => (
+                      <tr key={`${d.date}-${d.platform ?? ''}`} className="text-slate-800 hover:bg-slate-50/80">
                         <td className="px-2 py-1 whitespace-nowrap font-medium">{d.date}</td>
+                        {showPlatformInDailyDrill && (
+                          <td className="px-2 py-1 capitalize text-slate-600">{d.platform}</td>
+                        )}
                         <td className="px-2 py-1 text-right">{fmtDailyMoney(d.spend)}</td>
                         <td className="px-2 py-1 text-right text-green-700">{fmtDailyMoney(d.revenue)}</td>
                         <td className="px-2 py-1 text-right">{d.conversions.toLocaleString()}</td>
@@ -1206,6 +1232,19 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
                 </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {heatedDrillTab === 'adsets' && canAdsetsTab && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">Meta ad set performance</h3>
+              <MetaAdSetPerformanceTable
+                compact
+                clientId={selectedClient}
+                startDate={dateRange.start}
+                endDate={dateRange.end}
+                scopedClientId={scopedClientId || undefined}
+              />
             </div>
           )}
         </div>
