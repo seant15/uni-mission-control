@@ -129,6 +129,40 @@ function applyPerformanceClientScope(filters: PerformanceFilters): PerformanceFi
     return { ...filters, clientId: filters.scopedClientId }
 }
 
+/** Map Shopify order rollup rows into the same shape as `daily_performance` for unified charts/filters. */
+async function fetchShopifyDailyAsPerformanceShape(filters: PerformanceFilters): Promise<any[]> {
+    const f = applyPerformanceClientScope(filters)
+    let q = supabase
+        .from('shopify_daily_performance')
+        .select('client_id, client_name, date, total_orders, net_revenue')
+
+    if (f.clientId && f.clientId !== 'all') {
+        q = q.eq('client_id', f.clientId)
+    } else {
+        const activeIds = await cachedActiveClientIds()
+        if (activeIds.length === 0) return []
+        q = q.in('client_id', activeIds)
+    }
+    if (f.startDate) q = q.gte('date', f.startDate)
+    if (f.endDate) q = q.lte('date', f.endDate)
+    const { data, error } = await q.limit(5000)
+    if (error) throw error
+    return (data || []).map((row: Record<string, unknown>) => ({
+        id: `shopify|${row.client_id}|${row.date}`,
+        client_id: row.client_id,
+        client_name: row.client_name,
+        date: row.date,
+        platform: 'shopify',
+        ad_account_id: null,
+        data_timezone: null as string | null,
+        impressions: 0,
+        clicks: 0,
+        conversions: Number(row.total_orders) || 0,
+        cost: 0,
+        revenue: Number(row.net_revenue) || 0,
+    }))
+}
+
 /** Hourly slice used to synthesize missing daily_performance rows (same filters as daily query). */
 async function fetchHourlyRowsForDailyRollup(filters: PerformanceFilters): Promise<any[]> {
     let q = supabase
@@ -171,6 +205,23 @@ export const db = {
      */
     async getDailyPerformance(filters: PerformanceFilters) {
         const f = applyPerformanceClientScope(filters)
+        const plat = f.platform && f.platform !== 'all' ? f.platform : null
+        const includeShopify =
+            !f.adAccountId &&
+            (plat === null || plat === 'shopify')
+
+        if (plat === 'shopify') {
+            const shopOnly = await fetchShopifyDailyAsPerformanceShape(f)
+            shopOnly.sort((a: any, b: any) => {
+                const db = (b.date || '').localeCompare(a.date || '')
+                if (db !== 0) return db
+                return dailyPerfRowKey(b).localeCompare(dailyPerfRowKey(a))
+            })
+            const limS = f.limit || 5000
+            const offS = f.offset || 0
+            return shopOnly.slice(offS, offS + limS)
+        }
+
         let query = supabase
             .from('daily_performance')
             .select('id, client_id, client_name, date, platform, ad_account_id, data_timezone, impressions, clicks, conversions, cost, revenue')
@@ -183,8 +234,8 @@ export const db = {
             query = query.in('client_id', activeIds)
         }
 
-        if (f.platform && f.platform !== 'all') {
-            query = query.eq('platform', f.platform)
+        if (plat) {
+            query = query.eq('platform', plat)
         }
 
         if (f.adAccountId) {
@@ -213,6 +264,12 @@ export const db = {
             const dateKey = `${r.client_id}|${r.date}`
             if (!datesWithDailyData.has(dateKey)) merged.push(r)
         }
+
+        if (includeShopify) {
+            const shopRows = await fetchShopifyDailyAsPerformanceShape(f)
+            merged.push(...shopRows)
+        }
+
         merged.sort((a: any, b: any) => {
             const db = (b.date || '').localeCompare(a.date || '')
             if (db !== 0) return db
@@ -394,6 +451,16 @@ export const db = {
                 ...(hourlyPlat?.map(item => item.platform).filter(Boolean) as string[]),
             ]),
         ]
+
+        const { data: shopClients, error: e3 } = await supabase
+            .from('shopify_daily_performance')
+            .select('client_id')
+            .in('client_id', activeIds)
+            .limit(1)
+        if (e3) throw e3
+        if ((shopClients?.length ?? 0) > 0 && !platforms.includes('shopify')) {
+            platforms.push('shopify')
+        }
 
         return platforms.map(platform => ({
             id: platform,

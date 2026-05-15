@@ -11,6 +11,7 @@ import { getDashboardSettings } from '../lib/settings'
 import AccountDateRangePicker from '../components/AccountDateRangePicker'
 import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
 import { useAuth } from '../contexts/AuthContext'
+import { useDensityStackGap } from '../contexts/UiDensityContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
 import FilterShell from '../components/FilterShell'
 import AgencyClientBreakdown from '../components/AgencyClientBreakdown'
@@ -96,6 +97,7 @@ export default function MarketingOverview({
   showAgencyExtras?: boolean
 }) {
   const { appUser } = useAuth()
+  const densityStackGap = useDensityStackGap()
   const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
   const [dateRange, setDateRange] = useState(() => defaultCalendarRangeLastNDays(30))
   const [selectedClient, setSelectedClient] = useState<string>('all')
@@ -301,7 +303,7 @@ export default function MarketingOverview({
     s === 'resolved' ? <CheckCircle size={14} /> : <X size={14} />
 
   const primaryLeadGen = cur && prev && (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+    <div className={`grid grid-cols-2 md:grid-cols-4 ${densityStackGap}`}>
       <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} tone="blue" />
       <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} tone="violet" />
       <MetricCard title="Leads" value={fmtMetric(cur.conversions)} change={convChange} icon={Users} tone="emerald" />
@@ -310,7 +312,7 @@ export default function MarketingOverview({
   )
 
   const primaryEcom = cur && prev && (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+    <div className={`grid grid-cols-2 md:grid-cols-4 ${densityStackGap}`}>
       <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} tone="blue" />
       <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} tone="violet" />
       <MetricCard title="Purchases" value={fmtMetric(cur.conversions)} change={convChange} icon={ShoppingCart} tone="emerald" />
@@ -460,7 +462,7 @@ export default function MarketingOverview({
         <>
           {businessType === 'leadgen' ? primaryLeadGen : primaryEcom}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+          <div className={`grid grid-cols-2 md:grid-cols-4 ${densityStackGap}`}>
             <MetricCard title="Impressions" value={fmtMetric(cur.impressions)} change={prev ? pctChange(cur.impressions, prev.impressions) : undefined} icon={Eye} tone="indigo" />
             <MetricCard title="Clicks" value={fmtMetric(cur.clicks)} change={prev ? pctChange(cur.clicks, prev.clicks) : undefined} icon={MousePointer} tone="cyan" />
             <MetricCard title="CTR (detail)" value={`${cur.ctr.toFixed(2)}%`} change={prev ? pctChange(cur.ctr, prev.ctr) : undefined} icon={Target} tone="teal" />
@@ -468,20 +470,20 @@ export default function MarketingOverview({
           </div>
 
           {businessType === 'ecommerce' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+            <div className={`grid grid-cols-1 md:grid-cols-2 ${densityStackGap}`}>
               <MetricCard title="Total Revenue" value={fmtMoney(cur.revenue)} change={revChange} icon={TrendingUp} tone="emerald" />
               <MetricCard title="CPA (Cost Per Acquisition)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} tone="amber" invertTrend />
             </div>
           )}
           {businessType === 'leadgen' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+            <div className={`grid grid-cols-1 md:grid-cols-2 ${densityStackGap}`}>
               <MetricCard title="Total Revenue (if tracked)" value={fmtMoney(cur.revenue)} change={revChange} icon={TrendingUp} tone="emerald" />
             </div>
           )}
 
           {showAgencyExtras && (
             <>
-              <AgencyInsightPies />
+              <AgencyInsightPies dailyRows={curRows} />
               <AgencyClientBreakdown dateRange={dateRange} selectedPlatform={selectedPlatform} section="chart" />
             </>
           )}

@@ -1,7 +1,7 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect, useMemo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { LayoutDashboard, AlertTriangle, Bell, Settings, Activity, Layers, Megaphone, X, DoorOpen, MessageSquarePlus, LayoutGrid, Menu, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { db } from './lib/api'
 import OverviewPage from './pages/OverviewPage'
@@ -12,9 +12,13 @@ import CreativePerformance from './pages/CreativePerformance'
 import FeedbackAdmin from './pages/FeedbackAdmin'
 import Login from './pages/Login'
 import BottomRightAssistDock from './components/BottomRightAssistDock'
+import ShellPreviewControl from './components/ShellPreviewControl'
 import MissionBoard from './pages/MissionBoard'
 import { RoleGuard } from './components/RoleGuard'
 import { getDashboardSettings, GLOBAL_ANNOUNCEMENT_QUERY_KEY, APP_SHELL_SETTINGS_QUERY_KEY } from './lib/settings'
+import { getShellPreviewUserId, setShellPreviewUserIdStorage } from './lib/shellPreviewStorage'
+import { ShellPreviewProvider } from './contexts/ShellPreviewContext'
+import { UiDensityProvider } from './contexts/UiDensityContext'
 import { useAuth } from './contexts/AuthContext'
 import {
   normalizeRole,
@@ -91,7 +95,21 @@ function App() {
 function AppShell() {
   const { appUser, signOut, user } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const effRole = normalizeRole(appUser?.role)
+
+  const [shellPreviewUserId, setShellPreviewUserIdState] = useState<string | null>(() => getShellPreviewUserId())
+  const shellPreviewValue = useMemo(
+    () => ({
+      previewUserId: shellPreviewUserId,
+      setPreviewUserId: (id: string | null) => {
+        setShellPreviewUserIdStorage(id)
+        setShellPreviewUserIdState(id)
+        void queryClient.invalidateQueries({ queryKey: [...APP_SHELL_SETTINGS_QUERY_KEY] })
+      },
+    }),
+    [shellPreviewUserId, queryClient]
+  )
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
@@ -123,9 +141,12 @@ function AppShell() {
     return () => window.removeEventListener('resize', onResize)
   }, [mobileNavOpen])
 
+  const effectiveShellUserId =
+    appUser?.role === 'super_admin' && shellPreviewUserId ? shellPreviewUserId : user?.id || 'default_user'
+
   const { data: shellSettings } = useQuery({
-    queryKey: [...APP_SHELL_SETTINGS_QUERY_KEY, user?.id ?? 'anon'],
-    queryFn: () => getDashboardSettings(user?.id || 'default_user'),
+    queryKey: [...APP_SHELL_SETTINGS_QUERY_KEY, user?.id ?? 'anon', shellPreviewUserId ?? ''],
+    queryFn: () => getDashboardSettings(effectiveShellUserId),
     staleTime: 60_000,
   })
 
@@ -133,7 +154,7 @@ function AppShell() {
   const brandSubtitle = shellSettings?.appSubtitle?.trim() || 'Marketing Performance Hub'
   const brandLogo = shellSettings?.appLogoUrl?.trim() || '/uni-logo.gif'
   const density = shellSettings?.uiDensity === 'compact' ? 'compact' : 'comfort'
-  const mainPad = density === 'compact' ? 'p-3 sm:p-3 lg:p-4' : 'p-3 sm:p-4 lg:p-5'
+  const mainPad = density === 'compact' ? 'p-2 sm:p-2.5 lg:p-3' : 'p-4 sm:p-5 lg:py-6 lg:px-8'
 
   const { data: openAlertCount } = useQuery({
     queryKey: ['alert-open-count'],
@@ -144,6 +165,8 @@ function AppShell() {
 
   async function handleSignOut() {
     try {
+      setShellPreviewUserIdStorage(null)
+      setShellPreviewUserIdState(null)
       await signOut()
       navigate('/login', { replace: true })
     } catch (e) {
@@ -152,6 +175,7 @@ function AppShell() {
   }
 
   return (
+    <ShellPreviewProvider value={shellPreviewValue}>
     <div className="flex min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/25 to-amber-50/40">
         {mobileNavOpen && (
           <button
@@ -165,7 +189,7 @@ function AppShell() {
         <aside
           className={`
             fixed top-0 left-0 z-50 h-full text-slate-100 flex flex-col
-            bg-slate-900/95 backdrop-blur-md
+            bg-slate-800/92 backdrop-blur-xl backdrop-saturate-150
             border-r border-white/10 shadow-[4px_0_24px_-8px_rgba(0,0,0,0.15)]
             transition-transform duration-200 ease-out
             w-[min(16.5rem,88vw)]
@@ -198,6 +222,13 @@ function AppShell() {
                   {brandTitle}
                 </h1>
                 <p className="uni-sidebar-brand-subtitle text-[10px] truncate leading-snug mt-0.5">{brandSubtitle}</p>
+                {appUser?.role === 'super_admin' && (
+                  <ShellPreviewControl
+                    collapsed={sidebarCollapsed}
+                    isSuperAdmin
+                    currentUserId={user?.id}
+                  />
+                )}
               </div>
             </div>
             <button
@@ -248,9 +279,9 @@ function AppShell() {
             )}
           </nav>
 
-          <div className="mt-auto p-2 border-t border-white/15 space-y-2 bg-slate-950/90">
+          <div className="mt-auto border-t border-orange-200/50 bg-gradient-to-b from-orange-50/98 via-stone-50/95 to-stone-100/90 p-2 space-y-2">
             <div
-              className={`flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-800 ring-1 ring-white/15 ${
+              className={`flex items-center gap-2.5 p-2.5 rounded-xl bg-white/95 text-stone-900 ring-1 ring-orange-100 shadow-sm ${
                 sidebarCollapsed ? 'lg:flex-col lg:items-center' : ''
               }`}
             >
@@ -258,24 +289,24 @@ function AppShell() {
                 to="/dashboard/settings?tab=profile"
                 title="Edit profile"
                 onClick={() => setMobileNavOpen(false)}
-                className="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--brand-400)] to-[var(--brand-700)] flex items-center justify-center text-white text-[11px] font-semibold shadow-md shadow-black/30 hover:brightness-110 transition flex-shrink-0 ring-2 ring-orange-200/40"
+                className="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--brand-400)] to-[var(--brand-700)] flex items-center justify-center text-white text-[11px] font-semibold shadow-md shadow-black/20 hover:brightness-110 transition flex-shrink-0 ring-2 ring-orange-200/60"
               >
                 {(appUser?.display_name || 'U')[0].toUpperCase()}
               </Link>
               <div className={`flex-1 min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-                <p className="text-sm font-semibold text-white truncate tracking-tight">{appUser?.display_name || 'User'}</p>
-                <p className="text-[11px] text-orange-100/95 capitalize leading-tight font-medium">{effRole.replace('_', ' ')}</p>
+                <p className="text-sm font-semibold text-stone-900 truncate tracking-tight">{appUser?.display_name || 'User'}</p>
+                <p className="text-[11px] text-stone-600 capitalize leading-tight font-medium">{effRole.replace('_', ' ')}</p>
               </div>
             </div>
             <button
               type="button"
               onClick={handleSignOut}
               title="Sign out of UNI Mission Control"
-              className={`w-full flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 border border-white/20 hover:border-white/35 transition ${
+              className={`w-full flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-semibold text-stone-800 bg-orange-50/90 hover:bg-orange-100/95 border border-stone-200/90 transition ${
                 sidebarCollapsed ? 'lg:px-0' : ''
               }`}
             >
-              <DoorOpen size={15} className="shrink-0 text-orange-200" aria-hidden />
+              <DoorOpen size={15} className="shrink-0 text-stone-600" aria-hidden />
               <span className={sidebarCollapsed ? 'lg:sr-only' : ''}>Sign out</span>
             </button>
           </div>
@@ -316,6 +347,7 @@ function AppShell() {
           </header>
 
           <main className={`${mainPad} w-full min-w-0`}>
+            <UiDensityProvider value={density}>
             <Routes>
               <Route path="/" element={<OverviewPage />} />
               <Route path="/clients-overview" element={<Navigate to="/?tab=agency" replace />} />
@@ -362,14 +394,15 @@ function AppShell() {
                 }
               />
             </Routes>
+            </UiDensityProvider>
           </main>
         </div>
 
         <BottomRightAssistDock
-          showOpenclaw={shellSettings?.assistOpenclawFabEnabled !== false}
           showFeedback={shellSettings?.assistFeedbackFabEnabled !== false}
         />
       </div>
+    </ShellPreviewProvider>
   )
 }
 

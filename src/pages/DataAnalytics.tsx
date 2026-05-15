@@ -10,6 +10,7 @@ import {
 import { db } from '../lib/api'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
+import { useUiDensity } from '../contexts/UiDensityContext'
 import { scopedClientIdFromUser, canAccessCreative } from '../lib/rbac'
 import AccountDateRangePicker from '../components/AccountDateRangePicker'
 import FilterShell from '../components/FilterShell'
@@ -165,6 +166,7 @@ function PctBadge({ current, previous, invertTrend = false }: { current: number;
 export default function DataAnalytics({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate()
   const { appUser } = useAuth()
+  const uiDensity = useUiDensity()
   const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
 
   // Core states
@@ -573,8 +575,15 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
       maximumFractionDigits: 0,
     }).format(n)
 
-  const shellCard = embedded ? 'bg-white rounded-lg shadow-sm border border-gray-200 p-3' : 'bg-white rounded-xl shadow-sm border border-gray-200 p-6'
+  const shellCard =
+    embedded && uiDensity === 'compact'
+      ? 'bg-white rounded-lg shadow-sm border border-gray-200 p-3'
+      : embedded && uiDensity === 'comfort'
+        ? 'bg-white rounded-xl shadow-sm border border-gray-200 p-5'
+        : 'bg-white rounded-xl shadow-sm border border-gray-200 p-6'
   const tableWrapMt = embedded ? 'overflow-x-auto mt-2' : 'overflow-x-auto mt-4'
+  const rootStack =
+    embedded && uiDensity === 'compact' ? 'space-y-3' : embedded && uiDensity === 'comfort' ? 'space-y-5' : 'space-y-6'
 
   const canDailyTab = dailyDataWithMetrics.length > 0
   const canMetaTab = (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && aggMetaCampaigns.length > 0
@@ -598,7 +607,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
   }, [heatedDrillTab, canDailyTab, canMetaTab, canGoogleTab, canKwTab, canSearchTab])
 
   return (
-    <div className={embedded ? 'space-y-3' : 'space-y-6'}>
+    <div className={rootStack}>
       {/* Top Header */}
       <div className="flex items-center justify-between">
         {!embedded && (

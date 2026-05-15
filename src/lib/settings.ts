@@ -63,7 +63,7 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   appSubtitle: 'Marketing Performance Hub',
   appLogoUrl: '/uni-logo.gif',
   uiDensity: 'comfort',
-  assistOpenclawFabEnabled: true,
+  assistOpenclawFabEnabled: false,
   assistFeedbackFabEnabled: true,
 }
 

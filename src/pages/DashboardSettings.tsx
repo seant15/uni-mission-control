@@ -12,6 +12,8 @@ import {
 } from '../lib/settings'
 import UserManagement from './UserManagement'
 import { useAuth } from '../contexts/AuthContext'
+import { useShellPreview } from '../contexts/ShellPreviewContext'
+import { useDensitySectionClass, useUiDensity } from '../contexts/UiDensityContext'
 import { supabase } from '../lib/supabase'
 import { getStoredAccent, setStoredAccent, type AccentId } from '../lib/themeAccent'
 
@@ -57,6 +59,9 @@ function AssistToggleRow({
 export default function DashboardSettingsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const shellPreview = useShellPreview()
+  const densitySection = useDensitySectionClass()
+  const uiDensity = useUiDensity()
   const [searchParams] = useSearchParams()
   const { user, appUser } = useAuth()
   const tabParam = searchParams.get('tab') as SettingsTab | null
@@ -148,7 +153,7 @@ export default function DashboardSettingsPage() {
           appSubtitle: settings.appSubtitle,
           appLogoUrl: settings.appLogoUrl,
           uiDensity: settings.uiDensity,
-          assistOpenclawFabEnabled: settings.assistOpenclawFabEnabled,
+          assistOpenclawFabEnabled: false,
           assistFeedbackFabEnabled: settings.assistFeedbackFabEnabled,
         })
         if (!globalRes.ok) {
@@ -206,18 +211,18 @@ export default function DashboardSettingsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className={`${densitySection} max-w-5xl`}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/data-analytics')}
+            onClick={() => navigate('/')}
             className="p-2 hover:bg-gray-100 rounded-lg transition"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+            <h1 className={`font-bold text-gray-900 flex items-center gap-3 ${uiDensity === 'compact' ? 'text-2xl' : 'text-3xl'}`}>
               <SettingsIcon className="text-[var(--brand-600)]" />
               Settings
             </h1>
@@ -279,7 +284,18 @@ export default function DashboardSettingsPage() {
       </div>
 
       {/* Users tab */}
-      {activeTab === 'users' && <UserManagement />}
+      {activeTab === 'users' && (
+        <div className="space-y-4">
+          {appUser?.role === 'super_admin' && shellPreview?.previewUserId && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 leading-relaxed">
+              You are previewing the <span className="font-semibold">shell</span> (title, subtitle, logo, layout density, assist toggles)
+              as user <code className="text-xs bg-white/80 px-1 rounded">{shellPreview.previewUserId}</code>.
+              Change or clear this from the sidebar control labeled &quot;Shell&quot; under the brand block.
+            </div>
+          )}
+          <UserManagement />
+        </div>
+      )}
 
       {/* Profile tab */}
       {activeTab === 'profile' && (
@@ -360,7 +376,7 @@ export default function DashboardSettingsPage() {
 
       {/* Dashboard tab */}
       {activeTab === 'dashboard' && (
-        <div className="space-y-6">
+        <div className={uiDensity === 'compact' ? 'space-y-4' : 'space-y-6'}>
           {saveError && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
               {saveError}
@@ -417,20 +433,16 @@ export default function DashboardSettingsPage() {
                   <option value="comfort">Comfort (more spacing)</option>
                   <option value="compact">Compact (tighter)</option>
                 </select>
-                <p className="text-xs text-gray-500 mt-1">Controls main content padding across overview-style pages.</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Compact tightens padding on Overview (Agency + Heated) and Settings defaults tab; Comfort adds more air between sections and cards.
+                </p>
               </div>
 
               <div className="pt-4 border-t border-gray-100 space-y-1">
                 <h3 className="text-sm font-semibold text-gray-900">Floating assist widgets</h3>
                 <p className="text-xs text-gray-500 leading-relaxed pb-2">
-                  Turn off during trials or incidents. Applies to everyone (stored on the org <code className="text-[11px] bg-gray-100 px-1 rounded">default_user</code> row).
+                  Feedback pill visibility (stored on the org <code className="text-[11px] bg-gray-100 px-1 rounded">default_user</code> row).
                 </p>
-                <AssistToggleRow
-                  title="OpenClaw chat button"
-                  description="Bottom-right floating chat / Control UI embed."
-                  checked={settings.assistOpenclawFabEnabled}
-                  onChange={v => setSettings({ ...settings, assistOpenclawFabEnabled: v })}
-                />
                 <AssistToggleRow
                   title="Feedback widget"
                   description="Bottom-right “Feedback” launcher and panel."

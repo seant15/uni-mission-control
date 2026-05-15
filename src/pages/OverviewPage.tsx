@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { useSearchParams, Navigate } from 'react-router-dom'
 import { LayoutDashboard } from 'lucide-react'
+import { useDensitySectionClass } from '../contexts/UiDensityContext'
 import MarketingOverview from './MarketingOverview'
 import DataAnalytics from './DataAnalytics'
 
@@ -21,6 +22,7 @@ function normalizeOverviewTabParam(raw: string | null): OverviewTabId {
 }
 
 export default function OverviewPage() {
+  const sectionClass = useDensitySectionClass()
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
   const normalized = useMemo(() => normalizeOverviewTabParam(tabParam), [tabParam])
@@ -39,7 +41,7 @@ export default function OverviewPage() {
   )
 
   return (
-    <div className="space-y-4">
+    <div className={sectionClass}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="p-1.5 rounded-lg bg-[var(--brand-600)] text-white shrink-0">
