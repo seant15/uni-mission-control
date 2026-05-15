@@ -1,7 +1,7 @@
 import { Sparkles, ExternalLink } from 'lucide-react'
 
-const viteEnv = import.meta as ImportMeta & { env: { BASE_URL: string } }
-const guideHref = new URL('alert-system-guide.html', viteEnv.env.BASE_URL).href
+/** Must use literal `import.meta.env.BASE_URL` so Vite inlines it at build time (indirect access stays undefined in prod). */
+const guideHref = `${import.meta.env.BASE_URL}alert-system-guide.html`
 
 type Variant = 'rail' | 'page'
 
