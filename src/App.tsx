@@ -86,7 +86,7 @@ function App() {
       <Toaster position="top-right" richColors />
       <Routes>
         <Route path="/login" element={<Login />} />
-        {/* Use splat `*` (not `/*`) so `/login` is not swallowed by the catch-all in react-router v6 */}
+        {/* Never use path="/*" here: it competes with /login and can render AppShell instead of Login (RR v6). */}
         <Route path="*" element={<ProtectedRoute><AppShell /></ProtectedRoute>} />
       </Routes>
     </Router>
