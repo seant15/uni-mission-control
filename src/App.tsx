@@ -86,7 +86,8 @@ function App() {
       <Toaster position="top-right" richColors />
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/*" element={<ProtectedRoute><AppShell /></ProtectedRoute>} />
+        {/* Use splat `*` (not `/*`) so `/login` is not swallowed by the catch-all in react-router v6 */}
+        <Route path="*" element={<ProtectedRoute><AppShell /></ProtectedRoute>} />
       </Routes>
     </Router>
   )
