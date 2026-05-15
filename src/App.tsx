@@ -165,7 +165,7 @@ function AppShell() {
         <aside
           className={`
             fixed top-0 left-0 z-50 h-full text-slate-100 flex flex-col
-            bg-slate-800/92 backdrop-blur-xl backdrop-saturate-150
+            bg-slate-900/95 backdrop-blur-md
             border-r border-white/10 shadow-[4px_0_24px_-8px_rgba(0,0,0,0.15)]
             transition-transform duration-200 ease-out
             w-[min(16.5rem,88vw)]
@@ -248,9 +248,9 @@ function AppShell() {
             )}
           </nav>
 
-          <div className="mt-auto p-2 border-t border-white/10 space-y-2">
+          <div className="mt-auto p-2 border-t border-white/15 space-y-2 bg-slate-950/90">
             <div
-              className={`flex items-center gap-2.5 p-2 rounded-xl bg-white/[0.06] ring-1 ring-white/10 shadow-inner shadow-black/20 ${
+              className={`flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-800 ring-1 ring-white/15 ${
                 sidebarCollapsed ? 'lg:flex-col lg:items-center' : ''
               }`}
             >
@@ -258,24 +258,24 @@ function AppShell() {
                 to="/dashboard/settings?tab=profile"
                 title="Edit profile"
                 onClick={() => setMobileNavOpen(false)}
-                className="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--brand-400)] to-[var(--brand-700)] flex items-center justify-center text-white text-[11px] font-semibold shadow-md shadow-black/25 hover:brightness-110 transition flex-shrink-0 ring-2 ring-white/15"
+                className="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--brand-400)] to-[var(--brand-700)] flex items-center justify-center text-white text-[11px] font-semibold shadow-md shadow-black/30 hover:brightness-110 transition flex-shrink-0 ring-2 ring-orange-200/40"
               >
                 {(appUser?.display_name || 'U')[0].toUpperCase()}
               </Link>
               <div className={`flex-1 min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-                <p className="text-xs font-medium text-white/95 truncate tracking-tight">{appUser?.display_name || 'User'}</p>
-                <p className="text-[10px] text-slate-300/95 capitalize leading-tight">{effRole.replace('_', ' ')}</p>
+                <p className="text-sm font-semibold text-white truncate tracking-tight">{appUser?.display_name || 'User'}</p>
+                <p className="text-[11px] text-orange-100/95 capitalize leading-tight font-medium">{effRole.replace('_', ' ')}</p>
               </div>
             </div>
             <button
               type="button"
               onClick={handleSignOut}
               title="Sign out of UNI Mission Control"
-              className={`w-full flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-medium text-slate-200 bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 hover:border-white/25 transition ${
+              className={`w-full flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 border border-white/20 hover:border-white/35 transition ${
                 sidebarCollapsed ? 'lg:px-0' : ''
               }`}
             >
-              <DoorOpen size={15} className="shrink-0 opacity-90" aria-hidden />
+              <DoorOpen size={15} className="shrink-0 text-orange-200" aria-hidden />
               <span className={sidebarCollapsed ? 'lg:sr-only' : ''}>Sign out</span>
             </button>
           </div>
@@ -298,7 +298,7 @@ function AppShell() {
                 >
                   <Menu size={20} />
                 </button>
-                <span className="text-xs text-gray-600 font-semibold tracking-wide uppercase truncate select-none">
+                <span className="text-sm sm:text-[13px] font-bold text-[var(--brand-700)] tracking-wide uppercase truncate select-none drop-shadow-sm">
                   {brandTitle}
                 </span>
               </div>

@@ -4,21 +4,39 @@ import { toast } from 'sonner'
 
 const env = (import.meta as unknown as { env: Record<string, string | undefined> }).env
 
+/** Strip wrapping quotes / BOM / newlines — common when pasting from `.env` or secrets UI. */
+function normalizeGatewayToken(raw: string): string {
+  let t = raw.trim().replace(/^\uFEFF/, '')
+  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+    t = t.slice(1, -1).trim()
+  }
+  return t.replace(/\s+/g, '').trim()
+}
+
 /**
  * Control UI auth: prefer URL fragment `#token=...` (not sent in HTTP Referer).
  * See https://documentation.openclaw.ai/web/control-ui — "token should be passed via the URL fragment".
+ *
+ * Token mismatch: the value must match `gateway.auth.token` on the gateway host exactly
+ * (e.g. `openclaw config get gateway.auth.token`). Prefer pasting the full URL from
+ * `openclaw dashboard --no-open` into VITE_OPENCLAW_CHAT_URL.
  */
 function resolveOpenClawChatUrl(): string | undefined {
   const explicit = env.VITE_OPENCLAW_CHAT_URL?.trim()
   if (explicit) return explicit
 
   const base = env.VITE_OPENCLAW_GATEWAY_BASE?.trim()
-  const token = env.VITE_OPENCLAW_GATEWAY_TOKEN?.trim()
-  if (!base || !token) return undefined
+  const tokenRaw = env.VITE_OPENCLAW_GATEWAY_TOKEN
+  if (!base || tokenRaw == null) return undefined
+
+  const token = normalizeGatewayToken(tokenRaw)
+  if (!token) return undefined
 
   try {
     const u = new URL(base)
-    u.hash = `token=${encodeURIComponent(token)}`
+    // RFC 3986 fragment: unreserved ALPHA / DIGIT / "-" / "." / "_" / "~" can stay literal; otherwise encode.
+    const hashValue = /^[A-Za-z0-9._~-]+$/.test(token) ? token : encodeURIComponent(token)
+    u.hash = `token=${hashValue}`
     return u.toString()
   } catch {
     return undefined
@@ -39,7 +57,7 @@ export default function OpenClawChatWidget({ layout = 'standalone' }: { layout?:
     if (!CHAT_URL?.trim()) {
       toast.message('OpenClaw URL not configured', {
         description:
-          'Set VITE_OPENCLAW_CHAT_URL (full URL, may include #token=…), or set VITE_OPENCLAW_GATEWAY_BASE + VITE_OPENCLAW_GATEWAY_TOKEN in .env.local.',
+          'Best: paste the full URL from `openclaw dashboard --no-open` into VITE_OPENCLAW_CHAT_URL. Or set VITE_OPENCLAW_GATEWAY_BASE + token that exactly matches the gateway.',
       })
       return
     }
@@ -77,6 +95,7 @@ export default function OpenClawChatWidget({ layout = 'standalone' }: { layout?:
               </button>
             </div>
             <iframe
+              key={CHAT_URL}
               title="OpenClaw chat"
               src={CHAT_URL}
               className="min-h-0 flex-1 w-full border-0 bg-white"

@@ -17,6 +17,43 @@ import { getStoredAccent, setStoredAccent, type AccentId } from '../lib/themeAcc
 
 type SettingsTab = 'dashboard' | 'users' | 'profile'
 
+function AssistToggleRow({
+  title,
+  description,
+  checked,
+  onChange,
+}: {
+  title: string
+  description: string
+  checked: boolean
+  onChange: (next: boolean) => void
+}) {
+  const id = `assist-${title.replace(/\s+/g, '-').toLowerCase()}`
+  return (
+    <div className="flex items-center justify-between gap-4 py-3 border-b border-gray-100 last:border-0">
+      <div className="min-w-0 pr-2">
+        <p className="text-sm font-semibold text-gray-900">{title}</p>
+        <p className="text-xs text-gray-500 mt-0.5 leading-snug">{description}</p>
+      </div>
+      <label htmlFor={id} className="relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer items-center">
+        <input
+          id={id}
+          type="checkbox"
+          className="peer sr-only"
+          checked={checked}
+          onChange={e => onChange(e.target.checked)}
+        />
+        <span className="absolute inset-0 rounded-full bg-gray-300 transition-colors peer-checked:bg-[var(--brand-600)] peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--brand-500)] peer-focus-visible:ring-offset-2" />
+        <span
+          className={`pointer-events-none absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow-md transition-transform duration-200 ease-out ${
+            checked ? 'translate-x-5' : 'translate-x-0'
+          }`}
+        />
+      </label>
+    </div>
+  )
+}
+
 export default function DashboardSettingsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -383,35 +420,23 @@ export default function DashboardSettingsPage() {
                 <p className="text-xs text-gray-500 mt-1">Controls main content padding across overview-style pages.</p>
               </div>
 
-              <div className="pt-4 border-t border-gray-100 space-y-3">
+              <div className="pt-4 border-t border-gray-100 space-y-1">
                 <h3 className="text-sm font-semibold text-gray-900">Floating assist widgets</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">
+                <p className="text-xs text-gray-500 leading-relaxed pb-2">
                   Turn off during trials or incidents. Applies to everyone (stored on the org <code className="text-[11px] bg-gray-100 px-1 rounded">default_user</code> row).
                 </p>
-                <label className="flex items-start gap-3 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    className="mt-1 rounded border-gray-300 text-[var(--brand-600)] focus:ring-[var(--brand-500)]"
-                    checked={settings.assistOpenclawFabEnabled}
-                    onChange={e => setSettings({ ...settings, assistOpenclawFabEnabled: e.target.checked })}
-                  />
-                  <span>
-                    <span className="block text-sm font-medium text-gray-800">OpenClaw chat button</span>
-                    <span className="block text-xs text-gray-500">Bottom-right floating chat / Control UI embed.</span>
-                  </span>
-                </label>
-                <label className="flex items-start gap-3 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    className="mt-1 rounded border-gray-300 text-[var(--brand-600)] focus:ring-[var(--brand-500)]"
-                    checked={settings.assistFeedbackFabEnabled}
-                    onChange={e => setSettings({ ...settings, assistFeedbackFabEnabled: e.target.checked })}
-                  />
-                  <span>
-                    <span className="block text-sm font-medium text-gray-800">Feedback widget</span>
-                    <span className="block text-xs text-gray-500">Bottom-right “Feedback” launcher and panel.</span>
-                  </span>
-                </label>
+                <AssistToggleRow
+                  title="OpenClaw chat button"
+                  description="Bottom-right floating chat / Control UI embed."
+                  checked={settings.assistOpenclawFabEnabled}
+                  onChange={v => setSettings({ ...settings, assistOpenclawFabEnabled: v })}
+                />
+                <AssistToggleRow
+                  title="Feedback widget"
+                  description="Bottom-right “Feedback” launcher and panel."
+                  checked={settings.assistFeedbackFabEnabled}
+                  onChange={v => setSettings({ ...settings, assistFeedbackFabEnabled: v })}
+                />
               </div>
             </div>
           )}
