@@ -3,6 +3,11 @@ import { db } from './api'
 /** React Query key: global announcement row (`user_id` = default_user) */
 export const GLOBAL_ANNOUNCEMENT_QUERY_KEY = ['dashboard-settings', 'global-announcement'] as const
 
+/** Shell branding + density (merged from `default_user` + personal row in getDashboardSettings). */
+export const APP_SHELL_SETTINGS_QUERY_KEY = ['dashboard-settings', 'app-shell'] as const
+
+export type UiDensity = 'compact' | 'comfort'
+
 export interface DashboardSettings {
   // Display Settings
   defaultBusinessType: 'leadgen' | 'ecommerce'
@@ -27,6 +32,12 @@ export interface DashboardSettings {
   announcementEnabled: boolean
   announcementText: string
   announcementStyle: 'info' | 'warning' | 'success' | 'neutral'
+
+  /** Org shell — stored on `default_user` row, merged for all users */
+  appTitle: string
+  appSubtitle: string
+  appLogoUrl: string
+  uiDensity: UiDensity
 }
 
 export const DEFAULT_SETTINGS: DashboardSettings = {
@@ -44,32 +55,82 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   announcementEnabled: false,
   announcementText: '',
   announcementStyle: 'info',
+  appTitle: 'UNI Mission Control',
+  appSubtitle: 'Marketing Performance Hub',
+  appLogoUrl: '/uni-logo.gif',
+  uiDensity: 'comfort',
+}
+
+function mapDbRow(row: Record<string, unknown> | null | undefined): Partial<DashboardSettings> | null {
+  if (!row) return null
+  const d = row.ui_density
+  const density: UiDensity | undefined = d === 'compact' || d === 'comfort' ? d : undefined
+  return {
+    defaultBusinessType: row.default_business_type as DashboardSettings['defaultBusinessType'],
+    defaultDateRange: Number(row.default_date_range),
+    defaultMetric: row.default_metric as DashboardSettings['defaultMetric'],
+    chartHeight: Number(row.chart_height),
+    showGridLines: Boolean(row.show_grid_lines),
+    animateChart: Boolean(row.animate_chart),
+    rowsPerPage: Number(row.rows_per_page),
+    showPlatformBadge: Boolean(row.show_platform_badge),
+    cacheTimeout: Number(row.cache_timeout),
+    autoRefresh: Boolean(row.auto_refresh),
+    refreshInterval: Number(row.refresh_interval),
+    announcementEnabled: Boolean(row.announcement_enabled),
+    announcementText: (row.announcement_text as string) ?? '',
+    announcementStyle: (row.announcement_style as DashboardSettings['announcementStyle']) ?? 'info',
+    appTitle: typeof row.app_title === 'string' && row.app_title.trim() ? row.app_title.trim() : undefined,
+    appSubtitle: typeof row.app_subtitle === 'string' && row.app_subtitle.trim() ? row.app_subtitle.trim() : undefined,
+    appLogoUrl: typeof row.app_logo_url === 'string' && row.app_logo_url.trim() ? row.app_logo_url.trim() : undefined,
+    uiDensity: density,
+  }
 }
 
 export async function getDashboardSettings(userId: string): Promise<DashboardSettings> {
   try {
-    const dbSettings = await db.getSettings(userId)
+    const personal = await db.getSettings(userId)
+    const global = userId !== 'default_user' ? await db.getSettings('default_user') : null
 
-    if (dbSettings) {
+    const p = mapDbRow(personal as Record<string, unknown> | undefined) ?? {}
+    const g = mapDbRow(global as Record<string, unknown> | undefined) ?? {}
+
+    const shell = {
+      appTitle: (g.appTitle ?? p.appTitle) ?? DEFAULT_SETTINGS.appTitle,
+      appSubtitle: (g.appSubtitle ?? p.appSubtitle) ?? DEFAULT_SETTINGS.appSubtitle,
+      appLogoUrl: (g.appLogoUrl ?? p.appLogoUrl) ?? DEFAULT_SETTINGS.appLogoUrl,
+      uiDensity: ((g.uiDensity ?? p.uiDensity) as UiDensity | undefined) ?? DEFAULT_SETTINGS.uiDensity,
+    }
+
+    if (userId === 'default_user') {
       return {
-        defaultBusinessType: dbSettings.default_business_type,
-        defaultDateRange: dbSettings.default_date_range,
-        defaultMetric: dbSettings.default_metric,
-        chartHeight: dbSettings.chart_height,
-        showGridLines: dbSettings.show_grid_lines,
-        animateChart: dbSettings.animate_chart,
-        rowsPerPage: dbSettings.rows_per_page,
-        showPlatformBadge: dbSettings.show_platform_badge,
-        cacheTimeout: dbSettings.cache_timeout,
-        autoRefresh: dbSettings.auto_refresh,
-        refreshInterval: dbSettings.refresh_interval,
-        announcementEnabled: dbSettings.announcement_enabled ?? false,
-        announcementText: dbSettings.announcement_text ?? '',
-        announcementStyle: dbSettings.announcement_style ?? 'info',
+        ...DEFAULT_SETTINGS,
+        ...g,
+        ...p,
+        ...shell,
+        announcementEnabled: p.announcementEnabled ?? g.announcementEnabled ?? DEFAULT_SETTINGS.announcementEnabled,
+        announcementText: p.announcementText ?? g.announcementText ?? '',
+        announcementStyle: p.announcementStyle ?? g.announcementStyle ?? 'info',
       }
     }
 
-    return DEFAULT_SETTINGS
+    return {
+      ...DEFAULT_SETTINGS,
+      ...g,
+      ...p,
+      ...shell,
+      defaultBusinessType: p.defaultBusinessType ?? g.defaultBusinessType ?? DEFAULT_SETTINGS.defaultBusinessType,
+      defaultDateRange: p.defaultDateRange ?? g.defaultDateRange ?? DEFAULT_SETTINGS.defaultDateRange,
+      defaultMetric: p.defaultMetric ?? g.defaultMetric ?? DEFAULT_SETTINGS.defaultMetric,
+      chartHeight: p.chartHeight ?? g.chartHeight ?? DEFAULT_SETTINGS.chartHeight,
+      showGridLines: p.showGridLines ?? g.showGridLines ?? DEFAULT_SETTINGS.showGridLines,
+      animateChart: p.animateChart ?? g.animateChart ?? DEFAULT_SETTINGS.animateChart,
+      rowsPerPage: p.rowsPerPage ?? g.rowsPerPage ?? DEFAULT_SETTINGS.rowsPerPage,
+      showPlatformBadge: p.showPlatformBadge ?? g.showPlatformBadge ?? DEFAULT_SETTINGS.showPlatformBadge,
+      cacheTimeout: p.cacheTimeout ?? g.cacheTimeout ?? DEFAULT_SETTINGS.cacheTimeout,
+      autoRefresh: p.autoRefresh ?? g.autoRefresh ?? DEFAULT_SETTINGS.autoRefresh,
+      refreshInterval: p.refreshInterval ?? g.refreshInterval ?? DEFAULT_SETTINGS.refreshInterval,
+    }
   } catch (error) {
     console.error('Error loading dashboard settings:', error)
     return DEFAULT_SETTINGS
@@ -87,10 +148,12 @@ function errMessage(error: unknown): string {
 
 export async function saveDashboardSettings(
   userId: string,
-  settings: DashboardSettings
+  settings: DashboardSettings,
+  /** When saving a personal row, omit org shell fields so they stay controlled from `default_user`. */
+  omitShellFields = false
 ): Promise<SaveDashboardSettingsResult> {
   try {
-    const dbSettings = {
+    const dbSettings: Record<string, unknown> = {
       default_business_type: settings.defaultBusinessType,
       default_date_range: settings.defaultDateRange,
       default_metric: settings.defaultMetric,
@@ -105,6 +168,12 @@ export async function saveDashboardSettings(
       announcement_enabled: settings.announcementEnabled,
       announcement_text: settings.announcementText,
       announcement_style: settings.announcementStyle,
+    }
+    if (!omitShellFields) {
+      dbSettings.app_title = settings.appTitle
+      dbSettings.app_subtitle = settings.appSubtitle
+      dbSettings.app_logo_url = settings.appLogoUrl
+      dbSettings.ui_density = settings.uiDensity
     }
 
     await db.saveSettings(userId, dbSettings)

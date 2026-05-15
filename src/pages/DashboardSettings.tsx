@@ -2,7 +2,14 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Settings as SettingsIcon, Save, ArrowLeft, Check, Users, UserCircle } from 'lucide-react'
-import { getDashboardSettings, saveDashboardSettings, DEFAULT_SETTINGS, DashboardSettings, GLOBAL_ANNOUNCEMENT_QUERY_KEY } from '../lib/settings'
+import {
+  getDashboardSettings,
+  saveDashboardSettings,
+  DEFAULT_SETTINGS,
+  DashboardSettings,
+  GLOBAL_ANNOUNCEMENT_QUERY_KEY,
+  APP_SHELL_SETTINGS_QUERY_KEY,
+} from '../lib/settings'
 import UserManagement from './UserManagement'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -88,7 +95,7 @@ export default function DashboardSettingsPage() {
             announcementStyle: DEFAULT_SETTINGS.announcementStyle,
           }
 
-      const personalRes = await saveDashboardSettings(userId, personalSettings)
+      const personalRes = await saveDashboardSettings(userId, personalSettings, userId !== 'default_user')
       let success = personalRes.ok
       const errors: string[] = []
       if (!personalRes.ok) errors.push(personalRes.error)
@@ -100,6 +107,10 @@ export default function DashboardSettingsPage() {
           announcementEnabled: settings.announcementEnabled,
           announcementText: settings.announcementText,
           announcementStyle: settings.announcementStyle,
+          appTitle: settings.appTitle,
+          appSubtitle: settings.appSubtitle,
+          appLogoUrl: settings.appLogoUrl,
+          uiDensity: settings.uiDensity,
         })
         if (!globalRes.ok) {
           success = false
@@ -108,6 +119,7 @@ export default function DashboardSettingsPage() {
       }
 
       await queryClient.invalidateQueries({ queryKey: [...GLOBAL_ANNOUNCEMENT_QUERY_KEY] })
+      await queryClient.invalidateQueries({ queryKey: [...APP_SHELL_SETTINGS_QUERY_KEY] })
 
       if (success) {
         setSaved(true)
@@ -319,6 +331,58 @@ export default function DashboardSettingsPage() {
             These defaults apply to the <span className="font-semibold">Account Performance</span> page (Heated / Data Analytics): business type, default chart metric, date range, chart height, table pagination, and cache behavior.
             <span className="block mt-1 text-stone-600">Marketing Overview (agency pies and client breakdown) and Real-time Performance keep their own filters on each screen.</span>
           </p>
+
+          {appUser?.role === 'super_admin' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+              <h2 className="text-lg font-semibold text-gray-900">Appearance &amp; shell</h2>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Org-wide title, subtitle, and logo apply to the sidebar and top bar for every user. Use a public HTTPS URL for the logo when branding a partner container.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">App title</label>
+                <input
+                  type="text"
+                  value={settings.appTitle}
+                  onChange={e => setSettings({ ...settings, appTitle: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)] outline-none"
+                  maxLength={80}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Subtitle</label>
+                <input
+                  type="text"
+                  value={settings.appSubtitle}
+                  onChange={e => setSettings({ ...settings, appSubtitle: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)] outline-none"
+                  maxLength={120}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Logo URL</label>
+                <input
+                  type="url"
+                  value={settings.appLogoUrl}
+                  onChange={e => setSettings({ ...settings, appLogoUrl: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)] outline-none"
+                  placeholder="/uni-logo.gif or https://…"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Layout density</label>
+                <select
+                  value={settings.uiDensity}
+                  onChange={e => setSettings({ ...settings, uiDensity: e.target.value as 'compact' | 'comfort' })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)]"
+                >
+                  <option value="comfort">Comfort (more spacing)</option>
+                  <option value="compact">Compact (tighter)</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Controls main content padding across overview-style pages.</p>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             {/* Display Preferences */}

@@ -54,6 +54,14 @@ export interface HourlyPerformanceFilters {
     adAccountId?: string
 }
 
+/** UTC instant for hourly_performance row (date + hour are stored as UTC bucket). */
+function hourlyRowUtcMs(row: { date: string; hour: number | string }): number {
+    const d = row.date
+    const h = Number(row.hour)
+    if (!d || Number.isNaN(h)) return NaN
+    return Date.parse(`${d}T${String(h).padStart(2, '0')}:00:00.000Z`)
+}
+
 /** Stable key for merging daily rows with hourly rollups (same grain as daily_performance). */
 function dailyPerfRowKey(r: {
     client_id: string
@@ -662,7 +670,8 @@ export const db = {
         const prevWindowStartDH = toDateHour(prevWindowStart)
         const prevWindowEndDH = toDateHour(windowStart)
 
-        const cols = 'id, client_id, client_name, ad_account_id, platform, date, hour, impressions, clicks, conversions, cost, revenue'
+        const cols =
+            'id, client_id, client_name, ad_account_id, platform, date, hour, impressions, clicks, conversions, cost, revenue, account_timezone'
 
         // Filter: date >= windowStart.date AND (date > windowStart.date OR hour >= windowStart.hour)
         // Simplified: fetch by date range and filter in JS for hour boundaries
@@ -712,16 +721,27 @@ export const db = {
         if (curRes.error) throw curRes.error
         if (prevRes.error) throw prevRes.error
 
-        // Filter rows precisely by date+hour boundaries
-        const inWindow = (row: any, startDH: { date: string; hour: number }, endDH: { date: string; hour: number }) => {
-            if (row.date < startDH.date || row.date > endDH.date) return false
-            if (row.date === startDH.date && row.hour < startDH.hour) return false
-            if (row.date === endDH.date && row.hour > endDH.hour) return false
-            return true
-        }
+        const curStartMs = Date.parse(
+            `${curWindowStartDH.date}T${String(curWindowStartDH.hour).padStart(2, '0')}:00:00.000Z`
+        )
+        const curEndMs = Date.parse(
+            `${curWindowEndDH.date}T${String(curWindowEndDH.hour).padStart(2, '0')}:00:00.000Z`
+        )
+        const prevStartMs = Date.parse(
+            `${prevWindowStartDH.date}T${String(prevWindowStartDH.hour).padStart(2, '0')}:00:00.000Z`
+        )
+        const prevEndMs = Date.parse(
+            `${prevWindowEndDH.date}T${String(prevWindowEndDH.hour).padStart(2, '0')}:00:00.000Z`
+        )
 
-        const currentRows = (curRes.data || []).filter(r => inWindow(r, curWindowStartDH, curWindowEndDH))
-        const previousRows = (prevRes.data || []).filter(r => inWindow(r, prevWindowStartDH, prevWindowEndDH))
+        const currentRows = (curRes.data || []).filter((r) => {
+            const t = hourlyRowUtcMs(r)
+            return !Number.isNaN(t) && t >= curStartMs && t <= curEndMs
+        })
+        const previousRows = (prevRes.data || []).filter((r) => {
+            const t = hourlyRowUtcMs(r)
+            return !Number.isNaN(t) && t >= prevStartMs && t <= prevEndMs
+        })
 
         return {
             current: currentRows,

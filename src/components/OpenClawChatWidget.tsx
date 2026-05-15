@@ -4,10 +4,12 @@ import { toast } from 'sonner'
 
 const CHAT_URL = (import.meta as unknown as { env: Record<string, string | undefined> }).env.VITE_OPENCLAW_CHAT_URL
 
+type Layout = 'standalone' | 'dock'
+
 /**
- * Secondary FAB next to Feedback: opens OpenClaw chat in a panel when VITE_OPENCLAW_CHAT_URL is set.
+ * OpenClaw chat FAB. Use `layout="dock"` when stacked with Feedback (bottom-right).
  */
-export default function OpenClawChatWidget() {
+export default function OpenClawChatWidget({ layout = 'standalone' }: { layout?: Layout }) {
   const [open, setOpen] = useState(false)
 
   function handleOpen() {
@@ -20,15 +22,15 @@ export default function OpenClawChatWidget() {
     setOpen(true)
   }
 
+  const fabClass =
+    layout === 'dock'
+      ? 'flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 text-white shadow-lg ring-2 ring-white/90 transition hover:bg-slate-900 hover:scale-105'
+      : 'fixed bottom-6 left-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-slate-800 text-white shadow-lg transition hover:bg-slate-900 hover:scale-105'
+
   return (
     <>
-      <button
-        type="button"
-        onClick={handleOpen}
-        title="Open OpenClaw chat"
-        className="fixed bottom-6 left-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-slate-800 text-white shadow-lg transition hover:bg-slate-900 hover:scale-105"
-      >
-        <MessageCircle size={26} />
+      <button type="button" onClick={handleOpen} title="Open OpenClaw chat" className={fabClass}>
+        <MessageCircle size={layout === 'dock' ? 22 : 26} />
       </button>
 
       {open && CHAT_URL && (

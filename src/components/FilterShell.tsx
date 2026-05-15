@@ -12,7 +12,7 @@ export default function FilterShell({
 }) {
   return (
     <div
-      className={`sticky top-0 z-30 rounded-lg border border-slate-200/90 bg-white/95 backdrop-blur-sm shadow-sm px-2 py-1.5 sm:px-2.5 sm:py-2 flex flex-wrap items-center gap-1.5 sm:gap-2 ${className}`}
+      className={`sticky top-0 z-30 rounded-xl border border-gray-200 bg-white/95 backdrop-blur-sm shadow-sm px-2.5 py-2 sm:px-3 sm:py-2 flex flex-wrap items-center gap-1.5 sm:gap-2 ${className}`}
     >
       {children}
     </div>

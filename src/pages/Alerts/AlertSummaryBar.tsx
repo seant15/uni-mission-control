@@ -43,9 +43,9 @@ export default function AlertSummaryBar() {
   ]
 
   return (
-    <div className="grid grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
       {stats.map(stat => (
-        <div key={stat.label} className={`${stat.bg} rounded-xl shadow-sm border border-gray-100 p-4 flex items-center gap-3`}>
+        <div key={stat.label} className={`${stat.bg} rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 flex items-center gap-3`}>
           <stat.icon size={22} className={stat.color} />
           <div>
             <div className="text-xs text-gray-500 font-medium">{stat.label}</div>

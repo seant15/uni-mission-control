@@ -282,6 +282,17 @@ export default function RealtimePerformance() {
     return `${base} Per-account timezone hints appear in the Client column; slice boundaries stay UTC-hour based.`
   }, [hourlyData?.windowStart, hourlyData?.windowEnd, tzMode])
 
+  const reportingTzChip = useMemo(() => {
+    const raw = [...currentRows, ...previousRows]
+      .map((r: any) => String(r.account_timezone || '').trim())
+      .filter(Boolean)
+      .filter(t => t !== 'advertiser_tz')
+    const uniq = [...new Set(raw)]
+    if (uniq.length === 1) return { kind: 'single' as const, tz: uniq[0]! }
+    if (uniq.length > 1) return { kind: 'mixed' as const }
+    return { kind: 'none' as const }
+  }, [currentRows, previousRows])
+
   const selectedClientName = selectedClient === 'all'
     ? 'Agency (all clients)'
     : clients?.find((c: any) => c.id === selectedClient)?.name || selectedClient
@@ -306,6 +317,9 @@ export default function RealtimePerformance() {
           {windowBoundsLabel && (
             <p className="text-xs text-gray-500 mt-2 max-w-3xl leading-relaxed">{windowBoundsLabel}</p>
           )}
+          <p className="text-xs text-stone-500 mt-1 max-w-3xl leading-relaxed">
+            The same UTC hour slices are summed in every display mode; this control relabels window edges and clocks. If you need true local-day re-bucketing, plan a warehouse rollup keyed by advertiser timezone.
+          </p>
         </div>
         <div className="flex items-center gap-3 text-sm text-gray-500">
           <Clock size={14} />
@@ -325,7 +339,7 @@ export default function RealtimePerformance() {
       </div>
 
       {/* Controls — sticky filter bar */}
-      <div className="sticky top-[52px] z-30 bg-white/95 backdrop-blur-sm shadow-md border-b border-gray-200 rounded-xl px-4 py-3 flex items-center gap-6 flex-wrap">
+      <div className="sticky top-[52px] z-30 rounded-xl border border-gray-200 bg-white/95 backdrop-blur-sm shadow-sm px-3 py-2.5 sm:px-4 sm:py-3 flex items-center gap-4 sm:gap-6 flex-wrap">
         {/* Window selector */}
         <div>
           <label className="text-xs font-medium text-gray-500 uppercase block mb-1">Time Window</label>
@@ -372,6 +386,18 @@ export default function RealtimePerformance() {
                tzMode === 'browser' ? `${new Intl.DateTimeFormat('en', { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || 'Local'}` :
                'Account TZ'}
             </span>
+            {reportingTzChip.kind === 'single' && (
+              <span className="ml-2 inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-900 border border-emerald-200">
+                <MapPin size={12} aria-hidden />
+                {selectedClient !== 'all' ? 'Client reporting' : 'Visible rows'}: {reportingTzChip.tz}
+                <span className="text-emerald-700/80">({tzOffsetLabel(reportingTzChip.tz)})</span>
+              </span>
+            )}
+            {reportingTzChip.kind === 'mixed' && (
+              <span className="ml-2 inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-amber-50 text-amber-950 border border-amber-200">
+                Mixed account timezones in this view — totals stay UTC-bucketed; compare carefully.
+              </span>
+            )}
           </div>
         </div>
 
@@ -459,7 +485,7 @@ export default function RealtimePerformance() {
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Account</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Platform</th>

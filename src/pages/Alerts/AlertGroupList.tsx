@@ -468,7 +468,7 @@ export default function AlertGroupList({
   }, [somePageSelected, allPageSelected, showBulk])
   if (groups.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center text-gray-500">
         <div className="text-4xl mb-3">✅</div>
         <h3 className="text-lg font-medium text-gray-900 mb-1">All clear</h3>
         <p className="text-sm text-gray-500">No alerts match your current filters.</p>
@@ -489,9 +489,9 @@ export default function AlertGroupList({
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <table className="w-full">
-        <thead className="bg-gray-50 border-b border-gray-100">
+        <thead className="bg-gray-50 border-b border-gray-200">
           <tr>
             {showBulk && (
               <th className="px-2 py-3 w-10 text-left">

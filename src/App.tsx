@@ -11,11 +11,10 @@ import RealtimePerformance from './pages/RealtimePerformance'
 import CreativePerformance from './pages/CreativePerformance'
 import FeedbackAdmin from './pages/FeedbackAdmin'
 import Login from './pages/Login'
-import FeedbackWidget from './components/FeedbackWidget'
-import OpenClawChatWidget from './components/OpenClawChatWidget'
+import BottomRightAssistDock from './components/BottomRightAssistDock'
 import MissionBoard from './pages/MissionBoard'
 import { RoleGuard } from './components/RoleGuard'
-import { getDashboardSettings, GLOBAL_ANNOUNCEMENT_QUERY_KEY } from './lib/settings'
+import { getDashboardSettings, GLOBAL_ANNOUNCEMENT_QUERY_KEY, APP_SHELL_SETTINGS_QUERY_KEY } from './lib/settings'
 import { useAuth } from './contexts/AuthContext'
 import {
   normalizeRole,
@@ -90,7 +89,7 @@ function App() {
 }
 
 function AppShell() {
-  const { appUser, signOut } = useAuth()
+  const { appUser, signOut, user } = useAuth()
   const navigate = useNavigate()
   const effRole = normalizeRole(appUser?.role)
 
@@ -123,6 +122,18 @@ function AppShell() {
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [mobileNavOpen])
+
+  const { data: shellSettings } = useQuery({
+    queryKey: [...APP_SHELL_SETTINGS_QUERY_KEY, user?.id ?? 'anon'],
+    queryFn: () => getDashboardSettings(user?.id || 'default_user'),
+    staleTime: 60_000,
+  })
+
+  const brandTitle = shellSettings?.appTitle?.trim() || 'UNI Mission Control'
+  const brandSubtitle = shellSettings?.appSubtitle?.trim() || 'Marketing Performance Hub'
+  const brandLogo = shellSettings?.appLogoUrl?.trim() || '/uni-logo.gif'
+  const density = shellSettings?.uiDensity === 'compact' ? 'compact' : 'comfort'
+  const mainPad = density === 'compact' ? 'p-3 sm:p-3 lg:p-4' : 'p-3 sm:p-4 lg:p-5'
 
   const { data: openAlertCount } = useQuery({
     queryKey: ['alert-open-count'],
@@ -174,13 +185,17 @@ function AppShell() {
               }`}
             >
               <img
-                src="/uni-logo.gif"
-                alt="UNI"
-                className={`w-9 h-9 rounded-xl object-cover flex-shrink-0 ${sidebarCollapsed ? 'lg:mx-auto' : ''}`}
+                src={brandLogo}
+                alt=""
+                onError={(e) => {
+                  const el = e.target as HTMLImageElement
+                  if (el.src.indexOf('/uni-logo.gif') === -1) el.src = '/uni-logo.gif'
+                }}
+                className={`w-9 h-9 rounded-xl object-cover flex-shrink-0 ring-1 ring-white/20 ${sidebarCollapsed ? 'lg:mx-auto' : ''}`}
               />
               <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-                <h1 className="font-bold text-[13px] tracking-tight truncate">UNI Mission Control</h1>
-                <p className="text-[9px] text-slate-400 truncate">Marketing Performance Hub</p>
+                <h1 className="font-bold text-[13px] tracking-tight truncate text-white drop-shadow-sm">{brandTitle}</h1>
+                <p className="text-[10px] text-slate-200/95 truncate leading-snug">{brandSubtitle}</p>
               </div>
             </div>
             <button
@@ -219,7 +234,8 @@ function AppShell() {
               <NavLink to="/creative-performance" icon={Layers} label="Creative Performance" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
             )}
 
-            <div className={`text-[9px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5 mt-3 px-2.5 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+            <div className={`mt-5 pt-3 border-t border-white/10 ${sidebarCollapsed ? 'lg:hidden' : ''}`} aria-hidden />
+            <div className={`text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5 px-2.5 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
               System
             </div>
             {appUser?.role === 'super_admin' && (
@@ -274,8 +290,8 @@ function AppShell() {
                 >
                   <Menu size={20} />
                 </button>
-                <span className="text-xs text-gray-400 font-medium tracking-wide uppercase truncate select-none">
-                  UNI Mission Control
+                <span className="text-xs text-gray-600 font-semibold tracking-wide uppercase truncate select-none">
+                  {brandTitle}
                 </span>
               </div>
               <button
@@ -291,7 +307,7 @@ function AppShell() {
             </div>
           </header>
 
-          <main className="p-3 sm:p-4 lg:p-5 w-full min-w-0">
+          <main className={`${mainPad} w-full min-w-0`}>
             <Routes>
               <Route path="/" element={<OverviewPage />} />
               <Route path="/clients-overview" element={<Navigate to="/?tab=agency" replace />} />
@@ -341,9 +357,7 @@ function AppShell() {
           </main>
         </div>
 
-        {/* Feedback FAB — persists on every authenticated page */}
-        <OpenClawChatWidget />
-        <FeedbackWidget />
+        <BottomRightAssistDock />
       </div>
   )
 }

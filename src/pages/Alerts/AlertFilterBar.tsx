@@ -49,7 +49,7 @@ export default function AlertFilterBar({ filters, onChange }: Props) {
   })
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-3">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-3">
       {/* Row 1: search + text filters */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
@@ -59,7 +59,7 @@ export default function AlertFilterBar({ filters, onChange }: Props) {
             placeholder="Search alerts…"
             value={filters.search}
             onChange={e => onChange({ ...filters, search: e.target.value })}
-            className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--brand-500)]"
           />
         </div>
 
@@ -67,7 +67,7 @@ export default function AlertFilterBar({ filters, onChange }: Props) {
         <select
           value={filters.clientId[0] ?? ''}
           onChange={e => onChange({ ...filters, clientId: e.target.value ? [e.target.value] : [] })}
-          className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--brand-500)]"
         >
           <option value="">All Clients</option>
           {(clients ?? []).map((c: any) => (
@@ -80,7 +80,7 @@ export default function AlertFilterBar({ filters, onChange }: Props) {
           onClick={() => onChange({ ...filters, assignedToMe: !filters.assignedToMe })}
           className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
             filters.assignedToMe
-              ? 'bg-blue-600 text-white border-blue-600'
+              ? 'bg-[var(--brand-600)] text-white border-[var(--brand-600)]'
               : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
           }`}
         >
@@ -90,7 +90,7 @@ export default function AlertFilterBar({ filters, onChange }: Props) {
         {isDirty && (
           <button
             onClick={reset}
-            className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 ml-auto"
+            className="flex items-center gap-1 text-sm text-[var(--brand-600)] hover:text-[var(--brand-700)] ml-auto"
           >
             <X size={13} /> Clear all
           </button>

@@ -27,7 +27,7 @@ const SEVERITY_ACTIVE: Record<FeedbackSeverity, string> = {
   critical: 'bg-red-100 border-red-500 text-red-800',
 }
 
-export default function FeedbackWidget() {
+export default function FeedbackWidget({ layout = 'standalone' }: { layout?: 'standalone' | 'dock' }) {
   const { appUser, user } = useAuth()
   const queryClient = useQueryClient()
 
@@ -182,7 +182,8 @@ export default function FeedbackWidget() {
         aria-label="Submit feedback"
         title={cooldown ? `Please wait ${cooldownSecs}s` : 'Send feedback'}
         className={`
-          fixed bottom-6 right-6 z-50
+          ${layout === 'dock' ? 'relative' : 'fixed bottom-6 right-6'}
+          z-50
           flex items-center gap-2 px-4 py-3 rounded-full shadow-lg
           transition-all duration-200
           ${cooldown
@@ -215,7 +216,7 @@ export default function FeedbackWidget() {
           fixed z-50 bg-white shadow-2xl border border-gray-200
           transition-all duration-300 ease-out
           bottom-0 right-0
-          w-full sm:w-[420px] sm:bottom-20 sm:right-6 sm:rounded-2xl
+          w-full sm:w-[420px] ${layout === 'dock' ? 'sm:bottom-36' : 'sm:bottom-20'} sm:right-6 sm:rounded-2xl
           ${open ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'}
         `}
       >

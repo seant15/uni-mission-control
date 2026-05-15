@@ -5,11 +5,12 @@ import {
   Database, ChevronDown, TrendingUp, DollarSign, CreditCard,
   AlertCircle, Calendar, Settings, MousePointer2, ShoppingCart, Users,
   ArrowUpRight, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown, BookOpen,
+  Layers,
 } from 'lucide-react'
 import { db } from '../lib/api'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
-import { scopedClientIdFromUser } from '../lib/rbac'
+import { scopedClientIdFromUser, canAccessCreative } from '../lib/rbac'
 import AccountDateRangePicker from '../components/AccountDateRangePicker'
 import FilterShell from '../components/FilterShell'
 import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
@@ -862,7 +863,7 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
       {performanceData.length > 0 && (
         <div className={shellCard}>
           <p className="text-xs text-stone-500 mb-2">Switch report. Tabs with no rows for the current filters are disabled.</p>
-          <div className="flex flex-wrap gap-1.5 mb-3">
+          <div className="flex flex-wrap gap-1.5 mb-3 items-center">
             {([
               { id: 'daily' as const, label: 'Daily breakdown', disabled: !canDailyTab },
               { id: 'meta' as const, label: 'Meta campaigns' + (aggMetaCampaigns.length ? ` (${aggMetaCampaigns.length})` : ''), disabled: !canMetaTab },
@@ -886,6 +887,22 @@ export default function DataAnalytics({ embedded = false }: { embedded?: boolean
                 {tab.label}
               </button>
             ))}
+            {canAccessCreative(appUser?.role) && (
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    selectedClient && selectedClient !== 'all'
+                      ? `/creative-performance?client=${encodeURIComponent(selectedClient)}`
+                      : '/creative-performance'
+                  )
+                }
+                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-violet-200 text-violet-800 bg-violet-50 hover:bg-violet-100 transition flex items-center gap-1.5"
+              >
+                <Layers size={14} aria-hidden />
+                Meta assets
+              </button>
+            )}
           </div>
 
           {heatedDrillTab === 'daily' && canDailyTab && (

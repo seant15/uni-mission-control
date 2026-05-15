@@ -223,7 +223,7 @@ export default function Alerts() {
       <div className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Alerts</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Performance monitoring across all clients</p>
+          <p className="text-sm text-gray-500 mt-0.5 leading-snug">Performance monitoring across all clients</p>
         </div>
         <div className="flex border-b border-gray-200">
           {TABS.filter(t => t === 'Alerts' || canManageRules).map(tab => (
@@ -251,9 +251,9 @@ export default function Alerts() {
           <AlertFilterBar filters={filters} onChange={setFilters} />
 
           {canManageRules && selectedAlertIds.size > 0 && (
-            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-stone-200 bg-stone-50/95 px-4 py-3 text-sm text-stone-800">
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50/95 shadow-sm px-4 py-3 text-sm text-gray-800">
               <span className="font-medium">{selectedAlertIds.size} selected</span>
-              <span className="text-stone-300">|</span>
+              <span className="text-gray-300">|</span>
               <button
                 type="button"
                 disabled={bulkCreateMissions.isPending}
@@ -269,7 +269,7 @@ export default function Alerts() {
                   if (!window.confirm(`Archive (dismiss) ${selectedAlertIds.size} alert(s)?`)) return
                   bulkDismiss.mutate()
                 }}
-                className="px-3 py-1.5 rounded-lg border border-stone-300 bg-white text-xs font-medium hover:bg-stone-100 disabled:opacity-50"
+                className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
               >
                 Archive
               </button>
@@ -287,7 +287,7 @@ export default function Alerts() {
               <button
                 type="button"
                 onClick={() => setSelectedAlertIds(new Set())}
-                className="ml-auto text-xs text-stone-500 hover:text-stone-800 underline"
+                className="ml-auto text-xs text-gray-500 hover:text-gray-800 underline"
               >
                 Clear selection
               </button>
@@ -312,9 +312,9 @@ export default function Alerts() {
 
           {/* Loading skeleton */}
           {isLoading && (
-            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden animate-pulse">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center gap-4 px-4 py-4 border-b border-gray-50">
+                <div key={i} className="flex items-center gap-4 px-4 py-4 border-b border-gray-100">
                   <div className="h-5 w-16 bg-gray-100 rounded-full" />
                   <div className="h-4 w-28 bg-gray-100 rounded" />
                   <div className="h-4 flex-1 bg-gray-100 rounded" />

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, type ComponentType } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
@@ -46,16 +46,33 @@ function pctChange(cur: number, prev: number) {
 
 const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 
-function MetricCard({ title, value, change, icon: Icon, color, invertTrend = false }: {
-  title: string; value: string; change?: number; icon: any; color: string; invertTrend?: boolean
+const KPI_ICON_SHELL: Record<string, string> = {
+  blue: 'p-1.5 rounded-md bg-[var(--brand-50)] text-[var(--brand-600)]',
+  violet: 'p-1.5 rounded-md bg-violet-50 text-violet-600',
+  emerald: 'p-1.5 rounded-md bg-emerald-50 text-emerald-600',
+  amber: 'p-1.5 rounded-md bg-amber-50 text-amber-600',
+  slate: 'p-1.5 rounded-md bg-slate-50 text-slate-600',
+  cyan: 'p-1.5 rounded-md bg-cyan-50 text-cyan-600',
+  indigo: 'p-1.5 rounded-md bg-indigo-50 text-indigo-600',
+  teal: 'p-1.5 rounded-md bg-teal-50 text-teal-600',
+}
+
+function MetricCard({ title, value, change, icon: Icon, tone, invertTrend = false }: {
+  title: string
+  value: string
+  change?: number
+  icon: ComponentType<{ size?: number | string; className?: string }>
+  tone: keyof typeof KPI_ICON_SHELL
+  invertTrend?: boolean
 }) {
   const isGood = change === undefined ? true : invertTrend ? change <= 0 : change >= 0
   const absChange = change !== undefined ? Math.abs(change) : undefined
+  const shell = KPI_ICON_SHELL[tone] ?? KPI_ICON_SHELL.slate
   return (
-    <div className="bg-white/90 rounded-xl shadow-md border border-gray-200/90 ring-1 ring-black/[0.04] p-3 sm:p-4 transition-shadow hover:shadow-lg">
-      <div className="flex items-start justify-between mb-1.5 gap-1">
-        <div className={`p-1.5 rounded-lg shadow-inner ${color}`}>
-          <Icon className="w-4 h-4 text-white drop-shadow-sm" />
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 transition-shadow hover:shadow-md hover:border-gray-300/80">
+      <div className="flex items-start justify-between mb-1 gap-1">
+        <div className={`${shell} shrink-0`}>
+          <Icon className="w-4 h-4" />
         </div>
         {change !== undefined && (
           <div className={`flex items-center gap-0.5 text-xs font-medium shrink-0 ${isGood ? 'text-green-600' : 'text-red-600'}`}>
@@ -285,19 +302,19 @@ export default function MarketingOverview({
 
   const primaryLeadGen = cur && prev && (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-      <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} color="bg-[var(--brand-600)]" />
-      <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} color="bg-violet-600" />
-      <MetricCard title="Leads" value={fmtMetric(cur.conversions)} change={convChange} icon={Users} color="bg-emerald-600" />
-      <MetricCard title="Cost Per Lead (CPL)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} color="bg-amber-600" invertTrend />
+      <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} tone="blue" />
+      <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} tone="violet" />
+      <MetricCard title="Leads" value={fmtMetric(cur.conversions)} change={convChange} icon={Users} tone="emerald" />
+      <MetricCard title="Cost Per Lead (CPL)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} tone="amber" invertTrend />
     </div>
   )
 
   const primaryEcom = cur && prev && (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-      <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} color="bg-[var(--brand-600)]" />
-      <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} color="bg-violet-600" />
-      <MetricCard title="Purchases" value={fmtMetric(cur.conversions)} change={convChange} icon={ShoppingCart} color="bg-emerald-600" />
-      <MetricCard title="ROAS" value={`${cur.roas.toFixed(2)}x`} change={roasChange} icon={TrendingUp} color="bg-amber-600" />
+      <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} tone="blue" />
+      <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} tone="violet" />
+      <MetricCard title="Purchases" value={fmtMetric(cur.conversions)} change={convChange} icon={ShoppingCart} tone="emerald" />
+      <MetricCard title="ROAS" value={`${cur.roas.toFixed(2)}x`} change={roasChange} icon={TrendingUp} tone="amber" />
     </div>
   )
 
@@ -444,21 +461,21 @@ export default function MarketingOverview({
           {businessType === 'leadgen' ? primaryLeadGen : primaryEcom}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-            <MetricCard title="Impressions" value={fmtMetric(cur.impressions)} change={prev ? pctChange(cur.impressions, prev.impressions) : undefined} icon={Eye} color="bg-indigo-600" />
-            <MetricCard title="Clicks" value={fmtMetric(cur.clicks)} change={prev ? pctChange(cur.clicks, prev.clicks) : undefined} icon={MousePointer} color="bg-cyan-600" />
-            <MetricCard title="CTR (detail)" value={`${cur.ctr.toFixed(2)}%`} change={prev ? pctChange(cur.ctr, prev.ctr) : undefined} icon={Target} color="bg-teal-600" />
-            <MetricCard title="CPC" value={fmtMoney(cur.cpc)} change={prev ? pctChange(cur.cpc, prev.cpc) : undefined} icon={DollarSign} color="bg-pink-600" invertTrend />
+            <MetricCard title="Impressions" value={fmtMetric(cur.impressions)} change={prev ? pctChange(cur.impressions, prev.impressions) : undefined} icon={Eye} tone="indigo" />
+            <MetricCard title="Clicks" value={fmtMetric(cur.clicks)} change={prev ? pctChange(cur.clicks, prev.clicks) : undefined} icon={MousePointer} tone="cyan" />
+            <MetricCard title="CTR (detail)" value={`${cur.ctr.toFixed(2)}%`} change={prev ? pctChange(cur.ctr, prev.ctr) : undefined} icon={Target} tone="teal" />
+            <MetricCard title="CPC" value={fmtMoney(cur.cpc)} change={prev ? pctChange(cur.cpc, prev.cpc) : undefined} icon={DollarSign} tone="violet" invertTrend />
           </div>
 
           {businessType === 'ecommerce' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-              <MetricCard title="Total Revenue" value={fmtMoney(cur.revenue)} change={revChange} icon={TrendingUp} color="bg-green-600" />
-              <MetricCard title="CPA (Cost Per Acquisition)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} color="bg-rose-600" invertTrend />
+              <MetricCard title="Total Revenue" value={fmtMoney(cur.revenue)} change={revChange} icon={TrendingUp} tone="emerald" />
+              <MetricCard title="CPA (Cost Per Acquisition)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} tone="amber" invertTrend />
             </div>
           )}
           {businessType === 'leadgen' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-              <MetricCard title="Total Revenue (if tracked)" value={fmtMoney(cur.revenue)} change={revChange} icon={TrendingUp} color="bg-green-600" />
+              <MetricCard title="Total Revenue (if tracked)" value={fmtMoney(cur.revenue)} change={revChange} icon={TrendingUp} tone="emerald" />
             </div>
           )}
 
@@ -470,7 +487,7 @@ export default function MarketingOverview({
           )}
 
           {platformBreakdown.length > 0 && (
-            <div className="bg-white/90 rounded-xl shadow-md border border-gray-200/90 ring-1 ring-black/[0.04] p-4">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <h2 className="text-base font-semibold text-gray-900 mb-3">
                 Performance by Platform — {periodLabel}
               </h2>

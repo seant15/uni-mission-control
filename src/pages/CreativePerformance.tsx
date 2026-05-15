@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import {
   Image, Video, DollarSign, TrendingUp, ShoppingCart, MousePointer2,
   ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight, ExternalLink,
@@ -12,6 +13,13 @@ import { defaultCalendarRangeLastNDays } from '../lib/dashboardDateRange'
 import { getDashboardSettings } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip as RechartsTooltip,
+} from 'recharts'
 
 // ── Sort helpers ───────────────────────────────────────────────────────────────
 function useTableSort(defaultField: string, defaultDir: 'asc' | 'desc' = 'desc') {
@@ -242,7 +250,7 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
           <div className="min-w-0">
             <p className="text-xs font-semibold text-gray-800 truncate">{row.ad_name || row.ad_id}</p>
             <p className="text-xs text-gray-400 truncate mt-0.5">{row.campaign_name}</p>
@@ -431,7 +439,7 @@ function KpiCard({ label, value, icon: Icon, color }: {
   label: string; value: string; icon: any; color: string
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex items-center gap-4">
       <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${color}`}>
         <Icon size={20} className="text-white" />
       </div>
@@ -445,10 +453,23 @@ function KpiCard({ label, value, icon: Icon, color }: {
 
 const CHART_COLORS = ['#ea580c', '#f97316', '#fb923c', '#fdba74', '#c2410c', '#9a3412', '#78716c', '#ca8a04', '#16a34a', '#0d9488']
 
+const PIE_COLORS = ['#ea580c', '#8b5cf6', '#0d9488', '#64748b', '#ca8a04', '#16a34a', '#f43f5e']
+
+function classifyCreativeType(row: any): string {
+  const cta = String(row.call_to_action_type || '').toUpperCase()
+  if (cta.includes('CATALOG')) return 'Catalog'
+  if (row.video_id) return 'Video'
+  if (row.image_url || row.thumbnail_url) return 'Image'
+  if (String(row.headline || row.primary_copy || '').trim()) return 'Text / link'
+  return 'Unknown'
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function CreativePerformance() {
   const { appUser } = useAuth()
   const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
+  const [searchParams] = useSearchParams()
+  const clientFromUrl = searchParams.get('client')
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [dateRange, setDateRange] = useState(() => defaultCalendarRangeLastNDays(30))
   const [showClientDrop, setShowClientDrop] = useState(false)
@@ -462,6 +483,13 @@ export default function CreativePerformance() {
   useEffect(() => {
     if (scopedClientId) setSelectedClient(scopedClientId)
   }, [scopedClientId])
+
+  useEffect(() => {
+    if (scopedClientId) return
+    if (!clientFromUrl) return
+    setSelectedClient(prev => (prev === clientFromUrl ? prev : clientFromUrl))
+    setCreativePage(0)
+  }, [clientFromUrl, scopedClientId])
 
   useEffect(() => {
     getDashboardSettings('default_user').then(loaded => {
@@ -551,6 +579,20 @@ export default function CreativePerformance() {
     ? 'All Clients'
     : clients.find((c: any) => c.id === selectedClient)?.name || selectedClient
 
+  const creativeTypePie = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const row of allCreatives) {
+      const k = classifyCreativeType(row)
+      m.set(k, (m.get(k) || 0) + (Number(row.spend) || 0))
+    }
+    return [...m.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+  }, [allCreatives])
+
+  const totalPieSpend = useMemo(
+    () => creativeTypePie.reduce((s, x) => s + x.value, 0),
+    [creativeTypePie]
+  )
+
   const isLoading = loadingCreatives || loadingAdsets
 
   return (
@@ -566,7 +608,7 @@ export default function CreativePerformance() {
             Creative analytics for {selectedClientName}. Google Ads and other sources will appear here when connected.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg">
+        <div className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg shadow-sm">
           <span>{dateRange.start}</span>
           <span>→</span>
           <span>{dateRange.end}</span>
@@ -648,6 +690,39 @@ export default function CreativePerformance() {
         <KpiCard label="Portfolio CPA" value={portfolioCpa > 0 ? fmt$(portfolioCpa) : '—'} icon={ShoppingCart} color="bg-orange-500" />
       </div>
 
+      {!isLoading && creativeTypePie.length > 0 && totalPieSpend > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+          <h2 className="text-sm font-semibold text-gray-700 mb-1">Creative mix by type (spend-weighted)</h2>
+          <p className="text-xs text-gray-500 mb-3">Video vs image vs catalog-style CTAs vs text-only rows in the current date range.</p>
+          <div className="h-[240px] w-full max-w-lg mx-auto">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={creativeTypePie}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={52}
+                  outerRadius={88}
+                  paddingAngle={2}
+                >
+                  {creativeTypePie.map((_, i) => (
+                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <RechartsTooltip
+                  formatter={(value: number, _n, item: any) => {
+                    const pct = totalPieSpend > 0 ? ((value as number) / totalPieSpend) * 100 : 0
+                    return [`$${(value as number).toFixed(0)} (${pct.toFixed(1)}%)`, item?.payload?.name ?? 'Spend']
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       {/* Top Creatives Visual Chart */}
       {allCreatives.length > 0 && (() => {
         const chartData = chartMode === 'spend'
@@ -658,7 +733,7 @@ export default function CreativePerformance() {
           : Math.max(...chartData.map(r => r.spend > 0 ? r.revenue / r.spend : 0), 1)
 
         return (
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
             {/* Header + toggle */}
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-sm font-semibold text-gray-700">Top Creatives</h2>
@@ -686,16 +761,17 @@ export default function CreativePerformance() {
                 const isVideo = !!row.video_id
                 const roasColor = roas >= 3 ? 'text-green-600' : roas >= 1.5 ? 'text-yellow-600' : 'text-red-500'
                 const barValue = chartMode === 'spend' ? row.spend : roas
+                const barMaxPx = 112
                 return (
                   <div key={row._key} className="flex flex-col gap-1.5">
                     {/* Bar */}
-                    <div className="flex items-end justify-center" style={{ height: 40 }}>
+                    <div className="flex items-end justify-center h-28">
                       <div
-                        className="rounded-t-sm w-full max-w-[40px] mx-auto transition-all"
+                        className="rounded-t-md w-full max-w-[48px] mx-auto transition-all min-h-[10px]"
                         style={{
-                          height: `${Math.max(6, (barValue / maxBarValue) * 40)}px`,
+                          height: `${Math.max(10, (barValue / maxBarValue) * barMaxPx)}px`,
                           background: chartMode === 'spend' ? CHART_COLORS[i % CHART_COLORS.length] : (roas >= 3 ? '#22c55e' : roas >= 1.5 ? '#eab308' : '#f97316'),
-                          opacity: 0.85,
+                          opacity: 0.9,
                         }}
                       />
                     </div>
@@ -739,8 +815,8 @@ export default function CreativePerformance() {
       })()}
 
       {/* Creative Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold text-gray-700">Meta Creative Performance</h2>
             <p className="text-xs text-gray-400 mt-0.5">{allCreatives.length} unique ads</p>
@@ -762,7 +838,7 @@ export default function CreativePerformance() {
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-100">
+                <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase w-16">Visual</th>
                     <SortTh label="Ad Name" field="ad_name" sort={creativeSort} align="left" />
@@ -866,8 +942,8 @@ export default function CreativePerformance() {
       </div>
 
       {/* Ad Set Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-200">
           <h2 className="text-sm font-semibold text-gray-700">Ad Set Performance</h2>
           <p className="text-xs text-gray-400 mt-0.5">{allAdSets.length} ad sets</p>
         </div>
@@ -879,7 +955,7 @@ export default function CreativePerformance() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
+              <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-3 py-3 w-8" />
                   <SortTh label="Ad Set" field="ad_set_name" sort={adsetSort} align="left" />
