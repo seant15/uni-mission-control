@@ -16,6 +16,7 @@ import { scopedClientIdFromUser } from '../lib/rbac'
 import FilterShell from '../components/FilterShell'
 import AgencyClientBreakdown from '../components/AgencyClientBreakdown'
 import AgencyInsightPies from '../components/AgencyInsightPies'
+import AlertSystemGuideLink from '../components/AlertSystemGuideLink'
 
 interface Client {
   id: string
@@ -340,6 +341,12 @@ export default function MarketingOverview({
           )}
         </div>
 
+        {showAgencyExtras && (
+          <div className="xl:hidden">
+            <AlertSystemGuideLink variant="page" />
+          </div>
+        )}
+
         <FilterShell>
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full">
           <div className="flex rounded-md border border-gray-200 p-0.5 shrink-0">
@@ -560,6 +567,8 @@ export default function MarketingOverview({
               Reserved for auto summaries and next actions. Your notes can render above or below this block later.
             </p>
           </div>
+
+          <AlertSystemGuideLink variant="rail" />
 
           <div className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm flex flex-col min-h-0 flex-1 overflow-hidden">
             <div className="flex items-center justify-between gap-1 mb-2 shrink-0">

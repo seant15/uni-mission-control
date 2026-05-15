@@ -11,6 +11,7 @@ import AlertGroupList from './Alerts/AlertGroupList'
 import AlertColumnCustomizer from './Alerts/AlertColumnCustomizer'
 import AlertRulesTab from './Alerts/AlertRulesTab'
 import AbTestDeliveryTab from './Alerts/AbTestDeliveryTab'
+import AlertSystemGuideLink from '../components/AlertSystemGuideLink'
 import type {
   Alert,
   AlertGroup,
@@ -240,6 +241,13 @@ export default function Alerts() {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+        <p className="text-xs text-gray-500 sm:mr-auto max-w-md leading-snug hidden sm:block">
+          Architecture, severities, engines, and tuning — opens in a new tab (read-only).
+        </p>
+        <AlertSystemGuideLink variant="page" />
       </div>
 
       {activeTab === 'Alerts' ? (
