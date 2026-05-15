@@ -8,6 +8,16 @@ export type AccountDatePreset =
   | { label: string; days: number }
   | { label: string; type: 'month' | 'last_month' | 'this_year' | 'last_year' }
 
+/**
+ * Creative Performance: short UTC calendar windows.
+ * `meta_ads_ads` is keyed by date (not sub-daily); “half day” maps to today’s UTC row only.
+ */
+export const CREATIVE_DATE_PRESETS: AccountDatePreset[] = [
+  { label: 'Half day (today UTC)', days: 0 },
+  { label: '1 day (2 UTC dates)', days: 1 },
+  { label: '3 days (3 UTC dates)', days: 2 },
+]
+
 export const ACCOUNT_DATE_PRESETS: AccountDatePreset[] = [
   { label: 'Last 7 Days', days: 7 },
   { label: 'Last 14 Days', days: 14 },

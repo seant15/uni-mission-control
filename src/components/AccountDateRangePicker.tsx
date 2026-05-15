@@ -11,9 +11,16 @@ type Props = {
   dateRange: CalendarDateRange
   onChange: (next: CalendarDateRange) => void
   className?: string
+  /** Defaults to ACCOUNT_DATE_PRESETS when omitted */
+  presets?: AccountDatePreset[]
 }
 
-export default function AccountDateRangePicker({ dateRange, onChange, className }: Props) {
+export default function AccountDateRangePicker({
+  dateRange,
+  onChange,
+  className,
+  presets = ACCOUNT_DATE_PRESETS,
+}: Props) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -55,7 +62,7 @@ export default function AccountDateRangePicker({ dateRange, onChange, className 
       </button>
       {open && (
         <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-72 overflow-y-auto">
-          {ACCOUNT_DATE_PRESETS.map(preset => (
+          {presets.map(preset => (
             <button
               key={preset.label}
               type="button"

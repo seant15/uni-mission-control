@@ -9,7 +9,7 @@ import {
 import { db } from '../lib/api'
 import AccountDateRangePicker from '../components/AccountDateRangePicker'
 import FilterShell from '../components/FilterShell'
-import { defaultCalendarRangeLastNDays } from '../lib/dashboardDateRange'
+import { defaultCalendarRangeLastNDays, CREATIVE_DATE_PRESETS } from '../lib/dashboardDateRange'
 import { getDashboardSettings } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
@@ -79,6 +79,7 @@ function aggregateCreatives(rows: any[]): any[] {
         video_id: row.video_id,
         headline: row.headline,
         primary_copy: row.primary_copy,
+        description: row.description,
         call_to_action_type: row.call_to_action_type,
         destination_url: row.destination_url,
         instagram_permalink_url: row.instagram_permalink_url,
@@ -96,6 +97,8 @@ function aggregateCreatives(rows: any[]): any[] {
     if (!entry.thumbnail_url && row.thumbnail_url) entry.thumbnail_url = row.thumbnail_url
     if (!entry.video_id && row.video_id) entry.video_id = row.video_id
     if (!entry.headline && row.headline) entry.headline = row.headline
+    if (!entry.primary_copy && row.primary_copy) entry.primary_copy = row.primary_copy
+    if (!entry.description && row.description) entry.description = row.description
     if (!entry.destination_url && row.destination_url) entry.destination_url = row.destination_url
     if (!entry.instagram_permalink_url && row.instagram_permalink_url) entry.instagram_permalink_url = row.instagram_permalink_url
     if (!entry.facebook_post_url && row.facebook_post_url) entry.facebook_post_url = row.facebook_post_url
@@ -287,6 +290,13 @@ function AdPreviewModal({ row, onClose }: { row: any; onClose: () => void }) {
                 </p>
               </div>
             )}
+            {row.description && (
+              <div className="px-4 pb-2">
+                <p className="text-[11px] text-gray-500 leading-relaxed whitespace-pre-wrap line-clamp-3">
+                  {row.description}
+                </p>
+              </div>
+            )}
 
             {/* Creative image/video */}
             <div className="w-full bg-gray-100 relative" style={{ minHeight: 240 }}>
@@ -460,7 +470,7 @@ function classifyCreativeType(row: any): string {
   if (cta.includes('CATALOG')) return 'Catalog'
   if (row.video_id) return 'Video'
   if (row.image_url || row.thumbnail_url) return 'Image'
-  if (String(row.headline || row.primary_copy || '').trim()) return 'Text / link'
+  if (String(row.headline || row.primary_copy || row.description || '').trim()) return 'Text / link'
   return 'Unknown'
 }
 
@@ -678,6 +688,7 @@ export default function CreativePerformance() {
             dateRange={dateRange}
             onChange={d => { setDateRange(d); setCreativePage(0) }}
             className="w-full sm:w-auto sm:ml-auto"
+            presets={CREATIVE_DATE_PRESETS}
           />
         </div>
       </FilterShell>
@@ -876,6 +887,12 @@ export default function CreativePerformance() {
                             <div className="min-w-0">
                               <p className="font-medium text-gray-900 truncate text-xs leading-tight">{row.ad_name || row.ad_id}</p>
                               {row.headline && <p className="text-xs text-gray-500 truncate mt-0.5">{row.headline}</p>}
+                              {row.primary_copy && (
+                                <p className="text-[11px] text-gray-500 line-clamp-2 mt-0.5 leading-snug">{row.primary_copy}</p>
+                              )}
+                              {row.description && (
+                                <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5 leading-snug">{row.description}</p>
+                              )}
                               {row.ad_set_name && <p className="text-xs text-gray-400 truncate">{row.ad_set_name}</p>}
                             </div>
                           </div>
