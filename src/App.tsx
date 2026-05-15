@@ -194,8 +194,10 @@ function AppShell() {
                 className={`w-9 h-9 rounded-xl object-cover flex-shrink-0 ring-1 ring-white/20 ${sidebarCollapsed ? 'lg:mx-auto' : ''}`}
               />
               <div className={`min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-                <h1 className="font-bold text-[13px] tracking-tight truncate text-white drop-shadow-sm">{brandTitle}</h1>
-                <p className="text-[10px] text-slate-200/95 truncate leading-snug">{brandSubtitle}</p>
+                <h1 className="uni-sidebar-brand-title font-bold text-[13px] tracking-tight truncate leading-tight">
+                  {brandTitle}
+                </h1>
+                <p className="uni-sidebar-brand-subtitle text-[10px] truncate leading-snug mt-0.5">{brandSubtitle}</p>
               </div>
             </div>
             <button
@@ -246,28 +248,34 @@ function AppShell() {
             )}
           </nav>
 
-          <div className="mt-auto p-1.5 border-t border-slate-700 space-y-1.5">
-            <div className={`flex items-center gap-2 p-1.5 rounded-lg bg-slate-800/50 ${sidebarCollapsed ? 'lg:flex-col lg:items-center' : ''}`}>
+          <div className="mt-auto p-2 border-t border-white/10 space-y-2">
+            <div
+              className={`flex items-center gap-2.5 p-2 rounded-xl bg-white/[0.06] ring-1 ring-white/10 shadow-inner shadow-black/20 ${
+                sidebarCollapsed ? 'lg:flex-col lg:items-center' : ''
+              }`}
+            >
               <Link
                 to="/dashboard/settings?tab=profile"
                 title="Edit profile"
                 onClick={() => setMobileNavOpen(false)}
-                className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--brand-500)] to-[var(--brand-700)] flex items-center justify-center text-[11px] font-semibold hover:opacity-80 transition flex-shrink-0"
+                className="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--brand-400)] to-[var(--brand-700)] flex items-center justify-center text-white text-[11px] font-semibold shadow-md shadow-black/25 hover:brightness-110 transition flex-shrink-0 ring-2 ring-white/15"
               >
                 {(appUser?.display_name || 'U')[0].toUpperCase()}
               </Link>
               <div className={`flex-1 min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-                <p className="text-xs font-medium truncate">{appUser?.display_name || 'User'}</p>
-                <p className="text-[10px] text-slate-400 capitalize">{effRole.replace('_', ' ')}</p>
+                <p className="text-xs font-medium text-white/95 truncate tracking-tight">{appUser?.display_name || 'User'}</p>
+                <p className="text-[10px] text-slate-300/95 capitalize leading-tight">{effRole.replace('_', ' ')}</p>
               </div>
             </div>
             <button
               type="button"
               onClick={handleSignOut}
               title="Sign out of UNI Mission Control"
-              className={`w-full flex items-center justify-center gap-1.5 rounded-md py-1.5 px-2 text-xs font-semibold text-rose-100 bg-rose-950/55 border border-rose-800/80 hover:bg-rose-900/70 transition ${sidebarCollapsed ? 'lg:px-0' : ''}`}
+              className={`w-full flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-medium text-slate-200 bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 hover:border-white/25 transition ${
+                sidebarCollapsed ? 'lg:px-0' : ''
+              }`}
             >
-              <DoorOpen size={15} className="shrink-0" aria-hidden />
+              <DoorOpen size={15} className="shrink-0 opacity-90" aria-hidden />
               <span className={sidebarCollapsed ? 'lg:sr-only' : ''}>Sign out</span>
             </button>
           </div>
@@ -357,7 +365,10 @@ function AppShell() {
           </main>
         </div>
 
-        <BottomRightAssistDock />
+        <BottomRightAssistDock
+          showOpenclaw={shellSettings?.assistOpenclawFabEnabled !== false}
+          showFeedback={shellSettings?.assistFeedbackFabEnabled !== false}
+        />
       </div>
   )
 }

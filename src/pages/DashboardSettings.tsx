@@ -111,6 +111,8 @@ export default function DashboardSettingsPage() {
           appSubtitle: settings.appSubtitle,
           appLogoUrl: settings.appLogoUrl,
           uiDensity: settings.uiDensity,
+          assistOpenclawFabEnabled: settings.assistOpenclawFabEnabled,
+          assistFeedbackFabEnabled: settings.assistFeedbackFabEnabled,
         })
         if (!globalRes.ok) {
           success = false
@@ -379,6 +381,37 @@ export default function DashboardSettingsPage() {
                   <option value="compact">Compact (tighter)</option>
                 </select>
                 <p className="text-xs text-gray-500 mt-1">Controls main content padding across overview-style pages.</p>
+              </div>
+
+              <div className="pt-4 border-t border-gray-100 space-y-3">
+                <h3 className="text-sm font-semibold text-gray-900">Floating assist widgets</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Turn off during trials or incidents. Applies to everyone (stored on the org <code className="text-[11px] bg-gray-100 px-1 rounded">default_user</code> row).
+                </p>
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="mt-1 rounded border-gray-300 text-[var(--brand-600)] focus:ring-[var(--brand-500)]"
+                    checked={settings.assistOpenclawFabEnabled}
+                    onChange={e => setSettings({ ...settings, assistOpenclawFabEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-gray-800">OpenClaw chat button</span>
+                    <span className="block text-xs text-gray-500">Bottom-right floating chat / Control UI embed.</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="mt-1 rounded border-gray-300 text-[var(--brand-600)] focus:ring-[var(--brand-500)]"
+                    checked={settings.assistFeedbackFabEnabled}
+                    onChange={e => setSettings({ ...settings, assistFeedbackFabEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-gray-800">Feedback widget</span>
+                    <span className="block text-xs text-gray-500">Bottom-right “Feedback” launcher and panel.</span>
+                  </span>
+                </label>
               </div>
             </div>
           )}

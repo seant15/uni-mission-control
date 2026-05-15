@@ -38,6 +38,10 @@ export interface DashboardSettings {
   appSubtitle: string
   appLogoUrl: string
   uiDensity: UiDensity
+
+  /** Org-wide FABs — stored on `default_user`, merged for all users */
+  assistOpenclawFabEnabled: boolean
+  assistFeedbackFabEnabled: boolean
 }
 
 export const DEFAULT_SETTINGS: DashboardSettings = {
@@ -59,6 +63,8 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   appSubtitle: 'Marketing Performance Hub',
   appLogoUrl: '/uni-logo.gif',
   uiDensity: 'comfort',
+  assistOpenclawFabEnabled: true,
+  assistFeedbackFabEnabled: true,
 }
 
 function mapDbRow(row: Record<string, unknown> | null | undefined): Partial<DashboardSettings> | null {
@@ -84,6 +90,14 @@ function mapDbRow(row: Record<string, unknown> | null | undefined): Partial<Dash
     appSubtitle: typeof row.app_subtitle === 'string' && row.app_subtitle.trim() ? row.app_subtitle.trim() : undefined,
     appLogoUrl: typeof row.app_logo_url === 'string' && row.app_logo_url.trim() ? row.app_logo_url.trim() : undefined,
     uiDensity: density,
+    assistOpenclawFabEnabled:
+      row.assist_openclaw_fab_enabled === null || row.assist_openclaw_fab_enabled === undefined
+        ? undefined
+        : Boolean(row.assist_openclaw_fab_enabled),
+    assistFeedbackFabEnabled:
+      row.assist_feedback_fab_enabled === null || row.assist_feedback_fab_enabled === undefined
+        ? undefined
+        : Boolean(row.assist_feedback_fab_enabled),
   }
 }
 
@@ -100,6 +114,8 @@ export async function getDashboardSettings(userId: string): Promise<DashboardSet
       appSubtitle: (g.appSubtitle ?? p.appSubtitle) ?? DEFAULT_SETTINGS.appSubtitle,
       appLogoUrl: (g.appLogoUrl ?? p.appLogoUrl) ?? DEFAULT_SETTINGS.appLogoUrl,
       uiDensity: ((g.uiDensity ?? p.uiDensity) as UiDensity | undefined) ?? DEFAULT_SETTINGS.uiDensity,
+      assistOpenclawFabEnabled: g.assistOpenclawFabEnabled ?? DEFAULT_SETTINGS.assistOpenclawFabEnabled,
+      assistFeedbackFabEnabled: g.assistFeedbackFabEnabled ?? DEFAULT_SETTINGS.assistFeedbackFabEnabled,
     }
 
     if (userId === 'default_user') {
@@ -174,6 +190,8 @@ export async function saveDashboardSettings(
       dbSettings.app_subtitle = settings.appSubtitle
       dbSettings.app_logo_url = settings.appLogoUrl
       dbSettings.ui_density = settings.uiDensity
+      dbSettings.assist_openclaw_fab_enabled = settings.assistOpenclawFabEnabled
+      dbSettings.assist_feedback_fab_enabled = settings.assistFeedbackFabEnabled
     }
 
     await db.saveSettings(userId, dbSettings)

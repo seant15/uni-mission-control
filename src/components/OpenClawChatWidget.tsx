@@ -2,7 +2,30 @@ import { useState } from 'react'
 import { MessageCircle, X } from 'lucide-react'
 import { toast } from 'sonner'
 
-const CHAT_URL = (import.meta as unknown as { env: Record<string, string | undefined> }).env.VITE_OPENCLAW_CHAT_URL
+const env = (import.meta as unknown as { env: Record<string, string | undefined> }).env
+
+/**
+ * Control UI auth: prefer URL fragment `#token=...` (not sent in HTTP Referer).
+ * See https://documentation.openclaw.ai/web/control-ui — "token should be passed via the URL fragment".
+ */
+function resolveOpenClawChatUrl(): string | undefined {
+  const explicit = env.VITE_OPENCLAW_CHAT_URL?.trim()
+  if (explicit) return explicit
+
+  const base = env.VITE_OPENCLAW_GATEWAY_BASE?.trim()
+  const token = env.VITE_OPENCLAW_GATEWAY_TOKEN?.trim()
+  if (!base || !token) return undefined
+
+  try {
+    const u = new URL(base)
+    u.hash = `token=${encodeURIComponent(token)}`
+    return u.toString()
+  } catch {
+    return undefined
+  }
+}
+
+const CHAT_URL = resolveOpenClawChatUrl()
 
 type Layout = 'standalone' | 'dock'
 
@@ -15,7 +38,8 @@ export default function OpenClawChatWidget({ layout = 'standalone' }: { layout?:
   function handleOpen() {
     if (!CHAT_URL?.trim()) {
       toast.message('OpenClaw URL not configured', {
-        description: 'Set VITE_OPENCLAW_CHAT_URL in .env.local (e.g. your OpenClaw or embed URL).',
+        description:
+          'Set VITE_OPENCLAW_CHAT_URL (full URL, may include #token=…), or set VITE_OPENCLAW_GATEWAY_BASE + VITE_OPENCLAW_GATEWAY_TOKEN in .env.local.',
       })
       return
     }
