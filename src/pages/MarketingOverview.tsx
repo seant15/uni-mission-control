@@ -17,6 +17,7 @@ import AgencyClientBreakdown from '../components/AgencyClientBreakdown'
 import PlatformBadge from '../components/PlatformBadge'
 import AlertSystemGuideLink from '../components/AlertSystemGuideLink'
 import { splitShopifyAndAdsRevenue } from '../lib/shopifyMetrics'
+import ShopifyIcon from '../components/ShopifyIcon'
 
 interface Client {
   id: string
@@ -271,6 +272,10 @@ export default function MarketingOverview({
   const showAgencyRollup = showAgencyExtras && selectedClient === 'all' && !scopedClientId
 
   const shopifySplit = useMemo(() => splitShopifyAndAdsRevenue(curRows || []), [curRows])
+  const prevShopifySplit = useMemo(() => splitShopifyAndAdsRevenue(prevRows || []), [prevRows])
+  const adsRevenue = shopifySplit.adsReported
+  const prevAdsRevenue = prevShopifySplit.adsReported
+  const adsRevChange = cur && prev ? pctChange(adsRevenue, prevAdsRevenue) : undefined
 
   const primaryLeadGen = cur && prev && (
     <div className={`grid grid-cols-2 md:grid-cols-4 ${densityStackGap}`}>
@@ -309,7 +314,7 @@ export default function MarketingOverview({
           </div>
         )}
 
-        <FilterShell>
+        <FilterShell stickyBelowHeader>
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full">
           <div className="flex rounded-md border border-gray-200 p-0.5 shrink-0">
             <button
@@ -438,12 +443,34 @@ export default function MarketingOverview({
             <MetricCard title="CPC" value={fmtMoney(cur.cpc)} change={prev ? pctChange(cur.cpc, prev.cpc) : undefined} icon={DollarSign} tone="violet" invertTrend />
           </div>
 
-          {businessType === 'ecommerce' && (
-            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 ${densityStackGap}`}>
+                    {businessType === 'ecommerce' && (
+            <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 ${densityStackGap}`}>
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+                <div className="flex items-start justify-between mb-1 gap-1">
+                  <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-700 shrink-0">
+                    <ShopifyIcon className="w-4 h-4" />
+                  </div>
+                  {prev && (
+                    <div className={`text-xs font-medium shrink-0 ${pctChange(shopifySplit.shopifyReal, prevShopifySplit.shopifyReal) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {fmtPct(pctChange(shopifySplit.shopifyReal, prevShopifySplit.shopifyReal))}
+                    </div>
+                  )}
+                </div>
+                <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">{fmtMoney(shopifySplit.shopifyReal)}</div>
+                <div className="text-xs text-gray-500 mt-0.5">Shopify Real Sales</div>
+              </div>
               <MetricCard
-                title="Shopify Real Sales"
-                value={fmtMoney(shopifySplit.shopifyReal)}
-                change={prev ? pctChange(shopifySplit.shopifyReal, splitShopifyAndAdsRevenue(prevRows || []).shopifyReal) : undefined}
+                title="Shopify Returns"
+                value={fmtMoney(shopifySplit.shopifyReturns)}
+                change={prev ? pctChange(shopifySplit.shopifyReturns, prevShopifySplit.shopifyReturns) : undefined}
+                icon={ArrowDownRight}
+                tone="amber"
+                invertTrend
+              />
+              <MetricCard
+                title="After-return Sales"
+                value={fmtMoney(shopifySplit.shopifyAfterReturn)}
+                change={prev ? pctChange(shopifySplit.shopifyAfterReturn, prevShopifySplit.shopifyAfterReturn) : undefined}
                 icon={ShoppingCart}
                 tone="emerald"
               />
@@ -452,26 +479,26 @@ export default function MarketingOverview({
                   <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-600 shrink-0">
                     <TrendingUp className="w-4 h-4" />
                   </div>
-                  {revChange !== undefined && (
-                    <div className={`text-xs font-medium shrink-0 ${revChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {revChange >= 0 ? '+' : ''}{revChange.toFixed(1)}%
+                  {adsRevChange !== undefined && (
+                    <div className={`text-xs font-medium shrink-0 ${adsRevChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {adsRevChange >= 0 ? '+' : ''}{adsRevChange.toFixed(1)}%
                     </div>
                   )}
                 </div>
                 <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">
-                  {fmtMoney(cur.revenue)}
-                  {shopifySplit.adsPctOfShopify != null && shopifySplit.shopifyReal > 0 && (
+                  {fmtMoney(adsRevenue)}
+                  {shopifySplit.adsPctOfAfterReturn != null && shopifySplit.shopifyAfterReturn > 0 && (
                     <span className="ml-1.5 text-sm font-semibold text-emerald-700">
-                      ({shopifySplit.adsPctOfShopify.toFixed(0)}% of Shopify)
+                      ({shopifySplit.adsPctOfAfterReturn.toFixed(0)}% of after-return)
                     </span>
                   )}
                 </div>
-                <div className="text-xs text-gray-500 mt-0.5">Total Revenue (ads-reported + store)</div>
+                <div className="text-xs text-gray-500 mt-0.5">Total Revenue (ads-reported)</div>
               </div>
               <MetricCard title="CPA (Cost Per Acquisition)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} tone="amber" invertTrend />
             </div>
           )}
-          {businessType === 'leadgen' && (
+{businessType === 'leadgen' && (
             <div className={`grid grid-cols-1 md:grid-cols-2 ${densityStackGap}`}>
               <MetricCard title="Total Revenue (if tracked)" value={fmtMoney(cur.revenue)} change={revChange} icon={TrendingUp} tone="emerald" />
             </div>

@@ -9,7 +9,6 @@ import {
 import { db } from '../lib/api'
 import AccountDateRangePicker from '../components/AccountDateRangePicker'
 import FilterShell from '../components/FilterShell'
-import MetaAdSetPerformanceTable from '../components/MetaAdSetPerformanceTable'
 import { defaultCalendarRangeLastNDays, CREATIVE_DATE_PRESETS } from '../lib/dashboardDateRange'
 import { getDashboardSettings } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
@@ -956,14 +955,6 @@ export default function CreativePerformance() {
         )}
       </div>
 
-      <MetaAdSetPerformanceTable
-        className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
-        clientId={selectedClient}
-        startDate={dateRange.start}
-        endDate={dateRange.end}
-        scopedClientId={scopedClientId || undefined}
-        nestedCreatives={allCreatives}
-      />
     </div>
   )
 }

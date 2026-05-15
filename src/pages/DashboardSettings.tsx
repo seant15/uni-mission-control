@@ -12,6 +12,9 @@ import {
 } from '../lib/settings'
 import UserManagement from './UserManagement'
 import { useAuth } from '../contexts/AuthContext'
+import UserAvatar from '../components/UserAvatar'
+import AvatarPickerModal from '../components/AvatarPickerModal'
+import type { AvatarPresetId } from '../lib/avatarPresets'
 import { useShellPreview } from '../contexts/ShellPreviewContext'
 import { useDensitySectionClass, useUiDensity } from '../contexts/UiDensityContext'
 import { supabase } from '../lib/supabase'
@@ -63,7 +66,7 @@ export default function DashboardSettingsPage() {
   const densitySection = useDensitySectionClass()
   const uiDensity = useUiDensity()
   const [searchParams] = useSearchParams()
-  const { user, appUser } = useAuth()
+  const { user, appUser, refreshAppUser } = useAuth()
   const tabParam = searchParams.get('tab') as SettingsTab | null
   const initialTab: SettingsTab =
     tabParam === 'dashboard' || tabParam === 'users' || tabParam === 'profile'
@@ -84,6 +87,7 @@ export default function DashboardSettingsPage() {
   const [profileSaved, setProfileSaved] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileError, setProfileError] = useState('')
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
 
   useEffect(() => {
     if (appUser) setProfileName(appUser.display_name)
@@ -303,20 +307,40 @@ export default function DashboardSettingsPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-5">
             <h2 className="text-lg font-semibold text-gray-900">My Profile</h2>
 
-            {/* Avatar preview */}
-            <div className="flex items-center gap-4">
-              <div
-                className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold ${
-                  accent === 'blue'
-                    ? 'bg-gradient-to-br from-sky-400 to-blue-700'
-                    : 'bg-gradient-to-br from-[var(--brand-400)] to-[var(--brand-700)]'
-                }`}
+            <div className="flex items-center gap-4" id="profile-avatar">
+              <button
+                type="button"
+                onClick={() => setAvatarPickerOpen(true)}
+                className="rounded-full ring-2 ring-orange-200/80 hover:brightness-105 transition"
+                title="Choose profile avatar"
               >
-                {(profileName || appUser?.display_name || 'U')[0].toUpperCase()}
-              </div>
+                <UserAvatar
+                  displayName={profileName || appUser?.display_name}
+                  avatarPreset={appUser?.avatar_preset}
+                  size="lg"
+                />
+              </button>
+              <AvatarPickerModal
+                open={avatarPickerOpen}
+                currentPreset={appUser?.avatar_preset}
+                displayName={profileName || appUser?.display_name}
+                onClose={() => setAvatarPickerOpen(false)}
+                onSelect={async (presetId: AvatarPresetId) => {
+                  if (!appUser?.id) return
+                  await supabase.from('app_users').update({ avatar_preset: presetId }).eq('id', appUser.id)
+                  await refreshAppUser()
+                }}
+              />
               <div>
-                <p className="text-sm font-medium text-gray-700">Profile Avatar</p>
-                <p className="text-xs text-gray-400">Initials avatar color follows the interface accent you pick under Defaults &amp; charts.</p>
+                <p className="text-sm font-medium text-gray-700">Profile avatar</p>
+                <p className="text-xs text-gray-400">Shown in the sidebar and footer. Click the image to pick a preset.</p>
+                <button
+                  type="button"
+                  onClick={() => setAvatarPickerOpen(true)}
+                  className="mt-1 text-xs font-medium text-[var(--brand-600)] hover:underline"
+                >
+                  Change avatar
+                </button>
               </div>
             </div>
 

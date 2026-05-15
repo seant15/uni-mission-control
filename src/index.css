@@ -112,6 +112,33 @@ html {
   background: #ebe4d8;
 }
 
+.uni-sidebar-control-menu {
+  border-color: #e7e0d4 !important;
+  background: #f5f0e8 !important;
+  color: #334155;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.uni-sidebar-control-menu button {
+  color: #1e293b;
+}
+
+.uni-sidebar-control-menu button:hover {
+  background: #ebe4d8;
+}
+
+.uni-sidebar-control-menu button[aria-selected='true'],
+.uni-sidebar-control-menu .is-selected {
+  color: #0f172a;
+  font-weight: 700;
+  background: #e8dfd0;
+}
+
+/* Sticky filter bar sits below announcement + title header (~5.5rem) */
+.uni-filter-sticky-below-header {
+  top: 5.5rem;
+}
+
 .uni-sidebar-control-label {
   display: block;
   word-break: break-word;

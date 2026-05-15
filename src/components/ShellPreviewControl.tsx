@@ -68,14 +68,14 @@ export default function ShellPreviewControl({
         <>
           <button type="button" className="fixed inset-0 z-[60] cursor-default" aria-label="Close menu" onClick={() => setOpen(false)} />
           <ul
-            className="absolute left-0 right-0 top-full z-[70] mt-1 max-h-52 overflow-y-auto rounded-lg border border-slate-600/80 bg-slate-900 py-1 shadow-xl"
+            className="uni-sidebar-control-menu absolute left-0 right-0 top-full z-[70] mt-1 max-h-52 overflow-y-auto rounded-lg border py-1"
             role="listbox"
           >
             <li>
               <button
                 type="button"
                 role="option"
-                className="w-full px-2 py-1.5 text-left text-[11px] text-slate-100 hover:bg-slate-800"
+                className="w-full px-2 py-1.5 text-left text-[11px] font-medium"
                 onClick={() => {
                   shellPreview.setPreviewUserId(null)
                   setOpen(false)
@@ -88,7 +88,7 @@ export default function ShellPreviewControl({
               <button
                 type="button"
                 role="option"
-                className="w-full px-2 py-1.5 text-left text-[11px] text-slate-100 hover:bg-slate-800"
+                className="w-full px-2 py-1.5 text-left text-[11px] font-medium"
                 onClick={() => {
                   shellPreview.setPreviewUserId('default_user')
                   setOpen(false)
@@ -106,8 +106,8 @@ export default function ShellPreviewControl({
                     <button
                       type="button"
                       role="option"
-                      className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-slate-800 ${
-                        previewId === u.id ? 'text-[var(--brand-300)]' : 'text-slate-200'
+                      className={`w-full px-2 py-1.5 text-left text-[11px] font-medium ${
+                        previewId === u.id ? 'is-selected' : ''
                       }`}
                       onClick={() => {
                         shellPreview.setPreviewUserId(u.id)
@@ -115,7 +115,7 @@ export default function ShellPreviewControl({
                       }}
                     >
                       {(u.display_name || u.id).slice(0, 40)}
-                      {u.role ? <span className="text-slate-500"> · {u.role}</span> : null}
+                      {u.role ? <span className="text-stone-500 font-normal"> · {u.role}</span> : null}
                     </button>
                   </li>
                 ))}

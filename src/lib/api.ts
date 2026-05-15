@@ -132,7 +132,7 @@ async function fetchShopifyDailyAsPerformanceShape(filters: PerformanceFilters):
     const f = applyPerformanceClientScope(filters)
     let q = supabase
         .from('shopify_daily_performance')
-        .select('client_id, client_name, date, total_orders, net_revenue')
+        .select('client_id, client_name, date, total_orders, gross_revenue, net_revenue, refund_amount')
 
     if (f.clientId && f.clientId !== 'all') {
         q = q.eq('client_id', f.clientId)
@@ -158,6 +158,8 @@ async function fetchShopifyDailyAsPerformanceShape(filters: PerformanceFilters):
         conversions: Number(row.total_orders) || 0,
         cost: 0,
         revenue: Number(row.net_revenue) || 0,
+        gross_revenue: Number(row.gross_revenue) || 0,
+        refund_amount: Number(row.refund_amount) || 0,
     }))
 }
 
@@ -892,6 +894,42 @@ export const db = {
     /**
      * Recent alerts within last N hours for Real-time page
      */
+    /** Hourly rows for a calendar date range (Heated View rhythm chart). */
+    async getHourlyPerformanceForDateRange(filters: {
+        startDate: string
+        endDate: string
+        clientId?: string
+        scopedClientId?: string
+        platform?: string
+    }) {
+        const effectiveClientId = filters.scopedClientId ?? filters.clientId
+        const cols =
+            'id, client_id, client_name, ad_account_id, platform, date, hour, impressions, clicks, conversions, cost, revenue, account_timezone'
+
+        let q = supabase
+            .from('hourly_performance')
+            .select(cols)
+            .gte('date', filters.startDate)
+            .lte('date', filters.endDate)
+            .order('date', { ascending: true })
+            .order('hour', { ascending: true })
+
+        if (effectiveClientId && effectiveClientId !== 'all') {
+            q = q.eq('client_id', effectiveClientId)
+        } else {
+            const activeIds = await cachedActiveClientIds()
+            if (activeIds.length === 0) return []
+            q = q.in('client_id', activeIds)
+        }
+
+        const pf = filters.platform && filters.platform !== 'all' ? filters.platform : null
+        if (pf) q = q.eq('platform', pf)
+
+        const { data, error } = await q.limit(20000)
+        if (error) throw error
+        return data || []
+    },
+
     async getRecentAlerts(hoursBack: number) {
         const cutoff = new Date(Date.now() - hoursBack * 60 * 60 * 1000).toISOString()
         const { data, error } = await supabase

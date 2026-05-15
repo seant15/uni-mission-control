@@ -15,9 +15,6 @@ import BottomRightAssistDock from './components/BottomRightAssistDock'
 import ShellPreviewControl from './components/ShellPreviewControl'
 import AgencySwitcher from './components/AgencySwitcher'
 import UserAvatar from './components/UserAvatar'
-import AvatarPickerModal from './components/AvatarPickerModal'
-import { supabase } from './lib/supabase'
-import type { AvatarPresetId } from './lib/avatarPresets'
 import MissionBoard from './pages/MissionBoard'
 import { RoleGuard } from './components/RoleGuard'
 import { getDashboardSettings, GLOBAL_ANNOUNCEMENT_QUERY_KEY, APP_SHELL_SETTINGS_QUERY_KEY } from './lib/settings'
@@ -99,8 +96,7 @@ function App() {
 }
 
 function AppShell() {
-  const { appUser, signOut, user, refreshAppUser } = useAuth()
-  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
+  const { appUser, signOut, user } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const effRole = normalizeRole(appUser?.role)
@@ -297,8 +293,11 @@ function AppShell() {
             >
               <button
                 type="button"
-                title="Choose avatar"
-                onClick={() => setAvatarPickerOpen(true)}
+                title="Profile & avatar settings"
+                onClick={() => {
+                  setMobileNavOpen(false)
+                  navigate('/dashboard/settings?tab=profile')
+                }}
                 className="rounded-full flex-shrink-0 ring-2 ring-orange-200/60 hover:brightness-110 transition"
               >
                 <UserAvatar
@@ -307,17 +306,6 @@ function AppShell() {
                   size="md"
                 />
               </button>
-              <AvatarPickerModal
-                open={avatarPickerOpen}
-                currentPreset={appUser?.avatar_preset}
-                displayName={appUser?.display_name}
-                onClose={() => setAvatarPickerOpen(false)}
-                onSelect={async (presetId: AvatarPresetId) => {
-                  if (!appUser?.id) return
-                  await supabase.from('app_users').update({ avatar_preset: presetId }).eq('id', appUser.id)
-                  await refreshAppUser()
-                }}
-              />
               <div className={`flex-1 min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
                 <Link
                   to="/dashboard/settings?tab=profile"

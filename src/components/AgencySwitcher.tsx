@@ -43,15 +43,15 @@ export default function AgencySwitcher({ collapsed }: { collapsed?: boolean }) {
             onClick={() => setOpen(false)}
           />
           <ul
-            className="absolute left-0 right-0 top-full z-[70] mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-600/80 bg-slate-900 py-1 shadow-xl"
+            className="uni-sidebar-control-menu absolute left-0 right-0 top-full z-[70] mt-1 max-h-48 overflow-y-auto rounded-lg border py-1"
             role="listbox"
           >
             <li>
               <button
                 type="button"
                 role="option"
-                className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-slate-800 ${
-                  !currentAgencyId ? 'text-[var(--brand-300)]' : 'text-slate-200'
+                className={`w-full px-2 py-1.5 text-left text-[11px] font-semibold ${
+                  !currentAgencyId ? 'is-selected' : ''
                 }`}
                 onClick={() => {
                   setCurrentAgencyId(null)
@@ -66,8 +66,8 @@ export default function AgencySwitcher({ collapsed }: { collapsed?: boolean }) {
                 <button
                   type="button"
                   role="option"
-                  className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-slate-800 ${
-                    currentAgencyId === a.id ? 'text-[var(--brand-300)]' : 'text-slate-200'
+                  className={`w-full px-2 py-1.5 text-left text-[11px] font-medium ${
+                    currentAgencyId === a.id ? 'is-selected' : ''
                   }`}
                   onClick={() => {
                     setCurrentAgencyId(a.id)
@@ -75,7 +75,7 @@ export default function AgencySwitcher({ collapsed }: { collapsed?: boolean }) {
                   }}
                 >
                   {a.name}
-                  <span className="text-slate-500"> · {a.slug}</span>
+                  <span className="text-stone-500 font-normal"> · {a.slug}</span>
                 </button>
               </li>
             ))}

@@ -9,7 +9,6 @@ import type { HourWindow } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
 import PlatformBadge from '../components/PlatformBadge'
-import RealtimeRhythmChart from '../components/RealtimeRhythmChart'
 
 // Timezone display options
 type TzMode = 'utc' | 'browser' | 'account'
@@ -502,13 +501,6 @@ export default function RealtimePerformance() {
               )
             })}
           </div>
-
-          <RealtimeRhythmChart
-            rows={[...currentRows, ...previousRows]}
-            tzMode={tzMode}
-            accountTzHint={reportingTzChip.kind === 'single' ? reportingTzChip.tz : null}
-            selectedClient={selectedClient}
-          />
 
           {/* Per-client → per-account comparison */}
           {sortedClientGroups.length > 0 && (

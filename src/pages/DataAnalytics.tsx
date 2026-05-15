@@ -11,7 +11,7 @@ import AgencyInsightPies from '../components/AgencyInsightPies'
 import OverviewAiNotesRail from '../components/OverviewAiNotesRail'
 import PlatformBadge from '../components/PlatformBadge'
 import { db } from '../lib/api'
-import { splitShopifyAndAdsRevenue } from '../lib/shopifyMetrics'
+import PerformanceRhythmSection from '../components/PerformanceRhythmSection'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { useUiDensity } from '../contexts/UiDensityContext'
@@ -660,13 +660,6 @@ export default function DataAnalytics({
     !!dateRange.start &&
     !!dateRange.end
 
-  const shopifySplit = useMemo(() => splitShopifyAndAdsRevenue(performanceData), [performanceData])
-  const prevShopifySplit = useMemo(
-    () => splitShopifyAndAdsRevenue(previousPerformanceData),
-    [previousPerformanceData],
-  )
-  const shopifySalesChange = calculateChange(shopifySplit.shopifyReal, prevShopifySplit.shopifyReal)
-
   const heatedAlerts = useMemo(() => {
     if (!showHeatedRail || !alertsRaw) return []
     return alertsRaw.filter((a: { client_id?: string }) => {
@@ -729,7 +722,7 @@ export default function DataAnalytics({
       )}
 
       {/* ── STICKY FILTER BAR ── */}
-      <FilterShell className="z-40">
+      <FilterShell className="z-40" stickyBelowHeader>
         <div className="flex items-center gap-2 flex-wrap w-full">
           {/* Business Type Toggle */}
           <div className="flex rounded-md border border-gray-200 p-0.5 shrink-0">
@@ -894,42 +887,6 @@ export default function DataAnalytics({
         })}
       </div>
 
-      {businessType === 'ecommerce' && (
-        <div className={embedded ? 'grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'}>
-          <div className={`bg-white shadow-sm border border-gray-200 ${embedded ? 'rounded-lg p-3' : 'rounded-xl p-4'}`}>
-            <div className="flex items-start justify-between mb-1 gap-1">
-              <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-600 shrink-0">
-                <ShoppingCart className="w-4 h-4" />
-              </div>
-              {shopifySalesChange !== undefined && (
-                <div className={`text-xs font-medium shrink-0 ${shopifySalesChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {shopifySalesChange >= 0 ? '+' : ''}{shopifySalesChange.toFixed(1)}%
-                </div>
-              )}
-            </div>
-            <div className={embedded ? 'text-lg font-bold text-gray-900' : 'text-2xl font-bold text-gray-900'}>
-              ${shopifySplit.shopifyReal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            </div>
-            <div className="text-xs text-gray-500 mt-0.5">Shopify Real Sales</div>
-          </div>
-          <div className={`bg-white shadow-sm border border-gray-200 ${embedded ? 'rounded-lg p-3' : 'rounded-xl p-4'}`}>
-            <div className="flex items-start justify-between mb-1 gap-1">
-              <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-600 shrink-0">
-                <TrendingUp className="w-4 h-4" />
-              </div>
-            </div>
-            <div className={embedded ? 'text-lg font-bold text-gray-900' : 'text-2xl font-bold text-gray-900'}>
-              ${totals.revenue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-              {shopifySplit.adsPctOfShopify != null && shopifySplit.shopifyReal > 0 && (
-                <span className="ml-1.5 text-sm font-semibold text-emerald-700">
-                  ({shopifySplit.adsPctOfShopify.toFixed(0)}% of Shopify)
-                </span>
-              )}
-            </div>
-            <div className="text-xs text-gray-500 mt-0.5">Total Revenue (ads-reported + store)</div>
-          </div>
-        </div>
-      )}
 
       {/* Dynamic Chart */}
       <div className={`bg-white shadow-sm border border-gray-200 ${embedded ? 'rounded-lg p-3' : 'rounded-xl p-6'}`}>
@@ -1004,15 +961,6 @@ export default function DataAnalytics({
           <p className="text-xs text-gray-500 mt-3 leading-relaxed">{dailyDataTimezoneFootnote}</p>
         )}
       </div>
-
-      {performanceData.length > 0 && dateRange.start && dateRange.end && (
-        <AgencyInsightPies
-          dailyRows={performanceData}
-          dateRange={dateRange}
-          selectedClient={selectedClient}
-          selectedPlatform={selectedPlatform}
-        />
-      )}
 
       {performanceData.length > 0 && (
         <div className={shellCard}>
@@ -1360,6 +1308,24 @@ export default function DataAnalytics({
             </div>
           )}
         </div>
+      )}
+
+      {performanceData.length > 0 && dateRange.start && dateRange.end && (
+        <PerformanceRhythmSection
+          dateRange={dateRange}
+          selectedClient={selectedClient}
+          selectedPlatform={selectedPlatform}
+          scopedClientId={scopedClientId || undefined}
+        />
+      )}
+
+      {performanceData.length > 0 && dateRange.start && dateRange.end && (
+        <AgencyInsightPies
+          dailyRows={performanceData}
+          dateRange={dateRange}
+          selectedClient={selectedClient}
+          selectedPlatform={selectedPlatform}
+        />
       )}
     </div>
   )
