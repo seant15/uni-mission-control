@@ -284,7 +284,7 @@ function UserCard({ user, clients, agencies, currentAdminId, onSaved }: UserCard
     }
   }
 
-  const assignedCount = Object.values(grants).filter(g => g !== null).length
+  const assignedCount = scopedClients.filter(c => grants[c.id] != null).length
   const isClientUser = role === 'client_user'
   const isTeamMember = role === 'team_member'
 
