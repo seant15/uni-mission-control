@@ -109,6 +109,7 @@ export default function RealtimeRhythmChart({
   selectedClient,
   dateRange,
   dimmed = false,
+  periodRoasKpi,
 }: {
   rows: HourlyRow[]
   /** When set (Heated View), overrides browser TZ — agency default America/Phoenix. */
@@ -117,6 +118,8 @@ export default function RealtimeRhythmChart({
   selectedClient: string
   dateRange: CalendarDateRange
   dimmed?: boolean
+  /** When set, dashed reference line matches Heated View KPI (daily paid-ads sync). */
+  periodRoasKpi?: number
 }) {
   const [mode, setMode] = useState<RhythmMode>('hourly')
   const [selectedMetrics, setSelectedMetrics] = useState<Set<RhythmMetric>>(
@@ -132,7 +135,7 @@ export default function RealtimeRhythmChart({
 
   const tzFootnote = useMemo(() => rhythmTimezoneFootnote(displayZone, rows), [displayZone, rows])
 
-  const periodRoas = useMemo(() => {
+  const periodRoasHourly = useMemo(() => {
     let cost = 0
     let revenue = 0
     for (const r of rows) {
@@ -143,6 +146,11 @@ export default function RealtimeRhythmChart({
     }
     return cost > 0 ? revenue / cost : 0
   }, [rows, dateRange.start, dateRange.end])
+
+  const periodRoas =
+    periodRoasKpi != null && periodRoasKpi > 0 ? periodRoasKpi : periodRoasHourly
+  const periodRoasSource =
+    periodRoasKpi != null && periodRoasKpi > 0 ? 'daily paid-ads sync (KPI)' : 'hourly warehouse'
 
   const chartData = useMemo(() => {
     const filtered = rows.filter(r => {
@@ -212,9 +220,19 @@ export default function RealtimeRhythmChart({
         <p className="text-[10px] text-stone-500 mb-1">{tzFootnote}</p>
         {selectedMetrics.has('roas') && periodRoas > 0 && (
           <p className="text-[10px] text-stone-500 mb-3">
-            Period ROAS for this filter (total revenue ÷ total spend):{' '}
-            <span className="font-semibold text-stone-700">{periodRoas.toFixed(2)}x</span>. Each point is that
-            hour&apos;s slot ROAS — low-spend hours can look higher than the period average.
+            Period ROAS ({periodRoasSource}):{' '}
+            <span className="font-semibold text-stone-700">{periodRoas.toFixed(2)}x</span> — dashed line matches the
+            KPI above when on Heated View. Each point is slot ROAS (revenue ÷ spend for that hour or weekday bucket);
+            low-spend slots often look higher than the period average.
+            {periodRoasKpi != null &&
+              periodRoasHourly > 0 &&
+              Math.abs(periodRoasKpi - periodRoasHourly) / periodRoasKpi > 0.15 && (
+                <span>
+                  {' '}
+                  Hourly rollup totals differ from daily sync ({periodRoasHourly.toFixed(2)}x hourly sum) — use KPI /
+                  daily chart for official period ROAS.
+                </span>
+              )}
           </p>
         )}
         {!selectedMetrics.has('roas') && <p className="mb-3" />}

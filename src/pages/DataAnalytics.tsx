@@ -23,6 +23,7 @@ import AccountDateRangePicker from '../components/AccountDateRangePicker'
 import FilterShell from '../components/FilterShell'
 import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
 import { AGENCY_REPORTING_TZ } from '../lib/hourlyBuckets'
+import { filterAdsDailyRows, sumAdsMetrics } from '../lib/adsRows'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ComposedChart, Area, Line, LineChart
@@ -303,6 +304,7 @@ export default function DataAnalytics({
       startDate: dateRange.start,
       endDate: dateRange.end,
       scopedClientId: scopedClientId || undefined,
+      adsOnly: embedded,
     }),
     staleTime: settings.cacheTimeout * 60 * 1000,
     gcTime: 30 * 60 * 1000,
@@ -311,6 +313,17 @@ export default function DataAnalytics({
   })
 
   const performanceData: DailyPerformance[] = (performance as DailyPerformance[]) || []
+
+  /** Heated View: KPIs + daily trend = paid ads only; Shopify stays on Agency overview cards. */
+  const kpiRows = useMemo(
+    () => (embedded ? filterAdsDailyRows(performanceData) : performanceData),
+    [embedded, performanceData],
+  )
+
+  const paidAdsPeriodRoas = useMemo(() => {
+    const t = sumAdsMetrics(kpiRows)
+    return t.cost > 0 ? t.revenue / t.cost : 0
+  }, [kpiRows])
 
   const previousPeriodRange = useMemo(() => {
     if (!dateRange.start || !dateRange.end) return { start: '', end: '' }
@@ -326,6 +339,7 @@ export default function DataAnalytics({
       startDate: previousPeriodRange.start,
       endDate: previousPeriodRange.end,
       scopedClientId: scopedClientId || undefined,
+      adsOnly: embedded,
     }),
     enabled: !!previousPeriodRange.start && !!previousPeriodRange.end,
     staleTime: settings.cacheTimeout * 60 * 1000,
@@ -334,6 +348,10 @@ export default function DataAnalytics({
   })
 
   const previousPerformanceData: DailyPerformance[] = (previousPerformance as DailyPerformance[]) || []
+  const prevKpiRows = useMemo(
+    () => (embedded ? filterAdsDailyRows(previousPerformanceData) : previousPerformanceData),
+    [embedded, previousPerformanceData],
+  )
 
   const rhythmAccountTzHint = useMemo(() => {
     const tzs = [...new Set(performanceData.map(r => r.data_timezone).filter(Boolean) as string[])]
@@ -493,7 +511,7 @@ export default function DataAnalytics({
   const prevAggSearchTermsMap = new Map((aggregateRows(prevGoogleSearchTerms || [], 'search_term', 'search_term', ['campaign_name', 'ad_group_name', 'match_type'])).map(r => [r.search_term, r]))
 
   // Totals
-  const totals = performanceData.reduce((acc, day) => ({
+  const totals = kpiRows.reduce((acc, day) => ({
     cost: acc.cost + (day.cost || 0),
     impressions: acc.impressions + (day.impressions || 0),
     clicks: acc.clicks + (day.clicks || 0),
@@ -501,7 +519,7 @@ export default function DataAnalytics({
     revenue: acc.revenue + (day.revenue || 0),
   }), { cost: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0 })
 
-  const previousTotals = previousPerformanceData.reduce((acc, day) => ({
+  const previousTotals = prevKpiRows.reduce((acc, day) => ({
     cost: acc.cost + (day.cost || 0),
     impressions: acc.impressions + (day.impressions || 0),
     clicks: acc.clicks + (day.clicks || 0),
@@ -528,7 +546,7 @@ export default function DataAnalytics({
   const roasChange = calculateChange(roas, prevRoas)
 
   // Daily chart data
-  const dailyDataWithMetrics = performanceData.reduce((acc: any[], day) => {
+  const dailyDataWithMetrics = kpiRows.reduce((acc: any[], day) => {
     const existing = acc.find(d => d.date === day.date)
     const cost = day.cost || 0
     const revenue = day.revenue || 0
@@ -567,7 +585,7 @@ export default function DataAnalytics({
       }))
     }
     const map = new Map<string, any>()
-    for (const day of performanceData) {
+    for (const day of kpiRows) {
       const platKey = day.platform || 'unknown'
       const platLabel = platKey.replace(/_/g, ' ')
       const key = `${day.date}|${platKey}`
@@ -587,7 +605,7 @@ export default function DataAnalytics({
       if (byDate !== 0) return byDate
       return String(a.platform).localeCompare(String(b.platform))
     })
-  }, [performanceData, dailyDataWithMetrics, selectedPlatform, showPlatformInDailyDrill])
+  }, [kpiRows, dailyDataWithMetrics, selectedPlatform, showPlatformInDailyDrill])
 
   const { widths: ddColW, startResize: ddColResize } = useResizableColumns('heated-daily-drill-v1', {
     date: 112,
@@ -937,7 +955,10 @@ export default function DataAnalytics({
       {/* Dynamic Chart */}
       <div className={`bg-white shadow-sm border border-gray-200 ${embedded ? 'rounded-lg p-3' : 'rounded-xl p-6'}`}>
         <div className={`flex items-center justify-between flex-wrap gap-3 ${embedded ? 'mb-2' : 'mb-4'}`}>
-          <h3 className={embedded ? 'text-sm font-semibold text-gray-900' : 'text-lg font-semibold text-gray-900'}>{currentMetricConfig.label} Trend (Daily)</h3>
+          <h3 className={embedded ? 'text-sm font-semibold text-gray-900' : 'text-lg font-semibold text-gray-900'}>
+            {currentMetricConfig.label} Trend (Daily)
+            {embedded ? ' — paid ads' : ''}
+          </h3>
           <div className="flex items-center gap-3 flex-wrap">
             {/* Secondary metric */}
             <div className="flex items-center gap-2">
@@ -1016,12 +1037,14 @@ export default function DataAnalytics({
           scopedClientId={scopedClientId || undefined}
           displayZone={AGENCY_REPORTING_TZ}
           accountTzHint={rhythmAccountTzHint}
+          adsOnly={embedded}
+          periodRoasKpi={embedded && paidAdsPeriodRoas > 0 ? paidAdsPeriodRoas : undefined}
         />
       )}
 
       {performanceData.length > 0 && dateRange.start && dateRange.end && (
         <AgencyInsightPies
-          dailyRows={performanceData}
+          dailyRows={embedded ? kpiRows : performanceData}
           dateRange={dateRange}
           selectedClient={selectedClient}
           selectedPlatform={selectedPlatform}

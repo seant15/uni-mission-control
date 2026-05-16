@@ -14,6 +14,10 @@ type Props = {
   /** IANA zone for chart labels (default agency reporting TZ). */
   displayZone?: string
   accountTzHint?: string | null
+  /** Paid ads only (Heated View) — matches daily KPI scope. */
+  adsOnly?: boolean
+  /** Period ROAS from daily paid-ads rows (matches top KPI); overrides hourly-derived period line. */
+  periodRoasKpi?: number
 }
 
 export default function PerformanceRhythmSection({
@@ -23,6 +27,8 @@ export default function PerformanceRhythmSection({
   scopedClientId,
   displayZone: displayZoneProp,
   accountTzHint,
+  adsOnly = false,
+  periodRoasKpi,
 }: Props) {
   const clientId = scopedClientId || (selectedClient !== 'all' ? selectedClient : 'all')
 
@@ -34,6 +40,7 @@ export default function PerformanceRhythmSection({
       clientId,
       selectedPlatform,
       scopedClientId ?? '',
+      adsOnly ? 'ads' : 'all',
     ],
     queryFn: () =>
       db.getHourlyPerformanceForDateRange({
@@ -42,6 +49,7 @@ export default function PerformanceRhythmSection({
         clientId,
         scopedClientId: scopedClientId || undefined,
         platform: selectedPlatform !== 'all' ? selectedPlatform : undefined,
+        adsOnly,
       }),
     enabled: !!dateRange.start && !!dateRange.end,
     staleTime: 60_000,
@@ -83,6 +91,7 @@ export default function PerformanceRhythmSection({
         selectedClient={selectedClient}
         dateRange={dateRange}
         dimmed={busy}
+        periodRoasKpi={periodRoasKpi}
       />
     </div>
   )

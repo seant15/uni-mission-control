@@ -113,6 +113,8 @@ export interface PerformanceFilters {
     offset?: number
     /** When set, `clientId` is forced to this value in all queries using these filters. */
     scopedClientId?: string
+    /** Omit Shopify rows merged from shopify_daily_performance (Heated View / paid-ads KPIs). */
+    adsOnly?: boolean
 }
 
 function applyPerformanceClientScope(filters: PerformanceFilters): PerformanceFilters {
@@ -200,6 +202,7 @@ export const db = {
         const f = applyPerformanceClientScope(filters)
         const plat = f.platform && f.platform !== 'all' ? f.platform : null
         const includeShopify =
+            !f.adsOnly &&
             !f.adAccountId &&
             (plat === null || plat === 'shopify')
 
@@ -910,6 +913,8 @@ export const db = {
         clientId?: string
         scopedClientId?: string
         platform?: string
+        /** When true and platform unset, only Meta + Google hourly rows (no store channels). */
+        adsOnly?: boolean
     }) {
         const effectiveClientId = filters.scopedClientId ?? filters.clientId
         const cols =
@@ -932,7 +937,11 @@ export const db = {
         }
 
         const pf = filters.platform && filters.platform !== 'all' ? filters.platform : null
-        if (pf) q = q.eq('platform', pf)
+        if (pf) {
+            q = q.eq('platform', pf)
+        } else if (filters.adsOnly) {
+            q = q.in('platform', ['meta_ads', 'google_ads'])
+        }
 
         const { data, error } = await q.limit(20000)
         if (error) throw error
