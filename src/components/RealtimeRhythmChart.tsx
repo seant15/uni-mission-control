@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
 import ReportSectionHeader from './ReportSectionHeader'
 import type { CalendarDateRange } from '../lib/dashboardDateRange'
@@ -89,20 +89,16 @@ function addRow(b: Bucket, r: HourlyRow) {
 
 function bucketToMetrics(b: Bucket, divisor: number) {
   const n = Math.max(1, divisor)
-  const cost = b.cost / n
-  const revenue = b.revenue / n
-  const conversions = b.conversions / n
-  const clicks = b.clicks / n
-  const impressions = b.impressions / n
   return {
-    cost,
-    revenue,
-    conversions,
-    clicks,
-    impressions,
-    roas: cost > 0 ? revenue / cost : 0,
-    cpa: conversions > 0 ? cost / conversions : 0,
-    ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+    cost: b.cost / n,
+    revenue: b.revenue / n,
+    conversions: b.conversions / n,
+    clicks: b.clicks / n,
+    impressions: b.impressions / n,
+    // Ratio metrics: always from bucket totals (not average of daily ratios).
+    roas: b.cost > 0 ? b.revenue / b.cost : 0,
+    cpa: b.conversions > 0 ? b.cost / b.conversions : 0,
+    ctr: b.impressions > 0 ? (b.clicks / b.impressions) * 100 : 0,
   }
 }
 
@@ -135,6 +131,18 @@ export default function RealtimeRhythmChart({
   )
 
   const tzFootnote = useMemo(() => rhythmTimezoneFootnote(displayZone, rows), [displayZone, rows])
+
+  const periodRoas = useMemo(() => {
+    let cost = 0
+    let revenue = 0
+    for (const r of rows) {
+      if (dateRange.start && r.date < dateRange.start) continue
+      if (dateRange.end && r.date > dateRange.end) continue
+      cost += Number(r.cost) || 0
+      revenue += Number(r.revenue) || 0
+    }
+    return cost > 0 ? revenue / cost : 0
+  }, [rows, dateRange.start, dateRange.end])
 
   const chartData = useMemo(() => {
     const filtered = rows.filter(r => {
@@ -201,7 +209,15 @@ export default function RealtimeRhythmChart({
             : `Average per weekday (Mon–Sun) in ${displayZone} — each point is the mean across all Mondays, Tuesdays, etc. in the range (not one summed week).`}
           {selectedClient !== 'all' ? ' Filtered to selected client.' : ''}
         </p>
-        <p className="text-[10px] text-stone-500 mb-3">{tzFootnote}</p>
+        <p className="text-[10px] text-stone-500 mb-1">{tzFootnote}</p>
+        {selectedMetrics.has('roas') && periodRoas > 0 && (
+          <p className="text-[10px] text-stone-500 mb-3">
+            Period ROAS for this filter (total revenue ÷ total spend):{' '}
+            <span className="font-semibold text-stone-700">{periodRoas.toFixed(2)}x</span>. Each point is that
+            hour&apos;s slot ROAS — low-spend hours can look higher than the period average.
+          </p>
+        )}
+        {!selectedMetrics.has('roas') && <p className="mb-3" />}
 
         <div className="flex flex-wrap gap-2 mb-3">
           <div className="flex rounded-lg border border-gray-200 p-0.5">
@@ -258,6 +274,14 @@ export default function RealtimeRhythmChart({
                 }}
               />
               <Legend />
+              {selectedMetrics.has('roas') && periodRoas > 0 && (
+                <ReferenceLine
+                  y={periodRoas}
+                  stroke="#94a3b8"
+                  strokeDasharray="6 4"
+                  label={{ value: `Period ${periodRoas.toFixed(2)}x`, position: 'insideTopRight', fontSize: 10 }}
+                />
+              )}
               {active.map(m => (
                 <Line
                   key={m}

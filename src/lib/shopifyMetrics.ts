@@ -16,6 +16,25 @@ type Row = {
   gross_revenue?: number | null
 }
 
+/** Roll up rows from `shopify_daily_performance` (or shaped rows with gross/net/refund). */
+export function rollupShopifyDaily(rows: Row[]): Omit<ShopifyRollup, 'adsReported' | 'adsPctOfShopify' | 'adsPctOfAfterReturn'> {
+  let shopifyReal = 0
+  let shopifyReturns = 0
+  let shopifyAfterReturn = 0
+
+  for (const r of rows) {
+    const net = Number(r.revenue) || 0
+    const gross = Number(r.gross_revenue) || 0
+    let refund = Number(r.refund_amount) || 0
+    if (refund <= 0 && gross > net) refund = gross - net
+    shopifyReal += gross > 0 ? gross : net + refund
+    shopifyReturns += refund
+    shopifyAfterReturn += net > 0 ? net : Math.max(0, (gross || net) - refund)
+  }
+
+  return { shopifyReal, shopifyReturns, shopifyAfterReturn }
+}
+
 export function splitShopifyAndAdsRevenue(rows: Row[]): ShopifyRollup {
   let shopifyReal = 0
   let shopifyReturns = 0
@@ -24,10 +43,11 @@ export function splitShopifyAndAdsRevenue(rows: Row[]): ShopifyRollup {
 
   for (const r of rows) {
     const p = (r.platform || '').toLowerCase()
-    if (p === 'shopify') {
+    if (p === 'shopify' || (!p && (r.gross_revenue != null || r.refund_amount != null))) {
       const net = Number(r.revenue) || 0
-      const refund = Number(r.refund_amount) || 0
+      let refund = Number(r.refund_amount) || 0
       const gross = Number(r.gross_revenue) || 0
+      if (refund <= 0 && gross > net) refund = gross - net
       shopifyReal += gross > 0 ? gross : net + refund
       shopifyReturns += refund
       shopifyAfterReturn += net > 0 ? net : Math.max(0, (gross || net) - refund)

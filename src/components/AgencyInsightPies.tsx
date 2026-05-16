@@ -44,7 +44,7 @@ const DIM_DB: Record<Exclude<InsightDim, 'platforms'>, 'device' | 'age' | 'gende
 const DIM_LABELS: Record<InsightDim, string> = {
   platforms: 'Platforms',
   devices: 'Devices',
-  demographics: 'Demographics (Meta)',
+  demographics: 'Demographics',
   demo_age: 'Age',
   demo_gender: 'Gender',
 }
@@ -52,7 +52,7 @@ const DIM_LABELS: Record<InsightDim, string> = {
 const DIM_HELP: Record<InsightDim, string> = {
   platforms: 'Paid ads only (Meta + Google). Use the page platform filter for a single network.',
   devices: 'Device splits from warehouse. Respects client, date, and platform filters above.',
-  demographics: 'Meta age+gender combined. Google has no combined slice — use Age or Gender for Google.',
+  demographics: 'Meta age×gender plus Google/Meta age and gender when platform = All.',
   demo_age: 'Age bands. When platform = All, segments are merged across Meta and Google.',
   demo_gender: 'Gender. When platform = All, segments are merged across Meta and Google.',
 }
@@ -137,16 +137,16 @@ function effectiveBreakdownDims(
   if (activeDim === 'demographics') {
     if (selectedPlatform === 'google_ads') {
       return {
-        dims: ['age'],
-        note: 'Google has no combined age×gender slice in the warehouse — showing age bands.',
+        dims: ['age', 'gender'],
+        note: 'Google age and gender bands (no combined age×gender slice in the warehouse).',
       }
     }
     if (selectedPlatform === 'meta_ads') {
       return { dims: ['demographic'] }
     }
     return {
-      dims: ['demographic', 'age'],
-      note: 'All platforms: Meta age×gender (demographic) plus age bands (Google + Meta).',
+      dims: ['demographic', 'age', 'gender'],
+      note: 'Meta age×gender plus age and gender bands for Google and Meta.',
     }
   }
   return { dims: [DIM_DB[activeDim]] }
@@ -233,7 +233,10 @@ export default function AgencyInsightPies({
 
   const sectionTitle = useMemo(() => {
     if (activeDim === 'platforms') return 'Spend & revenue by platform'
-    return `Spend & revenue by ${DIM_LABELS[activeDim].toLowerCase()}`
+    if (activeDim === 'demographics') return 'Spend & revenue by demographics'
+    if (activeDim === 'demo_age') return 'Spend & revenue by age'
+    if (activeDim === 'demo_gender') return 'Spend & revenue by gender'
+    return 'Spend & revenue by device'
   }, [activeDim])
 
   const barData = useMemo(

@@ -16,7 +16,7 @@ import FilterShell from '../components/FilterShell'
 import AgencyClientBreakdown from '../components/AgencyClientBreakdown'
 import PlatformBadge from '../components/PlatformBadge'
 import AlertSystemGuideLink from '../components/AlertSystemGuideLink'
-import { adsReportedRevenueFromRows, splitShopifyAndAdsRevenue } from '../lib/shopifyMetrics'
+import { adsReportedRevenueFromRows, rollupShopifyDaily } from '../lib/shopifyMetrics'
 import { formatSupabaseError } from '../lib/supabaseErrors'
 import ShopifyIcon from '../components/ShopifyIcon'
 import AgencyKpiLayoutEditor from '../components/AgencyKpiLayoutEditor'
@@ -312,8 +312,38 @@ export default function MarketingOverview({
     staleTime: 5 * 60_000,
   })
 
-  const shopifySplit = useMemo(() => splitShopifyAndAdsRevenue(shopifyDailyRows), [shopifyDailyRows])
-  const prevShopifySplit = useMemo(() => splitShopifyAndAdsRevenue(prevShopifyRows), [prevShopifyRows])
+  const shopifySplit = useMemo(() => {
+    const shop = rollupShopifyDaily(shopifyDailyRows)
+    const ads = adsReportedRevenueFromRows(curRows || [])
+    return {
+      ...shop,
+      adsReported: ads,
+      adsPctOfShopify: shop.shopifyReal > 0 ? (ads / shop.shopifyReal) * 100 : null,
+      adsPctOfAfterReturn: shop.shopifyAfterReturn > 0 ? (ads / shop.shopifyAfterReturn) * 100 : null,
+    }
+  }, [shopifyDailyRows, curRows])
+
+  const prevShopifySplit = useMemo(() => {
+    const shop = rollupShopifyDaily(prevShopifyRows)
+    const ads = adsReportedRevenueFromRows(prevRows || [])
+    return {
+      ...shop,
+      adsReported: ads,
+      adsPctOfShopify: shop.shopifyReal > 0 ? (ads / shop.shopifyReal) * 100 : null,
+      adsPctOfAfterReturn: shop.shopifyAfterReturn > 0 ? (ads / shop.shopifyAfterReturn) * 100 : null,
+    }
+  }, [prevShopifyRows, prevRows])
+
+  const shopifyKpiHint = useMemo(() => {
+    if (businessType !== 'ecommerce') return null
+    if (shopifyDailyRows.length === 0) {
+      return 'No Shopify daily rows for this client/range. Run sync_shopify_data.py (7+ day backfill) and confirm clients.shopify_store_url + token.'
+    }
+    if (shopifySplit.shopifyReturns <= 0 && shopifySplit.shopifyReal > 0) {
+      return 'Refunds are $0 in shopify_daily_performance.refund_amount for this range (orders may have no returns, or sync needs refresh).'
+    }
+    return null
+  }, [businessType, shopifyDailyRows.length, shopifySplit.shopifyReturns, shopifySplit.shopifyReal])
 
   const adsRevenue = useMemo(() => adsReportedRevenueFromRows(curRows || []), [curRows])
   const prevAdsRevenue = useMemo(() => adsReportedRevenueFromRows(prevRows || []), [prevRows])
@@ -417,14 +447,19 @@ export default function MarketingOverview({
         )
       case 'ecom_shopify_returns':
         return (
-          <MetricCard
-            title="Shopify Returns"
-            value={fmtMoney(shopifySplit.shopifyReturns)}
-            change={pctChange(shopifySplit.shopifyReturns, prevShopifySplit.shopifyReturns)}
-            icon={ArrowDownRight}
-            tone="amber"
-            invertTrend
-          />
+          <div>
+            <MetricCard
+              title="Shopify Returns"
+              value={fmtMoney(shopifySplit.shopifyReturns)}
+              change={pctChange(shopifySplit.shopifyReturns, prevShopifySplit.shopifyReturns)}
+              icon={ArrowDownRight}
+              tone="amber"
+              invertTrend
+            />
+            {shopifyKpiHint && (
+              <p className="text-[10px] text-amber-800 mt-1 leading-snug px-0.5">{shopifyKpiHint}</p>
+            )}
+          </div>
         )
       case 'ecom_after_return':
         return (

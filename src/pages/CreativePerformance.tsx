@@ -442,6 +442,8 @@ const CHART_COLORS = ['#ea580c', '#f97316', '#fb923c', '#fdba74', '#c2410c', '#9
 
 const PIE_COLORS = ['#ea580c', '#8b5cf6', '#0d9488', '#64748b', '#ca8a04', '#16a34a', '#f43f5e']
 
+const CREATIVE_FILTER_TYPES = ['Video', 'Image', 'Catalog', 'Unknown'] as const
+
 function classifyCreativeType(row: any): string {
   const cta = String(row.call_to_action_type || '').toUpperCase()
   const dest = String(row.destination_url || '').toLowerCase()
@@ -485,6 +487,7 @@ export default function CreativePerformance() {
   const [chartMode, setChartMode] = useState<'spend' | 'roas'>('spend')
   const [selectedAd, setSelectedAd] = useState<any>(null)
   const [failedThumbKeys, setFailedThumbKeys] = useState<Set<string>>(() => new Set())
+  const [hiddenCreativeTypes, setHiddenCreativeTypes] = useState<Set<string>>(() => new Set())
   const PAGE_SIZE = 20
 
   useEffect(() => {
@@ -552,6 +555,24 @@ export default function CreativePerformance() {
   // Aggregate
   const allCreatives = aggregateCreatives(rawCreatives as any[])
 
+  const filteredCreatives = useMemo(() => {
+    return allCreatives.filter(row => {
+      const t = classifyCreativeType(row)
+      if (!(CREATIVE_FILTER_TYPES as readonly string[]).includes(t)) return true
+      return !hiddenCreativeTypes.has(t)
+    })
+  }, [allCreatives, hiddenCreativeTypes])
+
+  const toggleCreativeType = (type: string) => {
+    setHiddenCreativeTypes(prev => {
+      const next = new Set(prev)
+      if (next.has(type)) next.delete(type)
+      else next.add(type)
+      return next
+    })
+    setCreativePage(0)
+  }
+
   const thumbWithUrlCount = useMemo(
     () => allCreatives.filter((r: any) => r.thumbnail_url || r.image_url).length,
     [allCreatives]
@@ -559,25 +580,25 @@ export default function CreativePerformance() {
   const showCdnStaleBanner =
     thumbWithUrlCount > 0 && failedThumbKeys.size / thumbWithUrlCount > 0.6
 
-  const sortedCreatives = creativeSort.sortRows(allCreatives)
+  const sortedCreatives = creativeSort.sortRows(filteredCreatives)
 
   const pagedCreatives = sortedCreatives.slice(creativePage * PAGE_SIZE, (creativePage + 1) * PAGE_SIZE)
   const totalPages = Math.ceil(sortedCreatives.length / PAGE_SIZE)
 
   // KPIs
-  const totalSpend = allCreatives.reduce((s, r) => s + r.spend, 0)
-  const totalRevenue = allCreatives.reduce((s, r) => s + r.revenue, 0)
-  const totalConversions = allCreatives.reduce((s, r) => s + r.conversions, 0)
-  const totalClicks = allCreatives.reduce((s, r) => s + r.clicks, 0)
-  const totalImpressions = allCreatives.reduce((s, r) => s + r.impressions, 0)
+  const totalSpend = filteredCreatives.reduce((s, r) => s + r.spend, 0)
+  const totalRevenue = filteredCreatives.reduce((s, r) => s + r.revenue, 0)
+  const totalConversions = filteredCreatives.reduce((s, r) => s + r.conversions, 0)
+  const totalClicks = filteredCreatives.reduce((s, r) => s + r.clicks, 0)
+  const totalImpressions = filteredCreatives.reduce((s, r) => s + r.impressions, 0)
   const portfolioRoas = totalSpend > 0 ? totalRevenue / totalSpend : 0
   const portfolioCpa = totalConversions > 0 ? totalSpend / totalConversions : 0
   const portfolioCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0
-  const adsWithSpend = allCreatives.filter(r => r.spend > 0).length
+  const adsWithSpend = filteredCreatives.filter(r => r.spend > 0).length
 
   const creativesMissingImages =
-    allCreatives.length > 0 &&
-    allCreatives.every((r: any) => !r.image_url && !r.thumbnail_url)
+    filteredCreatives.length > 0 &&
+    filteredCreatives.every((r: any) => !r.image_url && !r.thumbnail_url)
 
   const selectedClientName = selectedClient === 'all'
     ? 'All Clients'
@@ -585,12 +606,12 @@ export default function CreativePerformance() {
 
   const creativeTypePie = useMemo(() => {
     const m = new Map<string, number>()
-    for (const row of allCreatives) {
+    for (const row of filteredCreatives) {
       const k = classifyCreativeType(row)
       m.set(k, (m.get(k) || 0) + (Number(row.spend) || 0))
     }
     return [...m.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
-  }, [allCreatives])
+  }, [filteredCreatives])
 
   const totalPieSpend = useMemo(
     () => creativeTypePie.reduce((s, x) => s + x.value, 0),
@@ -707,6 +728,30 @@ export default function CreativePerformance() {
         </div>
       </FilterShell>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-stone-500 w-full sm:w-auto">
+          Creative type
+        </span>
+        {CREATIVE_FILTER_TYPES.map(t => {
+          const on = !hiddenCreativeTypes.has(t)
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => toggleCreativeType(t)}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition ${
+                on
+                  ? 'bg-[var(--brand-600)] text-white border-transparent'
+                  : 'bg-stone-100 text-stone-400 border-stone-200 line-through'
+              }`}
+            >
+              {t}
+            </button>
+          )
+        })}
+        <span className="text-[10px] text-stone-500">Click to hide a type from table and charts.</span>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard label="Ads with Spend" value={String(adsWithSpend)} icon={Image} color="bg-[var(--brand-600)]" />
@@ -750,10 +795,10 @@ export default function CreativePerformance() {
       )}
 
       {/* Top Creatives Visual Chart */}
-      {allCreatives.length > 0 && (() => {
+      {filteredCreatives.length > 0 && (() => {
         const chartData = chartMode === 'spend'
-          ? allCreatives.filter(r => r.spend > 0).slice(0, 8)
-          : allCreatives.filter(r => r.spend > 0 && r.revenue > 0).sort((a, b) => (b.revenue / b.spend) - (a.revenue / a.spend)).slice(0, 8)
+          ? filteredCreatives.filter(r => r.spend > 0).slice(0, 8)
+          : filteredCreatives.filter(r => r.spend > 0 && r.revenue > 0).sort((a, b) => (b.revenue / b.spend) - (a.revenue / a.spend)).slice(0, 8)
         const maxBarValue = chartMode === 'spend'
           ? (chartData[0]?.spend || 1)
           : Math.max(...chartData.map(r => r.spend > 0 ? r.revenue / r.spend : 0), 1)
@@ -846,7 +891,7 @@ export default function CreativePerformance() {
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold text-gray-700">Meta Creative Performance</h2>
-            <p className="text-xs text-gray-400 mt-0.5">{allCreatives.length} unique ads</p>
+            <p className="text-xs text-gray-400 mt-0.5">{filteredCreatives.length} unique ads</p>
           </div>
           <div className="flex items-center gap-1 text-xs text-gray-500">
             <MousePointer2 size={12} />
@@ -856,7 +901,7 @@ export default function CreativePerformance() {
 
         {isLoading ? (
           <div className="flex items-center justify-center py-20 text-gray-400 text-sm">Loading...</div>
-        ) : allCreatives.length === 0 ? (
+        ) : filteredCreatives.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-2">
             <Image size={32} className="opacity-30" />
             <p className="text-sm">No creative data found for this selection</p>
