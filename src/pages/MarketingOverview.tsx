@@ -16,7 +16,8 @@ import FilterShell from '../components/FilterShell'
 import AgencyClientBreakdown from '../components/AgencyClientBreakdown'
 import PlatformBadge from '../components/PlatformBadge'
 import AlertSystemGuideLink from '../components/AlertSystemGuideLink'
-import { splitShopifyAndAdsRevenue } from '../lib/shopifyMetrics'
+import { adsReportedRevenueFromRows, splitShopifyAndAdsRevenue } from '../lib/shopifyMetrics'
+import { formatSupabaseError } from '../lib/supabaseErrors'
 import ShopifyIcon from '../components/ShopifyIcon'
 import AgencyKpiLayoutEditor from '../components/AgencyKpiLayoutEditor'
 import ReportSectionHeader from '../components/ReportSectionHeader'
@@ -106,7 +107,8 @@ export default function MarketingOverview({
   /** When true (Agency View), adds client rollup, attribution pies, and AI-notes / alerts rail. */
   showAgencyExtras?: boolean
 }) {
-  const { appUser } = useAuth()
+  const { user, appUser } = useAuth()
+  const settingsUserId = user?.id ?? 'default_user'
   const queryClient = useQueryClient()
   const densityStackGap = useDensityStackGap()
   const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
@@ -284,16 +286,43 @@ export default function MarketingOverview({
 
   const showAgencyRollup = showAgencyExtras && selectedClient === 'all' && !scopedClientId
 
-  const shopifySplit = useMemo(() => splitShopifyAndAdsRevenue(curRows || []), [curRows])
-  const prevShopifySplit = useMemo(() => splitShopifyAndAdsRevenue(prevRows || []), [prevRows])
-  const adsRevenue = shopifySplit.adsReported
-  const prevAdsRevenue = prevShopifySplit.adsReported
+  const { data: shopifyDailyRows = [] } = useQuery({
+    queryKey: ['shopify_daily_kpi', dateRange.start, dateRange.end, selectedClient, scopedClientId ?? ''],
+    queryFn: () =>
+      db.getShopifyDailyPerformance({
+        clientId: selectedClient,
+        startDate: dateRange.start,
+        endDate: dateRange.end,
+        scopedClientId: scopedClientId || undefined,
+      }),
+    enabled: businessType === 'ecommerce' && !!dateRange.start && !!dateRange.end,
+    staleTime: 5 * 60_000,
+  })
+
+  const { data: prevShopifyRows = [] } = useQuery({
+    queryKey: ['shopify_daily_kpi_prev', previousRange.start, previousRange.end, selectedClient, scopedClientId ?? ''],
+    queryFn: () =>
+      db.getShopifyDailyPerformance({
+        clientId: selectedClient,
+        startDate: previousRange.start,
+        endDate: previousRange.end,
+        scopedClientId: scopedClientId || undefined,
+      }),
+    enabled: businessType === 'ecommerce' && !!previousRange.start && !!previousRange.end,
+    staleTime: 5 * 60_000,
+  })
+
+  const shopifySplit = useMemo(() => splitShopifyAndAdsRevenue(shopifyDailyRows), [shopifyDailyRows])
+  const prevShopifySplit = useMemo(() => splitShopifyAndAdsRevenue(prevShopifyRows), [prevShopifyRows])
+
+  const adsRevenue = useMemo(() => adsReportedRevenueFromRows(curRows || []), [curRows])
+  const prevAdsRevenue = useMemo(() => adsReportedRevenueFromRows(prevRows || []), [prevRows])
   const adsRevChange = cur && prev ? pctChange(adsRevenue, prevAdsRevenue) : undefined
 
   const { data: kpiRow } = useQuery({
-    queryKey: ['dashboard-settings-agency-kpi', appUser?.id ?? 'none'],
-    queryFn: () => db.getSettings(appUser!.id),
-    enabled: Boolean(showAgencyExtras && appUser?.id),
+    queryKey: ['dashboard-settings-agency-kpi', settingsUserId],
+    queryFn: () => db.getSettings(settingsUserId),
+    enabled: Boolean(showAgencyExtras && user?.id),
   })
   const resolvedKpiLayout = useMemo(() => normalizeAgencyKpiLayout(kpiRow?.agency_kpi_cards), [kpiRow])
   const agencyKpiVisibleIds = useMemo(
@@ -313,15 +342,18 @@ export default function MarketingOverview({
   }, [kpiEditorOpen, resolvedKpiLayout])
 
   async function persistAgencyKpiLayout() {
-    if (!appUser?.id) return
+    if (!user?.id) {
+      setKpiSaveErr('Sign in required to save layout.')
+      return
+    }
     setKpiSaving(true)
     setKpiSaveErr(null)
     try {
-      await db.mergeDashboardSettings(appUser.id, { agency_kpi_cards: draftKpiLayout })
-      await queryClient.invalidateQueries({ queryKey: ['dashboard-settings-agency-kpi', appUser.id] })
+      await db.saveAgencyKpiCards(user.id, draftKpiLayout as unknown as Record<string, unknown>)
+      await queryClient.invalidateQueries({ queryKey: ['dashboard-settings-agency-kpi', user.id] })
       setKpiEditorOpen(false)
     } catch (e: unknown) {
-      setKpiSaveErr(e instanceof Error ? e.message : String(e))
+      setKpiSaveErr(formatSupabaseError(e))
     } finally {
       setKpiSaving(false)
     }
@@ -380,7 +412,7 @@ export default function MarketingOverview({
               )}
             </div>
             <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">{fmtMoney(shopifySplit.shopifyReal)}</div>
-            <div className="text-xs text-gray-500 mt-0.5">Shopify Real Sales</div>
+            <div className="text-xs text-gray-500 mt-0.5">Shopify gross sales</div>
           </div>
         )
       case 'ecom_shopify_returns':
@@ -600,7 +632,7 @@ export default function MarketingOverview({
         <>
           {showAgencyExtras ? (
             <>
-              {kpiEditorOpen && appUser?.id && (
+              {kpiEditorOpen && user?.id && (
                 <AgencyKpiLayoutEditor
                   layout={draftKpiLayout}
                   onChange={setDraftKpiLayout}
@@ -656,7 +688,7 @@ export default function MarketingOverview({
                   )}
                 </div>
                 <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">{fmtMoney(shopifySplit.shopifyReal)}</div>
-                <div className="text-xs text-gray-500 mt-0.5">Shopify Real Sales</div>
+                <div className="text-xs text-gray-500 mt-0.5">Shopify gross sales</div>
               </div>
               <MetricCard
                 title="Shopify Returns"

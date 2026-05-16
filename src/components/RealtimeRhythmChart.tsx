@@ -4,6 +4,15 @@ import {
 } from 'recharts'
 import ReportSectionHeader from './ReportSectionHeader'
 import type { CalendarDateRange } from '../lib/dashboardDateRange'
+import {
+  AGENCY_REPORTING_TZ,
+  type HourlyPerfRow,
+  resolveRhythmDisplayZone,
+  rhythmBucketHour,
+  rhythmBucketWeekday,
+  rhythmTimezoneFootnote,
+  hourlyRowUtcMs,
+} from '../lib/hourlyBuckets'
 
 export type RhythmMode = 'hourly' | 'weekday'
 export type RhythmMetric =
@@ -44,26 +53,13 @@ const ALL_METRICS: RhythmMetric[] = [
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-function resolveZone(tzMode: 'utc' | 'browser' | 'account', accountTz?: string | null): string {
-  if (tzMode === 'utc') return 'UTC'
-  if (tzMode === 'account' && accountTz && accountTz !== 'advertiser_tz') return accountTz
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-  } catch {
-    return 'UTC'
-  }
+function calendarDayInZone(utcMs: number, zone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(
+    new Date(utcMs),
+  )
 }
 
-function weekdayIndex(isoUtc: string, zone: string): number {
-  const d = new Date(isoUtc)
-  const wd = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short' }).format(d)
-  const idx = WEEKDAY_LABELS.indexOf(wd)
-  return idx >= 0 ? idx : 0
-}
-
-type HourlyRow = {
-  date: string
-  hour: number | string
+type HourlyRow = HourlyPerfRow & {
   cost?: number
   revenue?: number
   conversions?: number
@@ -91,29 +87,36 @@ function addRow(b: Bucket, r: HourlyRow) {
   b.impressions += Number(r.impressions) || 0
 }
 
-function bucketToMetrics(b: Bucket) {
+function bucketToMetrics(b: Bucket, divisor: number) {
+  const n = Math.max(1, divisor)
+  const cost = b.cost / n
+  const revenue = b.revenue / n
+  const conversions = b.conversions / n
+  const clicks = b.clicks / n
+  const impressions = b.impressions / n
   return {
-    cost: b.cost,
-    revenue: b.revenue,
-    conversions: b.conversions,
-    clicks: b.clicks,
-    impressions: b.impressions,
-    roas: b.cost > 0 ? b.revenue / b.cost : 0,
-    cpa: b.conversions > 0 ? b.cost / b.conversions : 0,
-    ctr: b.impressions > 0 ? (b.clicks / b.impressions) * 100 : 0,
+    cost,
+    revenue,
+    conversions,
+    clicks,
+    impressions,
+    roas: cost > 0 ? revenue / cost : 0,
+    cpa: conversions > 0 ? cost / conversions : 0,
+    ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
   }
 }
 
 export default function RealtimeRhythmChart({
   rows,
-  tzMode,
+  displayZone: displayZoneProp,
   accountTzHint,
   selectedClient,
   dateRange,
   dimmed = false,
 }: {
   rows: HourlyRow[]
-  tzMode: 'utc' | 'browser' | 'account'
+  /** When set (Heated View), overrides browser TZ — agency default America/Phoenix. */
+  displayZone?: string
   accountTzHint?: string | null
   selectedClient: string
   dateRange: CalendarDateRange
@@ -124,7 +127,14 @@ export default function RealtimeRhythmChart({
     () => new Set<RhythmMetric>(['cost', 'revenue']),
   )
 
-  const zone = resolveZone(tzMode, accountTzHint)
+  const displayZone = useMemo(
+    () =>
+      displayZoneProp ??
+      resolveRhythmDisplayZone(rows, { hint: accountTzHint, fallback: AGENCY_REPORTING_TZ }),
+    [rows, displayZoneProp, accountTzHint],
+  )
+
+  const tzFootnote = useMemo(() => rhythmTimezoneFootnote(displayZone, rows), [displayZone, rows])
 
   const chartData = useMemo(() => {
     const filtered = rows.filter(r => {
@@ -134,34 +144,34 @@ export default function RealtimeRhythmChart({
 
     if (mode === 'hourly') {
       const buckets = Array.from({ length: 24 }, () => emptyBucket())
+      const daySets: Set<string>[] = Array.from({ length: 24 }, () => new Set())
       for (const r of filtered) {
-        const iso = `${r.date}T${String(r.hour).padStart(2, '0')}:00:00.000Z`
-        const h = new Date(iso)
-        const parts = new Intl.DateTimeFormat('en-US', {
-          timeZone: zone,
-          hour: 'numeric',
-          hour12: false,
-        }).formatToParts(h)
-        const hi = Number(parts.find(p => p.type === 'hour')?.value ?? 0)
-        if (hi >= 0 && hi < 24) addRow(buckets[hi], r)
+        const hi = rhythmBucketHour(r, displayZone)
+        const ms = hourlyRowUtcMs(r)
+        if (hi < 0 || hi > 23 || !Number.isFinite(ms)) continue
+        addRow(buckets[hi], r)
+        daySets[hi].add(calendarDayInZone(ms, displayZone))
       }
       return buckets.map((b, h) => ({
         label: `${String(h).padStart(2, '0')}:00`,
-        ...bucketToMetrics(b),
+        ...bucketToMetrics(b, daySets[h].size),
       }))
     }
 
     const buckets = WEEKDAY_LABELS.map(() => emptyBucket())
+    const weekdayDaySets: Set<string>[] = WEEKDAY_LABELS.map(() => new Set())
     for (const r of filtered) {
-      const iso = `${r.date}T${String(r.hour).padStart(2, '0')}:00:00.000Z`
-      const wi = weekdayIndex(iso, zone)
+      const wi = rhythmBucketWeekday(r, displayZone)
+      const ms = hourlyRowUtcMs(r)
+      if (!Number.isFinite(ms)) continue
       addRow(buckets[wi], r)
+      weekdayDaySets[wi].add(calendarDayInZone(ms, displayZone))
     }
     return buckets.map((b, i) => ({
       label: WEEKDAY_LABELS[i],
-      ...bucketToMetrics(b),
+      ...bucketToMetrics(b, weekdayDaySets[i].size),
     }))
-  }, [rows, mode, dateRange, zone])
+  }, [rows, mode, dateRange, displayZone])
 
   const toggleMetric = (m: RhythmMetric) => {
     setSelectedMetrics(prev => {
@@ -185,12 +195,13 @@ export default function RealtimeRhythmChart({
           title="Performance rhythm"
           badge={<span className="uni-badge-live">Hourly warehouse</span>}
         />
-        <p className="uni-panel-muted mt-2 mb-3">
+        <p className="uni-panel-muted mt-2 mb-1">
           {mode === 'hourly'
-            ? `Totals by hour (0–23) in ${zone} for ${dateRange.start} → ${dateRange.end}.`
-            : `Totals by weekday (Mon–Sun) in ${zone} — each day of week is its own series point, not summed into calendar weeks.`}
+            ? `Average per clock hour (0–23) in ${displayZone} — each point is total spend/metrics for that hour divided by number of calendar days with data.`
+            : `Average per weekday (Mon–Sun) in ${displayZone} — each point is the mean across all Mondays, Tuesdays, etc. in the range (not one summed week).`}
           {selectedClient !== 'all' ? ' Filtered to selected client.' : ''}
         </p>
+        <p className="text-[10px] text-stone-500 mb-3">{tzFootnote}</p>
 
         <div className="flex flex-wrap gap-2 mb-3">
           <div className="flex rounded-lg border border-gray-200 p-0.5">

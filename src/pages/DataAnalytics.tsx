@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   Database, ChevronDown, TrendingUp, DollarSign, CreditCard,
   AlertCircle, Calendar, Settings, MousePointer2, ShoppingCart, Users,
@@ -22,6 +22,7 @@ import { scopedClientIdFromUser } from '../lib/rbac'
 import AccountDateRangePicker from '../components/AccountDateRangePicker'
 import FilterShell from '../components/FilterShell'
 import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
+import { AGENCY_REPORTING_TZ } from '../lib/hourlyBuckets'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ComposedChart, Area, Line, LineChart
@@ -293,7 +294,7 @@ export default function DataAnalytics({
   }, [selectedClient, selectedAdAccount, clientsFromTable, adAccountsFromDB, businessTypeManual])
 
   // Current period performance
-  const { data: performance } = useQuery({
+  const { data: performance, isFetching: perfFetching } = useQuery({
     queryKey: ['performance', selectedClient, selectedPlatform, selectedAdAccount, dateRange, scopedClientId ?? ''],
     queryFn: () => db.getDailyPerformance({
       clientId: selectedClient,
@@ -306,6 +307,7 @@ export default function DataAnalytics({
     staleTime: settings.cacheTimeout * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   })
 
   const performanceData: DailyPerformance[] = (performance as DailyPerformance[]) || []
@@ -332,6 +334,11 @@ export default function DataAnalytics({
   })
 
   const previousPerformanceData: DailyPerformance[] = (previousPerformance as DailyPerformance[]) || []
+
+  const rhythmAccountTzHint = useMemo(() => {
+    const tzs = [...new Set(performanceData.map(r => r.data_timezone).filter(Boolean) as string[])]
+    return tzs.length === 1 ? tzs[0]! : null
+  }, [performanceData])
 
   const dailyDataTimezoneFootnote = useMemo(() => {
     const tzs = [...new Set(performanceData.map(r => r.data_timezone).filter(Boolean) as string[])]
@@ -738,7 +745,7 @@ export default function DataAnalytics({
   }, [heatedDrillTab, canDailyTab, canMetaTab, canGoogleTab, canKwTab, canSearchTab, canAdsetsTab])
 
   const mainContent = (
-    <div className={rootStack}>
+    <div className={`${rootStack}${perfFetching ? ' opacity-95 transition-opacity duration-200' : ''}`} aria-busy={perfFetching || undefined}>
       {/* Top Header */}
       <div className="flex items-center justify-between">
         {!embedded && (
@@ -1007,6 +1014,8 @@ export default function DataAnalytics({
           selectedClient={selectedClient}
           selectedPlatform={selectedPlatform}
           scopedClientId={scopedClientId || undefined}
+          displayZone={AGENCY_REPORTING_TZ}
+          accountTzHint={rhythmAccountTzHint}
         />
       )}
 

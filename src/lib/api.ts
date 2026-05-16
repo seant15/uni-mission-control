@@ -19,6 +19,7 @@ import type { MissionCardRow, MissionColumn } from '../types/mission'
 import type { ClientAbTestConfig, ClientAlertDelivery } from '../types/abTestDelivery'
 import { mockTasks } from './mock-data'
 import { getScopedAgencyId, peekActiveClientIdsCache, storeActiveClientIdsCache } from './agencyScope'
+import { hourlyRowUtcMs } from './hourlyBuckets'
 
 const USE_MOCK_DATA = (import.meta as any).env.VITE_USE_MOCK_DATA === 'true'
 
@@ -50,14 +51,6 @@ export interface HourlyPerformanceFilters {
     scopedClientId?: string
     platform?: string
     adAccountId?: string
-}
-
-/** UTC instant for hourly_performance row (date + hour are stored as UTC bucket). */
-function hourlyRowUtcMs(row: { date: string; hour: number | string }): number {
-    const d = row.date
-    const h = Number(row.hour)
-    if (!d || Number.isNaN(h)) return NaN
-    return Date.parse(`${d}T${String(h).padStart(2, '0')}:00:00.000Z`)
 }
 
 /** Stable key for merging daily rows with hourly rollups (same grain as daily_performance). */
@@ -286,8 +279,24 @@ export const db = {
     async getPerformanceBreakdown(
         filters: PerformanceFilters & { dimension: 'device' | 'age' | 'gender' | 'demographic' },
     ) {
+        return this.getPerformanceBreakdownSlices({
+            ...filters,
+            dimensions: [filters.dimension],
+        })
+    },
+
+    /**
+     * One or more breakdown dimensions (e.g. Meta demographic + Google age when platform = all).
+     */
+    async getPerformanceBreakdownSlices(
+        filters: PerformanceFilters & {
+            dimensions: Array<'device' | 'age' | 'gender' | 'demographic'>
+        },
+    ) {
         const f = applyPerformanceClientScope(filters)
         const plat = f.platform && f.platform !== 'all' ? f.platform : null
+        const dims = [...new Set(filters.dimensions)]
+        if (dims.length === 0) return []
 
         let query = supabase
             .from('daily_performance_breakdown')
@@ -307,7 +316,7 @@ export const db = {
         if (f.adAccountId) query = query.eq('ad_account_id', f.adAccountId)
         if (f.startDate) query = query.gte('date', f.startDate)
         if (f.endDate) query = query.lte('date', f.endDate)
-        query = query.eq('dimension', filters.dimension).order('date', { ascending: false }).limit(20000)
+        query = query.in('dimension', dims).order('date', { ascending: false }).limit(25000)
 
         const { data, error } = await query
         if (error) throw error
@@ -809,7 +818,7 @@ export const db = {
         const prevWindowEndDH = toDateHour(windowStart)
 
         const cols =
-            'id, client_id, client_name, ad_account_id, platform, date, hour, impressions, clicks, conversions, cost, revenue, account_timezone'
+            'id, client_id, client_name, ad_account_id, platform, date, hour, account_local_hour, impressions, clicks, conversions, cost, revenue, account_timezone'
 
         // Filter: date >= windowStart.date AND (date > windowStart.date OR hour >= windowStart.hour)
         // Simplified: fetch by date range and filter in JS for hour boundaries
@@ -904,7 +913,7 @@ export const db = {
     }) {
         const effectiveClientId = filters.scopedClientId ?? filters.clientId
         const cols =
-            'id, client_id, client_name, ad_account_id, platform, date, hour, impressions, clicks, conversions, cost, revenue, account_timezone'
+            'id, client_id, client_name, ad_account_id, platform, date, hour, account_local_hour, impressions, clicks, conversions, cost, revenue, account_timezone'
 
         let q = supabase
             .from('hourly_performance')
@@ -998,8 +1007,51 @@ export const db = {
                 : { ...patch }
         merged.user_id = userId
         delete merged.updated_at
+        delete merged.id
         await this.saveSettings(userId, merged as any)
         return true
+    },
+
+    /** Persist Agency Overview KPI layout only (auth user id = dashboard_settings.user_id). */
+    async saveAgencyKpiCards(userId: string, layout: Record<string, unknown>) {
+        const { error } = await supabase
+            .from('dashboard_settings')
+            .upsert(
+                {
+                    user_id: userId,
+                    agency_kpi_cards: layout,
+                    updated_at: new Date().toISOString(),
+                },
+                { onConflict: 'user_id' },
+            )
+        if (error) throw error
+        return true
+    },
+
+    async getShopifyDailyPerformance(filters: PerformanceFilters) {
+        return fetchShopifyDailyAsPerformanceShape(applyPerformanceClientScope(filters))
+    },
+
+    async createClientRecord(input: {
+        name: string
+        business_type?: 'leadgen' | 'ecommerce'
+        agency_id?: string | null
+        currency?: string
+    }) {
+        const agencyId = input.agency_id ?? getScopedAgencyId() ?? null
+        const { data, error } = await supabase
+            .from('clients')
+            .insert({
+                name: input.name.trim(),
+                business_type: input.business_type ?? 'ecommerce',
+                agency_id: agencyId,
+                currency: input.currency ?? 'USD',
+                status: 'active',
+            })
+            .select('id, name')
+            .single()
+        if (error) throw error
+        return data
     },
 
     // ============================================================

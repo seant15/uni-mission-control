@@ -444,9 +444,28 @@ const PIE_COLORS = ['#ea580c', '#8b5cf6', '#0d9488', '#64748b', '#ca8a04', '#16a
 
 function classifyCreativeType(row: any): string {
   const cta = String(row.call_to_action_type || '').toUpperCase()
-  if (cta.includes('CATALOG')) return 'Catalog'
+  const dest = String(row.destination_url || '').toLowerCase()
+  const adName = String(row.ad_name || '').toLowerCase()
+  const headline = String(row.headline || '').toLowerCase()
+
+  if (
+    cta.includes('CATALOG') ||
+    cta.includes('SHOP_COLLECTION') ||
+    adName.includes('catalog') ||
+    adName.includes('dpa') ||
+    adName.includes('advantage+') ||
+    headline.includes('catalog')
+  ) {
+    return 'Catalog'
+  }
   if (row.video_id) return 'Video'
+  if (dest.includes('facebook.com/products') || dest.includes('/collections/')) {
+    return 'Catalog'
+  }
   if (row.image_url || row.thumbnail_url) return 'Image'
+  if (row.thumbnail_url && !row.image_url && (cta.includes('SHOP') || cta.includes('BUY'))) {
+    return 'Catalog'
+  }
   if (String(row.headline || row.primary_copy || row.description || '').trim()) return 'Text / link'
   return 'Unknown'
 }

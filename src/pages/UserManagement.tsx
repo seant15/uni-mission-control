@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
   Users, Plus, ChevronDown, ChevronUp,
-  Check, X, Save, AlertCircle, Key, Eye, EyeOff
+  Check, X, Save, AlertCircle, Key, Eye, EyeOff, Building2,
 } from 'lucide-react'
+import AddClientModal from '../components/AddClientModal'
 import { supabase } from '../lib/supabase'
 import { ACTIVE_CLIENT_STATUSES } from '../lib/api'
 import {
@@ -545,6 +546,7 @@ export default function UserManagement() {
   const [agencies, setAgencies] = useState<{ id: string; name: string; slug: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showAddClient, setShowAddClient] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [newName, setNewName] = useState('')
   const [newRole, setNewRole] = useState<AppRole>('team_member')
@@ -647,14 +649,29 @@ export default function UserManagement() {
             Control which users can see which clients and what data.
           </p>
         </div>
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
-        >
-          <Plus size={15} />
-          Add User
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAddClient(true)}
+            className="flex items-center gap-2 px-3 py-2 border border-stone-200 bg-white text-stone-800 rounded-lg text-sm font-medium hover:bg-stone-50 transition"
+          >
+            <Building2 size={15} />
+            Add Client
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+          >
+            <Plus size={15} />
+            Add User
+          </button>
+        </div>
       </div>
+
+      {showAddClient && (
+        <AddClientModal agencies={agencies} onClose={() => setShowAddClient(false)} onCreated={loadData} />
+      )}
 
       {/* Add user form */}
       {showAddForm && (

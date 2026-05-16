@@ -1,15 +1,18 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { db } from '../lib/api'
 import RealtimeRhythmChart from './RealtimeRhythmChart'
 import type { CalendarDateRange } from '../lib/dashboardDateRange'
+import { AGENCY_REPORTING_TZ, resolveRhythmDisplayZone } from '../lib/hourlyBuckets'
 
 type Props = {
   dateRange: CalendarDateRange
   selectedClient: string
   selectedPlatform: string
   scopedClientId?: string
-  tzMode?: 'utc' | 'browser' | 'account'
+  /** IANA zone for chart labels (default agency reporting TZ). */
+  displayZone?: string
   accountTzHint?: string | null
 }
 
@@ -18,12 +21,12 @@ export default function PerformanceRhythmSection({
   selectedClient,
   selectedPlatform,
   scopedClientId,
-  tzMode = 'browser',
+  displayZone: displayZoneProp,
   accountTzHint,
 }: Props) {
   const clientId = scopedClientId || (selectedClient !== 'all' ? selectedClient : 'all')
 
-  const { data: hourlyRows = [], isLoading, isFetching, error } = useQuery({
+  const { data: hourlyRows = [], isLoading, error } = useQuery({
     queryKey: [
       'rhythm_hourly_range',
       dateRange.start,
@@ -44,7 +47,17 @@ export default function PerformanceRhythmSection({
     staleTime: 60_000,
   })
 
-  const busy = isLoading || isFetching
+  const busy = isLoading && hourlyRows.length === 0
+
+  const displayZone = useMemo(
+    () =>
+      displayZoneProp ??
+      resolveRhythmDisplayZone(hourlyRows, {
+        hint: accountTzHint,
+        fallback: AGENCY_REPORTING_TZ,
+      }),
+    [hourlyRows, displayZoneProp, accountTzHint],
+  )
 
   return (
     <div className="relative min-h-[200px]">
@@ -65,7 +78,7 @@ export default function PerformanceRhythmSection({
       )}
       <RealtimeRhythmChart
         rows={hourlyRows}
-        tzMode={tzMode}
+        displayZone={displayZone}
         accountTzHint={accountTzHint}
         selectedClient={selectedClient}
         dateRange={dateRange}
