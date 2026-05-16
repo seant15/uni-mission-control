@@ -87,16 +87,17 @@ function addRow(b: Bucket, r: HourlyRow) {
   b.impressions += Number(r.impressions) || 0
 }
 
-function bucketToMetrics(b: Bucket, divisor: number) {
+function bucketToMetrics(b: Bucket, divisor: number, roasScale = 1) {
   const n = Math.max(1, divisor)
+  const slotRoas = b.cost > 0 ? b.revenue / b.cost : 0
   return {
     cost: b.cost / n,
     revenue: b.revenue / n,
     conversions: b.conversions / n,
     clicks: b.clicks / n,
     impressions: b.impressions / n,
-    // Ratio metrics: always from bucket totals (not average of daily ratios).
-    roas: b.cost > 0 ? b.revenue / b.cost : 0,
+    // Slot ROAS from hourly buckets; scale to daily KPI when hourly warehouse overstates revenue.
+    roas: slotRoas > 0 ? slotRoas * roasScale : 0,
     cpa: b.conversions > 0 ? b.cost / b.conversions : 0,
     ctr: b.impressions > 0 ? (b.clicks / b.impressions) * 100 : 0,
   }
@@ -152,6 +153,12 @@ export default function RealtimeRhythmChart({
   const periodRoasSource =
     periodRoasKpi != null && periodRoasKpi > 0 ? 'daily paid-ads sync (KPI)' : 'hourly warehouse'
 
+  const roasDisplayScale = useMemo(() => {
+    if (periodRoasKpi == null || periodRoasKpi <= 0 || periodRoasHourly <= 0) return 1
+    if (periodRoasHourly / periodRoasKpi > 1.15) return periodRoasKpi / periodRoasHourly
+    return 1
+  }, [periodRoasKpi, periodRoasHourly])
+
   const chartData = useMemo(() => {
     const filtered = rows.filter(r => {
       if (!dateRange.start || !dateRange.end) return true
@@ -170,7 +177,7 @@ export default function RealtimeRhythmChart({
       }
       return buckets.map((b, h) => ({
         label: `${String(h).padStart(2, '0')}:00`,
-        ...bucketToMetrics(b, daySets[h].size),
+        ...bucketToMetrics(b, daySets[h].size, roasDisplayScale),
       }))
     }
 
@@ -185,9 +192,9 @@ export default function RealtimeRhythmChart({
     }
     return buckets.map((b, i) => ({
       label: WEEKDAY_LABELS[i],
-      ...bucketToMetrics(b, weekdayDaySets[i].size),
+      ...bucketToMetrics(b, weekdayDaySets[i].size, roasDisplayScale),
     }))
-  }, [rows, mode, dateRange, displayZone])
+  }, [rows, mode, dateRange, displayZone, roasDisplayScale])
 
   const toggleMetric = (m: RhythmMetric) => {
     setSelectedMetrics(prev => {
@@ -223,16 +230,14 @@ export default function RealtimeRhythmChart({
             Period ROAS ({periodRoasSource}):{' '}
             <span className="font-semibold text-stone-700">{periodRoas.toFixed(2)}x</span> — dashed line matches the
             KPI above when on Heated View. Each point is slot ROAS (revenue ÷ spend for that hour or weekday bucket);
-            low-spend slots often look higher than the period average.
-            {periodRoasKpi != null &&
-              periodRoasHourly > 0 &&
-              Math.abs(periodRoasKpi - periodRoasHourly) / periodRoasKpi > 0.15 && (
-                <span>
-                  {' '}
-                  Hourly rollup totals differ from daily sync ({periodRoasHourly.toFixed(2)}x hourly sum) — use KPI /
-                  daily chart for official period ROAS.
-                </span>
-              )}
+            low-spend slots can look higher than the period average.
+            {roasDisplayScale < 1 && (
+              <span>
+                {' '}
+                Slot curve scaled to daily KPI (hourly warehouse summed to {periodRoasHourly.toFixed(2)}x vs{' '}
+                {periodRoas.toFixed(2)}x daily).
+              </span>
+            )}
           </p>
         )}
         {!selectedMetrics.has('roas') && <p className="mb-3" />}

@@ -340,7 +340,7 @@ export default function MarketingOverview({
       return 'No Shopify daily rows for this client/range. Run sync_shopify_data.py (7+ day backfill) and confirm clients.shopify_store_url + token.'
     }
     if (shopifySplit.shopifyReturns <= 0 && shopifySplit.shopifyReal > 0) {
-      return 'Refunds are $0 in shopify_daily_performance.refund_amount for this range (orders may have no returns, or sync needs refresh).'
+      return 'Returns are $0 in shopify_daily_performance for this range. Refunds are attributed by refund date (not order date) — run sync_shopify_data.py --backfill-days 30 on the sync host.'
     }
     return null
   }, [businessType, shopifyDailyRows.length, shopifySplit.shopifyReturns, shopifySplit.shopifyReal])
@@ -355,14 +355,22 @@ export default function MarketingOverview({
     enabled: Boolean(showAgencyExtras && user?.id),
   })
   const resolvedKpiLayout = useMemo(() => normalizeAgencyKpiLayout(kpiRow?.agency_kpi_cards), [kpiRow])
-  const agencyKpiVisibleIds = useMemo(
-    () =>
-      resolvedKpiLayout.order.filter(
-        id =>
-          !resolvedKpiLayout.hidden[id] && cardAppliesToBusiness(id, businessType),
-      ),
-    [resolvedKpiLayout, businessType],
-  )
+  const agencyKpiVisibleIds = useMemo(() => {
+    const visible = resolvedKpiLayout.order.filter(
+      id => !resolvedKpiLayout.hidden[id] && cardAppliesToBusiness(id, businessType),
+    )
+    if (showAgencyExtras && businessType === 'ecommerce') {
+      const shopifyCards: AgencyKpiCardId[] = [
+        'ecom_shopify_real',
+        'ecom_shopify_returns',
+        'ecom_after_return',
+      ]
+      for (const id of shopifyCards) {
+        if (!resolvedKpiLayout.hidden[id] && !visible.includes(id)) visible.push(id)
+      }
+    }
+    return visible
+  }, [resolvedKpiLayout, businessType, showAgencyExtras])
 
   useEffect(() => {
     if (kpiEditorOpen) {
