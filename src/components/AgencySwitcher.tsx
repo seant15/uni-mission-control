@@ -6,7 +6,16 @@ import { useAgency } from '../contexts/AgencyContext'
  * Super-admin: switch agency container (UNI vs Demo). Locks data scope for clients, performance, alerts.
  */
 export default function AgencySwitcher({ collapsed }: { collapsed?: boolean }) {
-  const { agencies, currentAgencyId, currentAgency, setCurrentAgencyId, canSwitchAgency, loading } = useAgency()
+  const {
+    agencies,
+    currentAgencyId,
+    currentAgency,
+    setCurrentAgencyId,
+    canSwitchAgency,
+    loading,
+    agenciesError,
+    agenciesErrorMessage,
+  } = useAgency()
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
@@ -79,9 +88,15 @@ export default function AgencySwitcher({ collapsed }: { collapsed?: boolean }) {
                 </button>
               </li>
             ))}
-            {agencies.length === 0 && !loading && (
-              <li className="px-2 py-2 text-[10px] text-amber-200/90 leading-snug">
-                Run migration 20260517120000_agencies_and_scoping.sql in Supabase to enable agency switching.
+            {agenciesError && (
+              <li className="px-2 py-2 text-[10px] text-red-800 leading-snug">
+                Cannot load agencies. Apply migration 20260517160000_agencies_rls.sql (and 20260517120000 if missing).
+                {agenciesErrorMessage ? ` (${agenciesErrorMessage.slice(0, 80)})` : ''}
+              </li>
+            )}
+            {!agenciesError && agencies.length === 0 && !loading && (
+              <li className="px-2 py-2 text-[10px] text-amber-900 leading-snug">
+                No agencies in database. Add rows to public.agencies (uni, demo, …) in Supabase.
               </li>
             )}
           </ul>

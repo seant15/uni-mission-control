@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
   Users, Plus, ChevronDown, ChevronUp,
@@ -177,12 +177,13 @@ function ClientAccessRow({ client, grant, onChange }: ClientRowProps) {
 
 interface UserCardProps {
   user: AppUserWithAccess
-  clients: { id: string; name: string }[]
+  clients: { id: string; name: string; agency_id?: string | null }[]
+  agencies: { id: string; name: string; slug: string }[]
   currentAdminId: string
   onSaved: () => void
 }
 
-function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
+function UserCard({ user, clients, agencies, currentAdminId, onSaved }: UserCardProps) {
   useAuth()
   const [expanded, setExpanded] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -201,8 +202,19 @@ function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
   const [isActive, setIsActive] = useState(user.is_active)
   const [notes, setNotes] = useState(user.notes ?? '')
   const [primaryClientId, setPrimaryClientId] = useState(user.primary_client_id ?? '')
+  const [agencyId, setAgencyId] = useState(user.agency_id ?? '')
+  useEffect(() => {
+    setAgencyId(user.agency_id ?? '')
+  }, [user.agency_id])
 
-  // Grants: keyed by client_id
+  const effectiveAgencyDb = agencyId || null
+
+  const scopedClients = useMemo(() => {
+    const narrow = role === 'team_member' || role === 'client_user'
+    if (!narrow || !effectiveAgencyDb) return clients
+    return clients.filter(c => !c.agency_id || c.agency_id === effectiveAgencyDb)
+  }, [clients, role, effectiveAgencyDb])
+
   const [grants, setGrants] = useState<Record<string, UserClientAccess | null>>(() => {
     const map: Record<string, UserClientAccess | null> = {}
     user.client_access.forEach(g => { map[g.client_id] = g })
@@ -239,6 +251,7 @@ function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
       is_active: isActive,
       notes: notes || null,
       primary_client_id: role === 'client_user' ? (primaryClientId || null) : null,
+      agency_id: effectiveAgencyDb,
     }
     const ok1 = await updateUser(user.id, userUpdates)
 
@@ -303,12 +316,12 @@ function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
         <div className="flex items-center gap-3 flex-shrink-0">
           {isTeamMember && (
             <span className="text-xs text-gray-400">
-              {assignedCount} / {clients.length} clients
+              {assignedCount} / {scopedClients.length} clients (scoped)
             </span>
           )}
           {isClientUser && user.primary_client_id && (
             <span className="text-xs text-gray-400">
-              {clients.find(c => c.id === user.primary_client_id)?.name ?? 'Unknown client'}
+              {scopedClients.find(c => c.id === user.primary_client_id)?.name ?? clients.find(c => c.id === user.primary_client_id)?.name ?? 'Unknown client'}
             </span>
           )}
           {expanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
@@ -343,6 +356,25 @@ function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
             </div>
           </div>
 
+          <div className="max-w-md">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Agency (data scope)</label>
+            <select
+              value={agencyId}
+              onChange={e => setAgencyId(e.target.value)}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="">Not set — all clients visible for assignment</option>
+              {agencies.map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.name} ({a.slug})
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              For team members and client users, suggested client list is limited to this agency (plus clients with no agency yet).
+            </p>
+          </div>
+
           {/* client_user: pick one client */}
           {isClientUser && (
             <div>
@@ -353,7 +385,7 @@ function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="">— Select a client —</option>
-                {clients.map(c => (
+                {scopedClients.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
@@ -370,7 +402,7 @@ function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
                   <button
                     onClick={() => {
                       const all: Record<string, UserClientAccess> = {}
-                      clients.forEach(c => {
+                      scopedClients.forEach(c => {
                         all[c.id] = grants[c.id] ?? {
                           id: '', user_id: '', client_id: c.id,
                           access_level: 'viewer', granted_by: null, granted_at: new Date().toISOString(),
@@ -393,7 +425,7 @@ function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
                 </div>
               </div>
               <div className="space-y-2">
-                {clients.map(c => (
+                {scopedClients.map(c => (
                   <ClientAccessRow
                     key={c.id}
                     client={c}
@@ -509,12 +541,14 @@ function UserCard({ user, clients, currentAdminId, onSaved }: UserCardProps) {
 export default function UserManagement() {
   const { appUser } = useAuth()
   const [users, setUsers] = useState<AppUserWithAccess[]>([])
-  const [clients, setClients] = useState<{ id: string; name: string }[]>([])
+  const [clients, setClients] = useState<{ id: string; name: string; agency_id?: string | null }[]>([])
+  const [agencies, setAgencies] = useState<{ id: string; name: string; slug: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [newName, setNewName] = useState('')
   const [newRole, setNewRole] = useState<AppRole>('team_member')
+  const [newAgencyId, setNewAgencyId] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState('')
 
@@ -522,12 +556,14 @@ export default function UserManagement() {
 
   async function loadData() {
     setLoading(true)
-    const [usersData, clientsRes] = await Promise.all([
+    const [usersData, clientsRes, agenciesRes] = await Promise.all([
       getAllUsersWithAccess(),
-      supabase.from('clients').select('id, name').in('status', [...ACTIVE_CLIENT_STATUSES]).order('name'),
+      supabase.from('clients').select('id, name, agency_id').in('status', [...ACTIVE_CLIENT_STATUSES]).order('name'),
+      supabase.from('agencies').select('id, name, slug').order('name'),
     ])
     setUsers(usersData)
     setClients(clientsRes.data ?? [])
+    setAgencies(agenciesRes.data ?? [])
     setLoading(false)
   }
 
@@ -537,7 +573,7 @@ export default function UserManagement() {
     if (!newEmail || !newName) { setAddError('Email and name are required.'); return }
     setAdding(true)
     setAddError('')
-    const created = await createUser(newEmail.trim().toLowerCase(), newName.trim(), newRole)
+    const created = await createUser(newEmail.trim().toLowerCase(), newName.trim(), newRole, undefined, newAgencyId || null)
     setAdding(false)
     if (!created) {
       setAddError('Failed to create user. Email may already exist.')
@@ -546,6 +582,7 @@ export default function UserManagement() {
     setNewEmail('')
     setNewName('')
     setNewRole('team_member')
+    setNewAgencyId('')
     setShowAddForm(false)
     loadData()
   }
@@ -623,7 +660,7 @@ export default function UserManagement() {
       {showAddForm && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
           <h3 className="text-sm font-semibold text-blue-800">New User</h3>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <input
               placeholder="Email address"
               value={newEmail}
@@ -644,6 +681,16 @@ export default function UserManagement() {
               <option value="team_member">Team Member</option>
               <option value="client_user">Client</option>
               <option value="super_admin">Super Admin</option>
+            </select>
+            <select
+              value={newAgencyId}
+              onChange={e => setNewAgencyId(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="">Agency (optional)</option>
+              {agencies.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
             </select>
           </div>
           {addError && (
@@ -684,6 +731,7 @@ export default function UserManagement() {
               key={u.id}
               user={u}
               clients={clients}
+              agencies={agencies}
               currentAdminId={CURRENT_ADMIN_ID}
               onSaved={loadData}
             />
@@ -710,6 +758,7 @@ export default function UserManagement() {
                 key={u.id}
                 user={u}
                 clients={clients}
+                agencies={agencies}
                 currentAdminId={CURRENT_ADMIN_ID}
                 onSaved={loadData}
               />

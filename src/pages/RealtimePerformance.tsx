@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Activity, ChevronDown, TrendingUp, TrendingDown,
@@ -9,6 +9,8 @@ import type { HourWindow } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
 import PlatformBadge from '../components/PlatformBadge'
+import ResizableColgroup from '../components/ResizableColgroup'
+import { useResizableColumns } from '../hooks/useResizableColumns'
 
 // Timezone display options
 type TzMode = 'utc' | 'browser' | 'account'
@@ -126,6 +128,34 @@ function AccountIdCell({ id }: { id: string }) {
   )
 }
 
+function RtResizeTh({
+  id,
+  widths,
+  startResize,
+  align = 'left',
+  children,
+}: {
+  id: string
+  widths: Record<string, number>
+  startResize: (colId: string, e: ReactMouseEvent) => void
+  align?: 'left' | 'right'
+  children: ReactNode
+}) {
+  return (
+    <th
+      style={{ width: widths[id], minWidth: widths[id] }}
+      className={`relative px-4 py-3 text-xs font-medium text-gray-500 ${align === 'right' ? 'text-right' : 'text-left'} border-b border-gray-200`}
+    >
+      <span className={align === 'right' ? 'pr-2 inline-block' : ''}>{children}</span>
+      <div
+        aria-hidden
+        className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-[var(--brand-600)]/25 z-10"
+        onMouseDown={e => startResize(id, e)}
+      />
+    </th>
+  )
+}
+
 type RTSortField = 'spend' | 'conversions' | 'roas' | 'client_name'
 type RTSortDir = 'asc' | 'desc'
 
@@ -137,6 +167,7 @@ export default function RealtimePerformance() {
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [lastRefreshed, setLastRefreshed] = useState(new Date())
   const [sortField, setSortField] = useState<RTSortField>('spend')
+  const [collapsedClients, setCollapsedClients] = useState<Set<string>>(() => new Set())
   const [sortDir, setSortDir] = useState<RTSortDir>('desc')
   const [tzMode, setTzMode] = useState<TzMode>('utc')
   const [hourlySlot, setHourlySlot] = useState(() => Math.floor(Date.now() / 300_000))
@@ -290,6 +321,18 @@ export default function RealtimePerformance() {
       bv = b.cur.cost > 0 ? b.cur.revenue / b.cur.cost : 0
     }
     return sortDir === 'asc' ? av - bv : bv - av
+  })
+
+  const { widths: rtColW, startResize: rtColResize } = useResizableColumns('rt-client-compare-v1', {
+    account: 132,
+    platform: 92,
+    client: 120,
+    spend: 84,
+    spendVs: 72,
+    conv: 72,
+    convVs: 72,
+    roas: 72,
+    roasVs: 72,
   })
 
   const windowBoundsLabel = useMemo(() => {
@@ -509,34 +552,48 @@ export default function RealtimePerformance() {
                 Per-client comparison — Current {windowHours}h vs Previous {windowHours}h
               </h3>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm table-fixed">
+                  <ResizableColgroup
+                    cols={['account', 'platform', 'client', 'spend', 'spendVs', 'conv', 'convVs', 'roas', 'roasVs']}
+                    widths={rtColW}
+                  />
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Account</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Platform</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">
-                        <button onClick={() => handleSort('client_name')} className="flex items-center gap-1 hover:text-gray-800">
+                      <RtResizeTh id="account" widths={rtColW} startResize={rtColResize}>
+                        Account
+                      </RtResizeTh>
+                      <RtResizeTh id="platform" widths={rtColW} startResize={rtColResize}>
+                        Platform
+                      </RtResizeTh>
+                      <RtResizeTh id="client" widths={rtColW} startResize={rtColResize}>
+                        <button type="button" onClick={() => handleSort('client_name')} className="flex items-center gap-1 hover:text-gray-800">
                           Client <SortIcon field="client_name" />
                         </button>
-                      </th>
-                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">
-                        <button onClick={() => handleSort('spend')} className="flex items-center gap-1 ml-auto hover:text-gray-800">
+                      </RtResizeTh>
+                      <RtResizeTh id="spend" align="right" widths={rtColW} startResize={rtColResize}>
+                        <button type="button" onClick={() => handleSort('spend')} className="flex items-center gap-1 ml-auto hover:text-gray-800 w-full justify-end pr-1">
                           Spend <SortIcon field="spend" />
                         </button>
-                      </th>
-                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">vs Prev</th>
-                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">
-                        <button onClick={() => handleSort('conversions')} className="flex items-center gap-1 ml-auto hover:text-gray-800">
+                      </RtResizeTh>
+                      <RtResizeTh id="spendVs" align="right" widths={rtColW} startResize={rtColResize}>
+                        vs Prev
+                      </RtResizeTh>
+                      <RtResizeTh id="conv" align="right" widths={rtColW} startResize={rtColResize}>
+                        <button type="button" onClick={() => handleSort('conversions')} className="flex items-center gap-1 ml-auto hover:text-gray-800 w-full justify-end pr-1">
                           Conv. <SortIcon field="conversions" />
                         </button>
-                      </th>
-                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">vs Prev</th>
-                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">
-                        <button onClick={() => handleSort('roas')} className="flex items-center gap-1 ml-auto hover:text-gray-800">
+                      </RtResizeTh>
+                      <RtResizeTh id="convVs" align="right" widths={rtColW} startResize={rtColResize}>
+                        vs Prev
+                      </RtResizeTh>
+                      <RtResizeTh id="roas" align="right" widths={rtColW} startResize={rtColResize}>
+                        <button type="button" onClick={() => handleSort('roas')} className="flex items-center gap-1 ml-auto hover:text-gray-800 w-full justify-end pr-1">
                           ROAS <SortIcon field="roas" />
                         </button>
-                      </th>
-                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">vs Prev</th>
+                      </RtResizeTh>
+                      <RtResizeTh id="roasVs" align="right" widths={rtColW} startResize={rtColResize}>
+                        vs Prev
+                      </RtResizeTh>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -544,16 +601,34 @@ export default function RealtimePerformance() {
                       const curRoasG = group.cur.cost > 0 ? group.cur.revenue / group.cur.cost : 0
                       const prevRoasG = group.prev.cost > 0 ? group.prev.revenue / group.prev.cost : 0
                       const sym = clientCurrencyMap.get(group.client_id) || '$'
+                      const isCollapsed = collapsedClients.has(group.client_id)
+                      const toggleClient = () => {
+                        setCollapsedClients(prev => {
+                          const next = new Set(prev)
+                          if (next.has(group.client_id)) next.delete(group.client_id)
+                          else next.add(group.client_id)
+                          return next
+                        })
+                      }
                       const clientRow = (
-                        <tr key={`${group.client_id}-client`} className="bg-slate-50/90">
-                          <td className="px-4 py-2 text-xs text-slate-500" colSpan={2}>Client</td>
-                          <td className="px-4 py-2 font-semibold text-gray-900">{group.client_name}</td>
-                          <td className="px-4 py-2 text-right font-semibold">{sym}{group.cur.cost.toFixed(2)}</td>
-                          <td className="px-4 py-2 text-right"><PctBadge change={pctChange(group.cur.cost, group.prev.cost)} /></td>
-                          <td className="px-4 py-2 text-right font-semibold">{group.cur.conversions}</td>
-                          <td className="px-4 py-2 text-right"><PctBadge change={pctChange(group.cur.conversions, group.prev.conversions)} /></td>
-                          <td className="px-4 py-2 text-right font-semibold">{curRoasG > 0 ? `${curRoasG.toFixed(2)}x` : '—'}</td>
-                          <td className="px-4 py-2 text-right">
+                        <tr
+                          key={`${group.client_id}-client`}
+                          className="bg-slate-50/90 cursor-pointer hover:bg-slate-100/90"
+                          onClick={toggleClient}
+                        >
+                          <td className="px-4 py-2 text-xs text-slate-500" colSpan={2}>
+                            <span className="inline-flex items-center gap-1">
+                              {isCollapsed ? <ChevronDown size={14} className="rotate-[-90deg]" /> : <ChevronDown size={14} />}
+                              Client
+                            </span>
+                          </td>
+                          <td style={{ width: rtColW.client }} className="px-4 py-2 font-semibold text-gray-900">{group.client_name}</td>
+                          <td style={{ width: rtColW.spend }} className="px-4 py-2 text-right font-semibold">{sym}{group.cur.cost.toFixed(2)}</td>
+                          <td style={{ width: rtColW.spendVs }} className="px-4 py-2 text-right"><PctBadge change={pctChange(group.cur.cost, group.prev.cost)} /></td>
+                          <td style={{ width: rtColW.conv }} className="px-4 py-2 text-right font-semibold">{group.cur.conversions}</td>
+                          <td style={{ width: rtColW.convVs }} className="px-4 py-2 text-right"><PctBadge change={pctChange(group.cur.conversions, group.prev.conversions)} /></td>
+                          <td style={{ width: rtColW.roas }} className="px-4 py-2 text-right font-semibold">{curRoasG > 0 ? `${curRoasG.toFixed(2)}x` : '—'}</td>
+                          <td style={{ width: rtColW.roasVs }} className="px-4 py-2 text-right">
                             {curRoasG > 0 || prevRoasG > 0 ? <PctBadge change={pctChange(curRoasG, prevRoasG)} /> : '—'}
                           </td>
                         </tr>
@@ -565,9 +640,9 @@ export default function RealtimePerformance() {
                       const prevRoasAcc = acc.prev.cost > 0 ? acc.prev.revenue / acc.prev.cost : 0
                       return (
                         <tr key={acc.account_id + acc.platform} className="hover:bg-gray-50/80">
-                          <td className="px-4 py-2 pl-8"><AccountIdCell id={acc.account_id} /></td>
-                          <td className="px-4 py-2"><PlatformBadge platform={acc.platform} /></td>
-                          <td className="px-4 py-2 text-xs text-gray-500">
+                          <td style={{ width: rtColW.account }} className="px-4 py-2 pl-8"><AccountIdCell id={acc.account_id} /></td>
+                          <td style={{ width: rtColW.platform }} className="px-4 py-2"><PlatformBadge platform={acc.platform} /></td>
+                          <td style={{ width: rtColW.client }} className="px-4 py-2 text-xs text-gray-500 truncate">
                             {acc.account_tz && acc.account_tz !== 'advertiser_tz' ? (
                               <span className="inline-flex items-center gap-0.5" title={acc.account_tz}>
                                 <MapPin size={10} className="shrink-0 text-gray-400" aria-hidden />
@@ -577,18 +652,18 @@ export default function RealtimePerformance() {
                               <span className="text-gray-400">-</span>
                             )}
                           </td>
-                          <td className="px-4 py-2 text-right">
+                          <td style={{ width: rtColW.spend }} className="px-4 py-2 text-right">
                             {clientCurrencyMap.get(acc.client_id) || '$'}{acc.cur.cost.toFixed(2)}
                           </td>
-                          <td className="px-4 py-2 text-right">
+                          <td style={{ width: rtColW.spendVs }} className="px-4 py-2 text-right">
                             <PctBadge change={pctChange(acc.cur.cost, acc.prev.cost)} />
                           </td>
-                          <td className="px-4 py-2 text-right">{acc.cur.conversions}</td>
-                          <td className="px-4 py-2 text-right">
+                          <td style={{ width: rtColW.conv }} className="px-4 py-2 text-right">{acc.cur.conversions}</td>
+                          <td style={{ width: rtColW.convVs }} className="px-4 py-2 text-right">
                             <PctBadge change={pctChange(acc.cur.conversions, acc.prev.conversions)} />
                           </td>
-                          <td className="px-4 py-2 text-right">{curRoasAcc > 0 ? `${curRoasAcc.toFixed(2)}x` : '-'}</td>
-                          <td className="px-4 py-2 text-right">
+                          <td style={{ width: rtColW.roas }} className="px-4 py-2 text-right">{curRoasAcc > 0 ? `${curRoasAcc.toFixed(2)}x` : '-'}</td>
+                          <td style={{ width: rtColW.roasVs }} className="px-4 py-2 text-right">
                             {curRoasAcc > 0 || prevRoasAcc > 0
                               ? <PctBadge change={pctChange(curRoasAcc, prevRoasAcc)} />
                               : <span className="text-gray-400">-</span>
@@ -597,7 +672,7 @@ export default function RealtimePerformance() {
                         </tr>
                         )
                       })
-                      return [clientRow, ...accountRows]
+                      return isCollapsed ? [clientRow] : [clientRow, ...accountRows]
                     })}
                   </tbody>
                 </table>

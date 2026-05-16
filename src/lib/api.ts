@@ -989,6 +989,19 @@ export const db = {
         return true
     },
 
+    /** Merge patch into existing row so omitted columns stay intact server-side expectation (client sends full merged row). */
+    async mergeDashboardSettings(userId: string, patch: Record<string, unknown>) {
+        const existing = await this.getSettings(userId)
+        const merged: Record<string, unknown> =
+            existing && typeof existing === 'object' && existing !== null
+                ? { ...(existing as Record<string, unknown>), ...patch }
+                : { ...patch }
+        merged.user_id = userId
+        delete merged.updated_at
+        await this.saveSettings(userId, merged as any)
+        return true
+    },
+
     // ============================================================
     // Feedback System
     // ============================================================

@@ -80,7 +80,8 @@ export async function createUser(
   email: string,
   displayName: string,
   role: AppUser['role'],
-  primaryClientId?: string
+  primaryClientId?: string,
+  agencyId?: string | null,
 ): Promise<AppUser | null> {
   const { data, error } = await supabase
     .from('app_users')
@@ -89,6 +90,7 @@ export async function createUser(
       display_name: displayName,
       role,
       primary_client_id: primaryClientId ?? null,
+      agency_id: agencyId ?? null,
     })
     .select()
     .single()
@@ -99,7 +101,7 @@ export async function createUser(
 /** Update a user's role or active status */
 export async function updateUser(
   userId: string,
-  updates: Partial<Pick<AppUser, 'display_name' | 'role' | 'is_active' | 'notes' | 'primary_client_id'>>
+  updates: Partial<Pick<AppUser, 'display_name' | 'role' | 'is_active' | 'notes' | 'primary_client_id' | 'agency_id'>>
 ): Promise<boolean> {
   const { error } = await supabase
     .from('app_users')

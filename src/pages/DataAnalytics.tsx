@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -12,6 +12,9 @@ import OverviewAiNotesRail from '../components/OverviewAiNotesRail'
 import PlatformBadge from '../components/PlatformBadge'
 import { db } from '../lib/api'
 import PerformanceRhythmSection from '../components/PerformanceRhythmSection'
+import ReportSectionHeader from '../components/ReportSectionHeader'
+import ResizableColgroup from '../components/ResizableColgroup'
+import { useResizableColumns } from '../hooks/useResizableColumns'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { useUiDensity } from '../contexts/UiDensityContext'
@@ -164,6 +167,34 @@ function PctBadge({ current, previous, invertTrend = false }: { current: number;
       <ArrowIcon size={10} />
       {Math.abs(pct).toFixed(1)}%
     </span>
+  )
+}
+
+function DailyDrillTh({
+  id,
+  children,
+  align = 'left',
+  widths,
+  startResize,
+}: {
+  id: string
+  children: ReactNode
+  align?: 'left' | 'right'
+  widths: Record<string, number>
+  startResize: (colId: string, e: ReactMouseEvent) => void
+}) {
+  return (
+    <th
+      style={{ width: widths[id], minWidth: widths[id], maxWidth: widths[id] }}
+      className={`relative px-2 py-1.5 ${align === 'right' ? 'text-right' : 'text-left'} font-medium text-slate-500`}
+    >
+      <span className={align === 'right' ? 'pr-2' : 'pl-0'}>{children}</span>
+      <div
+        aria-hidden
+        className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 hover:bg-[var(--brand-600)]/30"
+        onMouseDown={e => startResize(id, e)}
+      />
+    </th>
   )
 }
 
@@ -550,6 +581,14 @@ export default function DataAnalytics({
       return String(a.platform).localeCompare(String(b.platform))
     })
   }, [performanceData, dailyDataWithMetrics, selectedPlatform, showPlatformInDailyDrill])
+
+  const { widths: ddColW, startResize: ddColResize } = useResizableColumns('heated-daily-drill-v1', {
+    date: 112,
+    platform: 94,
+    spend: 78,
+    revenue: 84,
+    conv: 64,
+  })
 
   // 7-day rolling avg
   const chartData = dailyDataWithMetrics.map((d, i) => {
@@ -962,9 +1001,28 @@ export default function DataAnalytics({
         )}
       </div>
 
+      {performanceData.length > 0 && dateRange.start && dateRange.end && (
+        <PerformanceRhythmSection
+          dateRange={dateRange}
+          selectedClient={selectedClient}
+          selectedPlatform={selectedPlatform}
+          scopedClientId={scopedClientId || undefined}
+        />
+      )}
+
+      {performanceData.length > 0 && dateRange.start && dateRange.end && (
+        <AgencyInsightPies
+          dailyRows={performanceData}
+          dateRange={dateRange}
+          selectedClient={selectedClient}
+          selectedPlatform={selectedPlatform}
+        />
+      )}
+
       {performanceData.length > 0 && (
         <div className={shellCard}>
-          <p className="text-xs text-stone-500 mb-2">Switch report. Tabs with no rows for the current filters are disabled.</p>
+          <ReportSectionHeader sectionLabel="Heated drill" title="Campaign & keyword breakdowns" />
+          <p className="text-xs text-stone-500 mb-2 mt-1">Tabs with no rows for the current filters are disabled.</p>
           <div className="flex flex-wrap gap-1.5 mb-3 items-center">
             {([
               { id: 'daily' as const, label: 'Daily breakdown', disabled: !canDailyTab },
@@ -994,32 +1052,42 @@ export default function DataAnalytics({
 
           {heatedDrillTab === 'daily' && canDailyTab && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">Daily breakdown — {dateRange.start} → {dateRange.end}</h3>
+              <div className="mb-3">
+                <ReportSectionHeader sectionLabel="Tables" title={`Daily breakdown — ${dateRange.start} → ${dateRange.end}`} />
+              </div>
               <div className="overflow-x-auto max-h-[360px] overflow-y-auto rounded-md border border-slate-100">
-                <table className="w-full text-xs tabular-nums">
+                <table className="w-full table-fixed text-xs tabular-nums">
+                  <ResizableColgroup
+                    cols={
+                      showPlatformInDailyDrill
+                        ? ['date', 'platform', 'spend', 'revenue', 'conv']
+                        : ['date', 'spend', 'revenue', 'conv']
+                    }
+                    widths={ddColW}
+                  />
                   <thead className="bg-slate-50 sticky top-0">
                     <tr>
-                      <th className="px-2 py-1.5 text-left font-medium text-slate-500">Date</th>
+                      <DailyDrillTh id="date" widths={ddColW} startResize={ddColResize}>Date</DailyDrillTh>
                       {showPlatformInDailyDrill && (
-                        <th className="px-2 py-1.5 text-left font-medium text-slate-500">Platform</th>
+                        <DailyDrillTh id="platform" widths={ddColW} startResize={ddColResize}>Platform</DailyDrillTh>
                       )}
-                      <th className="px-2 py-1.5 text-right font-medium text-slate-500">Spend</th>
-                      <th className="px-2 py-1.5 text-right font-medium text-slate-500">Revenue</th>
-                      <th className="px-2 py-1.5 text-right font-medium text-slate-500">Conv.</th>
+                      <DailyDrillTh id="spend" align="right" widths={ddColW} startResize={ddColResize}>Spend</DailyDrillTh>
+                      <DailyDrillTh id="revenue" align="right" widths={ddColW} startResize={ddColResize}>Revenue</DailyDrillTh>
+                      <DailyDrillTh id="conv" align="right" widths={ddColW} startResize={ddColResize}>Conv.</DailyDrillTh>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {dailyDrillTableRows.map(d => (
                       <tr key={`${d.date}-${d.platform ?? ''}`} className="text-slate-800 hover:bg-slate-50/80">
-                        <td className="px-2 py-1 whitespace-nowrap font-medium">{d.date}</td>
+                        <td style={{ width: ddColW.date }} className="px-2 py-1 truncate whitespace-nowrap font-medium">{d.date}</td>
                         {showPlatformInDailyDrill && (
-                          <td className="px-2 py-1">
+                          <td style={{ width: ddColW.platform }} className="px-2 py-1 truncate">
                             <PlatformBadge platform={d.platformId || d.platform} />
                           </td>
                         )}
-                        <td className="px-2 py-1 text-right">{fmtDailyMoney(d.spend)}</td>
-                        <td className="px-2 py-1 text-right text-green-700">{fmtDailyMoney(d.revenue)}</td>
-                        <td className="px-2 py-1 text-right">{d.conversions.toLocaleString()}</td>
+                        <td style={{ width: ddColW.spend }} className="px-2 py-1 text-right">{fmtDailyMoney(d.spend)}</td>
+                        <td style={{ width: ddColW.revenue }} className="px-2 py-1 text-right text-green-700">{fmtDailyMoney(d.revenue)}</td>
+                        <td style={{ width: ddColW.conv }} className="px-2 py-1 text-right">{d.conversions.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1030,10 +1098,11 @@ export default function DataAnalytics({
 
           {heatedDrillTab === 'meta' && canMetaTab && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                <BookOpen className="text-[var(--brand-600)]" size={18} aria-hidden />
-                Meta campaigns <span className="text-xs font-normal text-gray-400">vs previous period</span>
-              </h3>
+              <ReportSectionHeader
+                sectionLabel="Meta"
+                title="Campaign performance vs previous period"
+                badge={<BookOpen className="text-[var(--brand-600)]" size={18} aria-hidden />}
+              />
               <div className={tableWrapMt}>
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
@@ -1119,7 +1188,7 @@ export default function DataAnalytics({
 
           {heatedDrillTab === 'google' && canGoogleTab && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">Google campaigns <span className="text-xs font-normal text-gray-400">vs previous period</span></h3>
+              <ReportSectionHeader sectionLabel="Google Ads" title="Campaign performance vs previous period" />
               <div className={tableWrapMt}>
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
@@ -1185,7 +1254,7 @@ export default function DataAnalytics({
 
           {heatedDrillTab === 'keywords' && canKwTab && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">Google keywords <span className="text-xs font-normal text-gray-400">vs previous period</span></h3>
+              <ReportSectionHeader sectionLabel="Google Ads" title="Keywords vs previous period" />
               <div className={tableWrapMt}>
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
@@ -1240,7 +1309,7 @@ export default function DataAnalytics({
 
           {heatedDrillTab === 'search' && canSearchTab && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">Google search terms <span className="text-xs font-normal text-gray-400">vs previous period</span></h3>
+              <ReportSectionHeader sectionLabel="Google Ads" title="Search terms vs previous period" />
               <div className={tableWrapMt}>
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
@@ -1297,7 +1366,7 @@ export default function DataAnalytics({
 
           {heatedDrillTab === 'adsets' && canAdsetsTab && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">Meta ad set performance</h3>
+              <ReportSectionHeader sectionLabel="Meta" title="Ad set performance" />
               <MetaAdSetPerformanceTable
                 compact
                 clientId={selectedClient}
@@ -1310,23 +1379,7 @@ export default function DataAnalytics({
         </div>
       )}
 
-      {performanceData.length > 0 && dateRange.start && dateRange.end && (
-        <PerformanceRhythmSection
-          dateRange={dateRange}
-          selectedClient={selectedClient}
-          selectedPlatform={selectedPlatform}
-          scopedClientId={scopedClientId || undefined}
-        />
-      )}
 
-      {performanceData.length > 0 && dateRange.start && dateRange.end && (
-        <AgencyInsightPies
-          dailyRows={performanceData}
-          dateRange={dateRange}
-          selectedClient={selectedClient}
-          selectedPlatform={selectedPlatform}
-        />
-      )}
     </div>
   )
 

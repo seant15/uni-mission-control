@@ -16,6 +16,8 @@ type AgencyContextValue = {
   setCurrentAgencyId: (id: string | null) => void
   canSwitchAgency: boolean
   loading: boolean
+  agenciesError: boolean
+  agenciesErrorMessage: string | null
 }
 
 const AgencyContext = createContext<AgencyContextValue | null>(null)
@@ -50,7 +52,7 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
   const role = normalizeRole(appUser?.role)
   const canSwitchAgency = role === 'super_admin'
 
-  const { data: agencies = [], isLoading } = useQuery({
+  const { data: agencies = [], isLoading, isError, error: agenciesError } = useQuery({
     queryKey: ['agencies'],
     queryFn: fetchAgencies,
     staleTime: 5 * 60_000,
@@ -98,8 +100,10 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
       setCurrentAgencyId,
       canSwitchAgency,
       loading: isLoading,
+      agenciesError: isError,
+      agenciesErrorMessage: isError ? (agenciesError as Error)?.message ?? 'Failed to load agencies' : null,
     }),
-    [agencies, effectiveAgencyId, currentAgency, setCurrentAgencyId, canSwitchAgency, isLoading]
+    [agencies, effectiveAgencyId, currentAgency, setCurrentAgencyId, canSwitchAgency, isLoading, isError, agenciesError]
   )
 
   return <AgencyContext.Provider value={value}>{children}</AgencyContext.Provider>

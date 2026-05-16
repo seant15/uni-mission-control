@@ -20,6 +20,7 @@ type DailyRow = {
 type InsightDim = 'platforms' | 'devices' | 'demographics' | 'demo_age' | 'demo_gender'
 type ViewMode = 'pie' | 'bar' | 'table'
 type MetricFocus = 'spend' | 'revenue' | 'both'
+type BarMetric = 'spend' | 'revenue' | 'roas' | 'ctr' | 'cpa'
 
 const CHART_COLORS = [
   'var(--uni-chart-1)',
@@ -71,7 +72,7 @@ function labelSliceValue(dim: InsightDim, raw: string) {
 function buildSegments(
   rows: Array<{ dimension_value?: string; platform?: string; cost?: number | null; revenue?: number | null }>,
   dim: InsightDim,
-  tagByPlatform: boolean,
+  opts: { tagByPlatform: boolean; mergePlatforms: boolean },
 ): SegmentRow[] {
   const map = new Map<string, { spend: number; revenue: number }>()
   for (const r of rows) {
@@ -80,7 +81,8 @@ function buildSegments(
       key = platformLabel((r.platform || 'unknown').toLowerCase())
     } else {
       const val = labelSliceValue(dim, r.dimension_value || 'unknown')
-      key = tagByPlatform && r.platform ? `${val} · ${platformLabel(r.platform)}` : val
+      const splitByPlatform = opts.tagByPlatform && !opts.mergePlatforms && r.platform
+      key = splitByPlatform ? `${val} · ${platformLabel(r.platform)}` : val
     }
     if (!map.has(key)) map.set(key, { spend: 0, revenue: 0 })
     const e = map.get(key)!
@@ -127,25 +129,38 @@ export default function AgencyInsightPies({
   const { currentAgencyId } = useAgency()
   const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
   const effectiveClient = scopedClientId || (selectedClient !== 'all' ? selectedClient : undefined)
-  const tagByPlatform = selectedPlatform === 'all'
-
-  const [activeDim, setActiveDim] = useState<InsightDim>('platforms')
+  const [selectedDims, setSelectedDims] = useState<Set<InsightDim>>(() => new Set(['platforms']))
   const [viewMode, setViewMode] = useState<ViewMode>('pie')
   const [metricFocus, setMetricFocus] = useState<MetricFocus>('both')
+  const [aggregateMode, setAggregateMode] = useState(true)
   const [hiddenSegments, setHiddenSegments] = useState<Set<string>>(new Set())
+  const [barMetrics, setBarMetrics] = useState<Set<BarMetric>>(() => new Set(['spend', 'revenue']))
+
+  const primaryBreakdownDim = useMemo((): Exclude<InsightDim, 'platforms'> | null => {
+    if (selectedDims.has('demo_age')) return 'demo_age'
+    if (selectedDims.has('demo_gender')) return 'demo_gender'
+    if (selectedDims.has('demographics')) return 'demographics'
+    if (selectedDims.has('devices')) return 'devices'
+    return null
+  }, [selectedDims])
+
+  const showPlatforms = selectedDims.has('platforms')
+  const tagByPlatform = showPlatforms && selectedPlatform === 'all' && !aggregateMode
+  const mergePlatforms = !showPlatforms || aggregateMode
 
   const platformSegments = useMemo(() => {
+    if (!showPlatforms) return []
     const shaped = dailyRows.map(r => ({ platform: r.platform ?? undefined, cost: r.cost, revenue: r.revenue }))
-    return buildSegments(shaped, 'platforms', false)
-  }, [dailyRows])
+    return buildSegments(shaped, 'platforms', { tagByPlatform: false, mergePlatforms: true })
+  }, [dailyRows, showPlatforms])
 
-  const breakdownEnabled = activeDim !== 'platforms'
-  const dbDimension = breakdownEnabled ? DIM_DB[activeDim] : null
+  const breakdownEnabled = primaryBreakdownDim !== null
+  const dbDimension = breakdownEnabled ? DIM_DB[primaryBreakdownDim] : null
 
   const { data: breakdownRows = [], isLoading: breakdownLoading } = useQuery({
     queryKey: [
       'perf-breakdown',
-      activeDim,
+      primaryBreakdownDim,
       dateRange.start,
       dateRange.end,
       selectedPlatform,
@@ -165,25 +180,39 @@ export default function AgencyInsightPies({
   })
 
   const allSegments = useMemo(() => {
-    if (activeDim === 'platforms') return platformSegments
-    if (breakdownLoading) return []
-    return buildSegments(breakdownRows, activeDim, tagByPlatform)
-  }, [activeDim, platformSegments, breakdownRows, breakdownLoading, tagByPlatform])
+    if (showPlatforms && !primaryBreakdownDim) return platformSegments
+    if (breakdownLoading || !primaryBreakdownDim) return platformSegments
+    return buildSegments(breakdownRows, primaryBreakdownDim, { tagByPlatform, mergePlatforms })
+  }, [showPlatforms, primaryBreakdownDim, platformSegments, breakdownRows, breakdownLoading, tagByPlatform, mergePlatforms])
 
   const visibleSegments = useMemo(() => {
     const top = allSegments.slice(0, 16)
     return top.filter(s => !hiddenSegments.has(s.name))
   }, [allSegments, hiddenSegments])
 
-  const titleByDim: Record<InsightDim, string> = {
-    platforms: 'Spend & revenue by platform',
-    devices: 'Spend & revenue by device',
-    demographics: 'Spend & revenue by demographic',
-    demo_age: 'Spend & revenue by age band',
-    demo_gender: 'Spend & revenue by gender',
-  }
+  const sectionTitle = useMemo(() => {
+    const parts: string[] = []
+    if (showPlatforms) parts.push('platform')
+    if (primaryBreakdownDim === 'demo_age') parts.push('age')
+    else if (primaryBreakdownDim === 'demo_gender') parts.push('gender')
+    else if (primaryBreakdownDim === 'devices') parts.push('device')
+    else if (primaryBreakdownDim === 'demographics') parts.push('demographic')
+    if (parts.length === 0) return 'Spend & revenue'
+    return `Spend & revenue by ${parts.join(' + ')}`
+  }, [showPlatforms, primaryBreakdownDim])
 
   const pillOrder: InsightDim[] = ['platforms', 'devices', 'demographics', 'demo_age', 'demo_gender']
+
+  const barData = useMemo(
+    () =>
+      visibleSegments.map(s => ({
+        ...s,
+        roas: s.spend > 0 ? s.revenue / s.spend : 0,
+        ctr: 0,
+        cpa: 0,
+      })),
+    [visibleSegments],
+  )
   const pieSpend = toPieData(visibleSegments, 'spend')
   const pieRev = toPieData(visibleSegments, 'revenue')
   const barHeight = Math.max(220, visibleSegments.length * 28)
@@ -197,18 +226,49 @@ export default function AgencyInsightPies({
     })
   }
 
+  const toggleDim = (dim: InsightDim) => {
+    setSelectedDims(prev => {
+      const next = new Set(prev)
+      if (next.has(dim)) {
+        if (next.size > 1) next.delete(dim)
+      } else {
+        next.add(dim)
+      }
+      return next
+    })
+    setHiddenSegments(new Set())
+  }
+
+  const toggleBarMetric = (m: BarMetric) => {
+    setBarMetrics(prev => {
+      const next = new Set(prev)
+      if (next.has(m)) {
+        if (next.size > 1) next.delete(m)
+      } else {
+        next.add(m)
+      }
+      return next
+    })
+  }
+
+  const helpText = primaryBreakdownDim
+    ? DIM_HELP[primaryBreakdownDim]
+    : showPlatforms
+      ? DIM_HELP.platforms
+      : 'Select at least one dimension.'
+
   return (
     <div className="uni-card">
       <div className="uni-card-header flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="uni-section-label mb-2">Attribution</p>
-          <h3 className="uni-card-title">{titleByDim[activeDim]}</h3>
+          <h3 className="uni-card-title">{sectionTitle}</h3>
         </div>
         <span className="uni-badge-live">Warehouse · live</span>
       </div>
 
       <div className="uni-card-body">
-        <p className="uni-panel-muted mb-3">{DIM_HELP[activeDim]}</p>
+        <p className="uni-panel-muted mb-3">{helpText}</p>
 
         {breakdownEnabled && !breakdownLoading && breakdownRows.length === 0 && (
           <p className="uni-callout-warn mb-3">
@@ -219,18 +279,15 @@ export default function AgencyInsightPies({
 
         <div className="grid grid-cols-1 lg:grid-cols-[10.5rem_minmax(0,1fr)] gap-4">
           <aside className="space-y-3 border-r border-[var(--uni-border)] pr-0 lg:pr-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">Dimension</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">Dimensions (multi)</p>
             <div className="flex flex-col gap-1">
               {pillOrder.map(dim => (
                 <button
                   key={dim}
                   type="button"
-                  onClick={() => {
-                    setActiveDim(dim)
-                    setHiddenSegments(new Set())
-                  }}
+                  onClick={() => toggleDim(dim)}
                   className={`text-left px-2 py-1.5 rounded-md text-xs font-medium border transition ${
-                    activeDim === dim
+                    selectedDims.has(dim)
                       ? 'bg-[var(--brand-600)] text-white border-transparent'
                       : 'border-stone-200 text-stone-700 hover:bg-stone-50'
                   }`}
@@ -239,6 +296,17 @@ export default function AgencyInsightPies({
                 </button>
               ))}
             </div>
+            {primaryBreakdownDim && (
+              <label className="flex items-center gap-2 text-xs text-stone-700 mt-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={aggregateMode}
+                  onChange={e => setAggregateMode(e.target.checked)}
+                  className="rounded"
+                />
+                Aggregate across platforms (e.g. 18–24 not split by Meta/Google)
+              </label>
+            )}
             <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500 pt-1">View</p>
             <div className="flex flex-col gap-1">
               {(['pie', 'bar', 'table'] as ViewMode[]).map(v => (
@@ -273,7 +341,7 @@ export default function AgencyInsightPies({
           </aside>
 
           <div className="min-w-0 space-y-3">
-            {breakdownLoading && activeDim !== 'platforms' ? (
+            {breakdownLoading && primaryBreakdownDim ? (
               <p className="text-sm text-stone-500 py-12 text-center">Loading breakdown…</p>
             ) : visibleSegments.length === 0 ? (
               <p className="text-sm text-stone-500 py-12 text-center">No data for this dimension.</p>
@@ -303,30 +371,37 @@ export default function AgencyInsightPies({
                 </table>
               </div>
             ) : viewMode === 'bar' ? (
-              <ResponsiveContainer width="100%" height={barHeight}>
-                <BarChart
-                  data={visibleSegments}
-                  layout="vertical"
-                  margin={{ left: 8, right: 16, top: 8, bottom: 8 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis type="number" tick={{ fontSize: 10 }} />
-                  <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 10 }} />
-                  <Tooltip
-                    formatter={(v: number, key: string) => [
-                      `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
-                      key === 'spend' ? 'Spend' : 'Revenue',
-                    ]}
-                  />
-                  <Legend />
-                  {(metricFocus === 'spend' || metricFocus === 'both') && (
-                    <Bar dataKey="spend" name="Spend" fill="var(--uni-chart-1)" radius={[0, 4, 4, 0]} />
-                  )}
-                  {(metricFocus === 'revenue' || metricFocus === 'both') && (
-                    <Bar dataKey="revenue" name="Revenue" fill="var(--uni-chart-3)" radius={[0, 4, 4, 0]} />
-                  )}
-                </BarChart>
-              </ResponsiveContainer>
+              <>
+                <p className="text-[10px] text-stone-500 mb-1">Bar metrics (multi)</p>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {(['spend', 'revenue', 'roas', 'ctr', 'cpa'] as BarMetric[]).map(m => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => toggleBarMetric(m)}
+                      className={`px-2 py-0.5 rounded-full text-[10px] border ${
+                        barMetrics.has(m) ? 'bg-stone-800 text-white border-stone-800' : 'bg-stone-100 text-stone-500'
+                      }`}
+                    >
+                      {m.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+                <ResponsiveContainer width="100%" height={barHeight}>
+                  <BarChart data={barData} layout="vertical" margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis type="number" tick={{ fontSize: 10 }} />
+                    <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Legend />
+                    {barMetrics.has('spend') && <Bar dataKey="spend" name="Spend" fill="var(--uni-chart-1)" radius={[0, 4, 4, 0]} />}
+                    {barMetrics.has('revenue') && <Bar dataKey="revenue" name="Revenue" fill="var(--uni-chart-3)" radius={[0, 4, 4, 0]} />}
+                    {barMetrics.has('roas') && <Bar dataKey="roas" name="ROAS" fill="#7c3aed" radius={[0, 4, 4, 0]} />}
+                    {barMetrics.has('ctr') && <Bar dataKey="ctr" name="CTR %" fill="#0891b2" radius={[0, 4, 4, 0]} />}
+                    {barMetrics.has('cpa') && <Bar dataKey="cpa" name="CPA" fill="#d97706" radius={[0, 4, 4, 0]} />}
+                  </BarChart>
+                </ResponsiveContainer>
+              </>
             ) : (
               <div className={`grid gap-4 ${metricFocus === 'both' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
                 {(metricFocus === 'spend' || metricFocus === 'both') && (

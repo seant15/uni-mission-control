@@ -1,11 +1,20 @@
 import { useMemo, useState } from 'react'
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
+import ReportSectionHeader from './ReportSectionHeader'
 import type { CalendarDateRange } from '../lib/dashboardDateRange'
 
-export type RhythmMode = 'hourly' | 'weekly'
-export type RhythmMetric = 'cost' | 'revenue' | 'conversions' | 'clicks' | 'impressions'
+export type RhythmMode = 'hourly' | 'weekday'
+export type RhythmMetric =
+  | 'cost'
+  | 'revenue'
+  | 'conversions'
+  | 'clicks'
+  | 'impressions'
+  | 'roas'
+  | 'cpa'
+  | 'ctr'
 
 const METRIC_LABELS: Record<RhythmMetric, string> = {
   cost: 'Spend',
@@ -13,7 +22,27 @@ const METRIC_LABELS: Record<RhythmMetric, string> = {
   conversions: 'Conversions',
   clicks: 'Clicks',
   impressions: 'Impressions',
+  roas: 'ROAS',
+  cpa: 'CPA',
+  ctr: 'CTR %',
 }
+
+const METRIC_COLORS: Record<RhythmMetric, string> = {
+  cost: 'var(--uni-chart-1)',
+  revenue: 'var(--uni-chart-3)',
+  conversions: 'var(--uni-chart-2)',
+  clicks: 'var(--uni-chart-4)',
+  impressions: 'var(--uni-chart-5)',
+  roas: '#7c3aed',
+  cpa: '#d97706',
+  ctr: '#0891b2',
+}
+
+const ALL_METRICS: RhythmMetric[] = [
+  'cost', 'revenue', 'conversions', 'clicks', 'impressions', 'roas', 'cpa', 'ctr',
+]
+
+const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function resolveZone(tzMode: 'utc' | 'browser' | 'account', accountTz?: string | null): string {
   if (tzMode === 'utc') return 'UTC'
@@ -25,52 +54,54 @@ function resolveZone(tzMode: 'utc' | 'browser' | 'account', accountTz?: string |
   }
 }
 
-function bucketKey(isoUtc: string, zone: string, mode: RhythmMode): string {
+function weekdayIndex(isoUtc: string, zone: string): number {
   const d = new Date(isoUtc)
-  if (mode === 'hourly') {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: zone,
-      hour: 'numeric',
-      hour12: false,
-    }).formatToParts(d)
-    const h = Number(parts.find(p => p.type === 'hour')?.value ?? 0)
-    return String(h).padStart(2, '0')
-  }
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: zone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(d)
-  const y = parts.find(p => p.type === 'year')?.value ?? '1970'
-  const m = parts.find(p => p.type === 'month')?.value ?? '01'
-  const day = parts.find(p => p.type === 'day')?.value ?? '01'
-  const local = new Date(`${y}-${m}-${day}T12:00:00`)
-  const dow = local.getUTCDay()
-  const monday = new Date(local)
-  monday.setUTCDate(local.getUTCDate() - ((dow + 6) % 7))
-  return monday.toISOString().slice(0, 10)
-}
-
-function formatWeekLabel(isoMonday: string): string {
-  const start = new Date(`${isoMonday}T12:00:00Z`)
-  const end = new Date(start)
-  end.setUTCDate(start.getUTCDate() + 6)
-  const fmt = (d: Date) =>
-    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
-  return `${fmt(start)} – ${fmt(end)}`
+  const wd = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short' }).format(d)
+  const idx = WEEKDAY_LABELS.indexOf(wd)
+  return idx >= 0 ? idx : 0
 }
 
 type HourlyRow = {
   date: string
   hour: number | string
-  client_id?: string
   cost?: number
   revenue?: number
   conversions?: number
   clicks?: number
   impressions?: number
-  account_timezone?: string | null
+}
+
+type Bucket = {
+  cost: number
+  revenue: number
+  conversions: number
+  clicks: number
+  impressions: number
+}
+
+function emptyBucket(): Bucket {
+  return { cost: 0, revenue: 0, conversions: 0, clicks: 0, impressions: 0 }
+}
+
+function addRow(b: Bucket, r: HourlyRow) {
+  b.cost += Number(r.cost) || 0
+  b.revenue += Number(r.revenue) || 0
+  b.conversions += Number(r.conversions) || 0
+  b.clicks += Number(r.clicks) || 0
+  b.impressions += Number(r.impressions) || 0
+}
+
+function bucketToMetrics(b: Bucket) {
+  return {
+    cost: b.cost,
+    revenue: b.revenue,
+    conversions: b.conversions,
+    clicks: b.clicks,
+    impressions: b.impressions,
+    roas: b.cost > 0 ? b.revenue / b.cost : 0,
+    cpa: b.conversions > 0 ? b.cost / b.conversions : 0,
+    ctr: b.impressions > 0 ? (b.clicks / b.impressions) * 100 : 0,
+  }
 }
 
 export default function RealtimeRhythmChart({
@@ -89,8 +120,9 @@ export default function RealtimeRhythmChart({
   dimmed?: boolean
 }) {
   const [mode, setMode] = useState<RhythmMode>('hourly')
-  const [metric, setMetric] = useState<RhythmMetric>('cost')
-  const [chartType, setChartType] = useState<'line' | 'bar'>('line')
+  const [selectedMetrics, setSelectedMetrics] = useState<Set<RhythmMetric>>(
+    () => new Set<RhythmMetric>(['cost', 'revenue']),
+  )
 
   const zone = resolveZone(tzMode, accountTzHint)
 
@@ -101,114 +133,135 @@ export default function RealtimeRhythmChart({
     })
 
     if (mode === 'hourly') {
-      const buckets = Array.from({ length: 24 }, (_, h) => ({
-        label: `${String(h).padStart(2, '0')}:00`,
-        sortKey: String(h).padStart(2, '0'),
-        value: 0,
-      }))
+      const buckets = Array.from({ length: 24 }, () => emptyBucket())
       for (const r of filtered) {
         const iso = `${r.date}T${String(r.hour).padStart(2, '0')}:00:00.000Z`
-        const h = bucketKey(iso, zone, 'hourly')
-        const idx = Number(h)
-        if (idx >= 0 && idx < 24) buckets[idx].value += Number(r[metric]) || 0
+        const h = new Date(iso)
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone: zone,
+          hour: 'numeric',
+          hour12: false,
+        }).formatToParts(h)
+        const hi = Number(parts.find(p => p.type === 'hour')?.value ?? 0)
+        if (hi >= 0 && hi < 24) addRow(buckets[hi], r)
       }
-      return buckets
+      return buckets.map((b, h) => ({
+        label: `${String(h).padStart(2, '0')}:00`,
+        ...bucketToMetrics(b),
+      }))
     }
 
-    const map = new Map<string, number>()
+    const buckets = WEEKDAY_LABELS.map(() => emptyBucket())
     for (const r of filtered) {
       const iso = `${r.date}T${String(r.hour).padStart(2, '0')}:00:00.000Z`
-      const wk = bucketKey(iso, zone, 'weekly')
-      map.set(wk, (map.get(wk) || 0) + (Number(r[metric]) || 0))
+      const wi = weekdayIndex(iso, zone)
+      addRow(buckets[wi], r)
     }
-    return [...map.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([wk, value]) => ({
-        label: formatWeekLabel(wk),
-        sortKey: wk,
-        value,
-      }))
-  }, [rows, mode, metric, dateRange, zone])
+    return buckets.map((b, i) => ({
+      label: WEEKDAY_LABELS[i],
+      ...bucketToMetrics(b),
+    }))
+  }, [rows, mode, dateRange, zone])
+
+  const toggleMetric = (m: RhythmMetric) => {
+    setSelectedMetrics(prev => {
+      const next = new Set(prev)
+      if (next.has(m)) {
+        if (next.size > 1) next.delete(m)
+      } else {
+        next.add(m)
+      }
+      return next
+    })
+  }
+
+  const active = ALL_METRICS.filter(m => selectedMetrics.has(m))
 
   return (
-    <div
-      className={`bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 transition-opacity ${
-        dimmed ? 'opacity-40 pointer-events-none' : ''
-      }`}
-    >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-3">
-        <div>
-          <h3 className="text-base font-semibold text-gray-900">Performance rhythm</h3>
-          <p className="text-xs text-gray-500 mt-0.5 max-w-xl">
-            {mode === 'hourly'
-              ? `Hour-of-day totals (0–23) in ${zone} for ${dateRange.start} → ${dateRange.end}.`
-              : `Calendar-week totals (Mon–Sun) in ${zone} across the selected range.`}
-            {selectedClient !== 'all' ? ' Filtered to selected client.' : ' All clients in scope.'}
-          </p>
-        </div>
-      </div>
+    <div className={`uni-card transition-opacity ${dimmed ? 'opacity-40 pointer-events-none' : ''}`}>
+      <div className="uni-card-body">
+        <ReportSectionHeader
+          sectionLabel="Performance"
+          title="Performance rhythm"
+          badge={<span className="uni-badge-live">Hourly warehouse</span>}
+        />
+        <p className="uni-panel-muted mt-2 mb-3">
+          {mode === 'hourly'
+            ? `Totals by hour (0–23) in ${zone} for ${dateRange.start} → ${dateRange.end}.`
+            : `Totals by weekday (Mon–Sun) in ${zone} — each day of week is its own series point, not summed into calendar weeks.`}
+          {selectedClient !== 'all' ? ' Filtered to selected client.' : ''}
+        </p>
 
-      <div className="flex flex-wrap gap-2 mb-3">
-        <div className="flex rounded-lg border border-gray-200 p-0.5">
-          <button
-            type="button"
-            onClick={() => setMode('hourly')}
-            className={`px-2.5 py-1 rounded-md text-xs font-medium ${mode === 'hourly' ? 'bg-[var(--brand-600)] text-white' : 'text-gray-600'}`}
-          >
-            By hour (0–23)
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('weekly')}
-            className={`px-2.5 py-1 rounded-md text-xs font-medium ${mode === 'weekly' ? 'bg-[var(--brand-600)] text-white' : 'text-gray-600'}`}
-          >
-            By week
-          </button>
+        <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex rounded-lg border border-gray-200 p-0.5">
+            <button
+              type="button"
+              onClick={() => setMode('hourly')}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium ${mode === 'hourly' ? 'bg-[var(--brand-600)] text-white' : 'text-gray-600'}`}
+            >
+              By hour (0–23)
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('weekday')}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium ${mode === 'weekday' ? 'bg-[var(--brand-600)] text-white' : 'text-gray-600'}`}
+            >
+              By weekday (Mon–Sun)
+            </button>
+          </div>
         </div>
-        <select
-          value={metric}
-          onChange={e => setMetric(e.target.value as RhythmMetric)}
-          className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-gray-50"
-        >
-          {(Object.keys(METRIC_LABELS) as RhythmMetric[]).map(m => (
-            <option key={m} value={m}>{METRIC_LABELS[m]}</option>
+
+        <p className="text-[10px] text-stone-500 mb-1.5">Metrics (multi-select)</p>
+        <div className="flex flex-wrap gap-1 mb-4">
+          {ALL_METRICS.map(m => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => toggleMetric(m)}
+              className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition ${
+                selectedMetrics.has(m)
+                  ? 'bg-[var(--brand-50)] border-[var(--brand-200)] text-[var(--brand-800)]'
+                  : 'bg-stone-100 border-stone-200 text-stone-400'
+              }`}
+            >
+              {METRIC_LABELS[m]}
+            </button>
           ))}
-        </select>
-        <select
-          value={chartType}
-          onChange={e => setChartType(e.target.value as 'line' | 'bar')}
-          className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-gray-50"
-        >
-          <option value="line">Line</option>
-          <option value="bar">Bar</option>
-        </select>
-      </div>
+        </div>
 
-      {chartData.length === 0 ? (
-        <p className="text-sm text-gray-500 py-8 text-center">No hourly rows in this range yet.</p>
-      ) : (
-        <ResponsiveContainer width="100%" height={280}>
-          {chartType === 'line' ? (
+        {chartData.length === 0 || active.length === 0 ? (
+          <p className="text-sm text-gray-500 py-8 text-center">No hourly rows or no metrics selected.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={mode === 'weekly' ? 0 : 'preserveStartEnd'} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v: number) => [v.toLocaleString(), METRIC_LABELS[metric]]} />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 10 }} width={48} />
+              <Tooltip
+                formatter={(v: number, name: string) => {
+                  const m = name as RhythmMetric
+                  if (m === 'ctr') return [`${Number(v).toFixed(2)}%`, METRIC_LABELS[m]]
+                  if (m === 'roas') return [`${Number(v).toFixed(2)}x`, METRIC_LABELS[m]]
+                  if (m === 'cpa') return [`$${Number(v).toFixed(2)}`, METRIC_LABELS[m]]
+                  return [Number(v).toLocaleString(), METRIC_LABELS[m] ?? name]
+                }}
+              />
               <Legend />
-              <Line type="monotone" dataKey="value" name={METRIC_LABELS[metric]} stroke="var(--brand-600)" strokeWidth={2} dot={false} />
+              {active.map(m => (
+                <Line
+                  key={m}
+                  type="monotone"
+                  dataKey={m}
+                  name={METRIC_LABELS[m]}
+                  stroke={METRIC_COLORS[m]}
+                  strokeWidth={2}
+                  dot={false}
+                />
+              ))}
             </LineChart>
-          ) : (
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={mode === 'weekly' ? 0 : 'preserveStartEnd'} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v: number) => [v.toLocaleString(), METRIC_LABELS[metric]]} />
-              <Legend />
-              <Bar dataKey="value" name={METRIC_LABELS[metric]} fill="var(--brand-600)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          )}
-        </ResponsiveContainer>
-      )}
+          </ResponsiveContainer>
+        )}
+      </div>
     </div>
   )
 }
