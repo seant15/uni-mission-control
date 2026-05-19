@@ -247,7 +247,6 @@ export default function MarketingOverview({
   const ctrChange = cur && prev ? pctChange(cur.ctr, prev.ctr) : undefined
   const convChange = cur && prev ? pctChange(cur.conversions, prev.conversions) : undefined
   const cpaChange = cur && prev ? pctChange(cur.cpa, prev.cpa) : undefined
-  const roasChange = cur && prev ? pctChange(cur.roas, prev.roas) : undefined
   const revChange = cur && prev ? pctChange(cur.revenue, prev.revenue) : undefined
 
   const fmtMoney = (n: number) =>
@@ -349,6 +348,16 @@ export default function MarketingOverview({
   const prevAdsRevenue = useMemo(() => adsReportedRevenueFromRows(prevRows || []), [prevRows])
   const adsRevChange = cur && prev ? pctChange(adsRevenue, prevAdsRevenue) : undefined
 
+  const reportedRoas = cur && cur.spend > 0 ? adsRevenue / cur.spend : 0
+  const prevReportedRoas = prev && prev.spend > 0 ? prevAdsRevenue / prev.spend : 0
+  const reportedRoasChange = cur && prev ? pctChange(reportedRoas, prevReportedRoas) : undefined
+
+  const mer = cur && cur.spend > 0 ? shopifySplit.shopifyAfterReturn / cur.spend : 0
+  const prevMer = prev && prev.spend > 0 ? prevShopifySplit.shopifyAfterReturn / prev.spend : 0
+  const merChange = cur && prev ? pctChange(mer, prevMer) : undefined
+
+  const fmtRatio = (v: number) => (v > 0 ? `${v.toFixed(2)}x` : '—')
+
   const { data: kpiRow } = useQuery({
     queryKey: ['dashboard-settings-agency-kpi', settingsUserId],
     queryFn: () => db.getSettings(settingsUserId),
@@ -364,6 +373,7 @@ export default function MarketingOverview({
         'ecom_shopify_real',
         'ecom_shopify_returns',
         'ecom_after_return',
+        'ecom_mer',
       ]
       for (const id of shopifyCards) {
         if (!resolvedKpiLayout.hidden[id] && !visible.includes(id)) visible.push(id)
@@ -418,7 +428,23 @@ export default function MarketingOverview({
         return businessType === 'leadgen' ? (
           <MetricCard title="Cost Per Lead (CPL)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} tone="amber" invertTrend />
         ) : (
-          <MetricCard title="ROAS" value={`${cur.roas.toFixed(2)}x`} change={roasChange} icon={TrendingUp} tone="amber" />
+          <MetricCard
+            title="Reported revenue / spend"
+            value={fmtRatio(reportedRoas)}
+            change={reportedRoasChange}
+            icon={TrendingUp}
+            tone="amber"
+          />
+        )
+      case 'ecom_mer':
+        return (
+          <MetricCard
+            title="MER — after-return Shopify ÷ spend"
+            value={fmtRatio(mer)}
+            change={merChange}
+            icon={ShoppingCart}
+            tone="teal"
+          />
         )
       case 'traffic_impressions':
         return (
@@ -526,11 +552,24 @@ export default function MarketingOverview({
   )
 
   const primaryEcom = cur && prev && (
-    <div className={`grid grid-cols-2 md:grid-cols-4 ${densityStackGap}`}>
+    <div className={`grid grid-cols-2 md:grid-cols-5 ${densityStackGap}`}>
       <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} tone="blue" />
       <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} tone="violet" />
       <MetricCard title="Purchases" value={fmtMetric(cur.conversions)} change={convChange} icon={ShoppingCart} tone="emerald" />
-      <MetricCard title="ROAS" value={`${cur.roas.toFixed(2)}x`} change={roasChange} icon={TrendingUp} tone="amber" />
+      <MetricCard
+        title="Reported revenue / spend"
+        value={fmtRatio(reportedRoas)}
+        change={reportedRoasChange}
+        icon={TrendingUp}
+        tone="amber"
+      />
+      <MetricCard
+        title="MER — after-return Shopify ÷ spend"
+        value={fmtRatio(mer)}
+        change={merChange}
+        icon={Target}
+        tone="teal"
+      />
     </div>
   )
 
