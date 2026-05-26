@@ -61,6 +61,23 @@ function SortTh({ label, field, sort, align = 'right' }: {
   )
 }
 
+/** Prefer Supabase Storage URLs over Meta CDN (signatures expire in the browser). */
+function isStableCreativeUrl(url?: string | null): boolean {
+  if (!url || typeof url !== 'string') return false
+  const u = url.toLowerCase()
+  return u.includes('supabase.co/storage') || u.includes('/storage/v1/object/')
+}
+
+function pickBetterCreativeUrl(current?: string | null, next?: string | null): string | undefined {
+  const n = (next || '').trim()
+  if (!n) return (current || '').trim() || undefined
+  const c = (current || '').trim()
+  if (!c) return n
+  if (isStableCreativeUrl(c)) return c
+  if (isStableCreativeUrl(n)) return n
+  return c
+}
+
 // ── Aggregation ────────────────────────────────────────────────────────────────
 function aggregateCreatives(rows: any[]): any[] {
   const map = new Map<string, any>()
@@ -93,8 +110,8 @@ function aggregateCreatives(rows: any[]): any[] {
     entry.clicks += Number(row.clicks) || 0
     entry.conversions += Number(row.conversions) || 0
     entry.revenue += Number(row.revenue) || 0
-    if (!entry.image_url && row.image_url) entry.image_url = row.image_url
-    if (!entry.thumbnail_url && row.thumbnail_url) entry.thumbnail_url = row.thumbnail_url
+    entry.image_url = pickBetterCreativeUrl(entry.image_url, row.image_url)
+    entry.thumbnail_url = pickBetterCreativeUrl(entry.thumbnail_url, row.thumbnail_url)
     if (!entry.video_id && row.video_id) entry.video_id = row.video_id
     if (!entry.headline && row.headline) entry.headline = row.headline
     if (!entry.primary_copy && row.primary_copy) entry.primary_copy = row.primary_copy
@@ -508,8 +525,13 @@ export default function CreativePerformance() {
   }, [])
 
   useEffect(() => {
+    setSelectedAdAccount('')
+    setCreativePage(0)
+  }, [selectedClient])
+
+  useEffect(() => {
     setFailedThumbKeys(new Set())
-  }, [selectedClient, dateRange.start, dateRange.end])
+  }, [selectedClient, selectedAdAccount, dateRange.start, dateRange.end])
 
   const reportThumbFail = useCallback((key: string) => {
     setFailedThumbKeys(prev => {
@@ -542,13 +564,22 @@ export default function CreativePerformance() {
 
   // Creative data (meta_ads_ads with creative fields)
   const { data: rawCreatives = [], isLoading: loadingCreatives } = useQuery({
-    queryKey: ['meta-creatives', selectedClient, dateRange.start, dateRange.end, scopedClientId ?? ''],
-    queryFn: () => db.getMetaCreatives(
-      selectedClient === 'all' ? undefined : selectedClient,
+    queryKey: [
+      'meta-creatives',
+      selectedClient,
+      selectedAdAccount,
       dateRange.start,
       dateRange.end,
-      scopedClientId || undefined
-    ),
+      scopedClientId ?? '',
+    ],
+    queryFn: () =>
+      db.getMetaCreatives(
+        selectedClient === 'all' ? undefined : selectedClient,
+        dateRange.start,
+        dateRange.end,
+        scopedClientId || undefined,
+        selectedAdAccount || undefined,
+      ),
     staleTime: 5 * 60 * 1000,
   })
 

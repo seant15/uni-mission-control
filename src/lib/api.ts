@@ -426,11 +426,19 @@ export const db = {
      * Fetch Meta ad creatives with client and date filtering
      * Includes creative fields: image_url, thumbnail_url, headline, primary_copy, description, call_to_action_type
      */
-    async getMetaCreatives(clientId?: string, startDate?: string, endDate?: string, scopedClientId?: string) {
+    async getMetaCreatives(
+        clientId?: string,
+        startDate?: string,
+        endDate?: string,
+        scopedClientId?: string,
+        adAccountId?: string,
+    ) {
         const cid = scopedClientId ?? clientId
         let query = supabase
             .from('meta_ads_ads')
-            .select('id, client_id, date, campaign_id, campaign_name, ad_set_id, ad_set_name, ad_id, ad_name, spend, impressions, clicks, conversions, revenue, image_url, thumbnail_url, video_id, headline, primary_copy, description, call_to_action_type, destination_url, instagram_permalink_url, facebook_post_url')
+            .select(
+                'id, client_id, date, ad_account_id, campaign_id, campaign_name, ad_set_id, ad_set_name, ad_id, ad_name, spend, impressions, clicks, conversions, revenue, image_url, thumbnail_url, video_id, headline, primary_copy, description, call_to_action_type, destination_url, instagram_permalink_url, facebook_post_url',
+            )
             .order('spend', { ascending: false })
             .limit(2000)
 
@@ -440,6 +448,9 @@ export const db = {
             const activeIds = await cachedActiveClientIds()
             if (activeIds.length === 0) return []
             query = query.in('client_id', activeIds)
+        }
+        if (adAccountId) {
+            query = query.eq('ad_account_id', adAccountId)
         }
         if (startDate) query = query.gte('date', startDate)
         if (endDate) query = query.lte('date', endDate)
