@@ -18,7 +18,7 @@ import { useResizableColumns } from '../hooks/useResizableColumns'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { useUiDensity } from '../contexts/UiDensityContext'
-import { scopedClientIdFromUser } from '../lib/rbac'
+import { canAccessAlerts, scopedClientIdFromUser } from '../lib/rbac'
 import AccountDateRangePicker from '../components/AccountDateRangePicker'
 import FilterShell from '../components/FilterShell'
 import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
@@ -1415,7 +1415,7 @@ export default function DataAnalytics({
     </div>
   )
 
-  if (!showHeatedRail) return mainContent
+  if (!showHeatedRail || !canAccessAlerts(appUser?.role)) return mainContent
 
   return (
     <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_15rem] xl:gap-3 xl:items-start">

@@ -13,6 +13,8 @@ export type AgencyKpiCardId =
   | 'ecom_shopify_returns'
   | 'ecom_after_return'
   | 'ecom_ads_revenue'
+  | 'ecom_ads_purchases'
+  | 'ecom_shopify_orders'
   | 'ecom_mer'
   | 'ecom_cpa'
   | 'leadgen_total_revenue'
@@ -35,6 +37,8 @@ export const AGENCY_KPI_CARD_LABELS: Record<AgencyKpiCardId, string> = {
   ecom_shopify_returns: 'Shopify returns',
   ecom_after_return: 'After-return sales',
   ecom_ads_revenue: 'Total revenue (ads-reported)',
+  ecom_ads_purchases: 'Purchases (ads-reported)',
+  ecom_shopify_orders: 'Shopify recorded orders',
   ecom_mer: 'MER (after-return Shopify ÷ spend)',
   ecom_cpa: 'CPA',
   leadgen_total_revenue: 'Total revenue (lead gen)',
@@ -55,6 +59,8 @@ export const AGENCY_KPI_DEFAULT_ORDER: AgencyKpiCardId[] = [
   'ecom_after_return',
   'ecom_mer',
   'ecom_ads_revenue',
+  'ecom_ads_purchases',
+  'ecom_shopify_orders',
   'ecom_cpa',
 ]
 
@@ -71,9 +77,12 @@ export function cardAppliesToBusiness(id: AgencyKpiCardId, businessType: 'leadge
     'ecom_shopify_returns',
     'ecom_after_return',
     'ecom_ads_revenue',
+    'ecom_ads_purchases',
+    'ecom_shopify_orders',
     'ecom_mer',
     'ecom_cpa',
   ]
+  if (id === 'primary_conversion') return businessType === 'leadgen'
   if (id === 'leadgen_total_revenue') return businessType === 'leadgen'
   if (ecomOnly.includes(id)) return businessType === 'ecommerce'
   return true

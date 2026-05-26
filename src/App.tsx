@@ -28,6 +28,7 @@ import {
   canAccessCreative,
   canAccessAlerts,
   canAccessSettings,
+  scopedClientIdFromUser,
 } from './lib/rbac'
 import { Toaster } from 'sonner'
 import { applyAccentToDocument } from './lib/themeAccent'
@@ -95,11 +96,58 @@ function App() {
   )
 }
 
+function CreativePerformanceGate() {
+  const { appUser } = useAuth()
+  const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
+  const role = normalizeRole(appUser?.role)
+
+  const { data: metaAdAccounts, isLoading } = useQuery({
+    queryKey: ['creative-meta-accounts', scopedClientId ?? ''],
+    queryFn: () =>
+      db.getAdAccounts({
+        clientId: scopedClientId,
+        platform: 'meta_ads',
+        scopedClientId: scopedClientId || undefined,
+      }),
+    enabled: role === 'client' && !!scopedClientId,
+    staleTime: 10 * 60_000,
+  })
+
+  const hasMetaAds = (metaAdAccounts?.length ?? 0) > 0
+
+  if (canAccessCreative(appUser?.role, hasMetaAds)) {
+    return <CreativePerformance />
+  }
+  if (role === 'client' && isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+        Loading creative performance…
+      </div>
+    )
+  }
+  return <Navigate to="/" replace />
+}
+
 function AppShell() {
   const { appUser, signOut, user } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const effRole = normalizeRole(appUser?.role)
+  const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
+
+  const { data: clientMetaAdAccounts } = useQuery({
+    queryKey: ['nav-meta-accounts', scopedClientId ?? ''],
+    queryFn: () =>
+      db.getAdAccounts({
+        clientId: scopedClientId,
+        platform: 'meta_ads',
+        scopedClientId: scopedClientId || undefined,
+      }),
+    enabled: effRole === 'client' && !!scopedClientId,
+    staleTime: 10 * 60_000,
+  })
+  const clientHasMetaAds = (clientMetaAdAccounts?.length ?? 0) > 0
+  const showCreativeNav = canAccessCreative(appUser?.role, clientHasMetaAds)
 
   const [shellPreviewUserId, setShellPreviewUserIdState] = useState<string | null>(() => getShellPreviewUserId())
   const shellPreviewValue = useMemo(
@@ -269,7 +317,7 @@ function AppShell() {
               <NavLink to="/alerts" icon={AlertTriangle} label="Alerts" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} badge={openAlertCount ?? 0} />
             )}
             <NavLink to="/realtime-performance" icon={Activity} label="Real-time Performance" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
-            {canAccessCreative(appUser?.role) && (
+            {showCreativeNav && (
               <NavLink to="/creative-performance" icon={Layers} label="Creative Performance" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
             )}
 
@@ -352,16 +400,18 @@ function AppShell() {
                   {brandTitle}
                 </span>
               </div>
-              <button
-                onClick={() => navigate(canAccessAlerts(appUser?.role) ? '/alerts' : '/')}
-                className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-                title={canAccessAlerts(appUser?.role) ? 'View alerts' : 'Home'}
-              >
-                <Bell size={18} />
-                {(openAlertCount ?? 0) > 0 && (
-                  <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full" />
-                )}
-              </button>
+              {canAccessAlerts(appUser?.role) && (
+                <button
+                  onClick={() => navigate('/alerts')}
+                  className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                  title="View alerts"
+                >
+                  <Bell size={18} />
+                  {(openAlertCount ?? 0) > 0 && (
+                    <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full" />
+                  )}
+                </button>
+              )}
             </div>
           </header>
 
@@ -388,14 +438,7 @@ function AppShell() {
                 }
               />
               <Route path="/realtime-performance" element={<RealtimePerformance />} />
-              <Route
-                path="/creative-performance"
-                element={
-                  <RoleGuard allowed={['super_admin', 'media_buyer']}>
-                    <CreativePerformance />
-                  </RoleGuard>
-                }
-              />
+              <Route path="/creative-performance" element={<CreativePerformanceGate />} />
               <Route
                 path="/dashboard/settings"
                 element={

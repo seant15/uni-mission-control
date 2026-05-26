@@ -73,3 +73,26 @@ export function splitShopifyAndAdsRevenue(rows: Row[]): ShopifyRollup {
 export function adsReportedRevenueFromRows(rows: Row[]): number {
   return splitShopifyAndAdsRevenue(rows).adsReported
 }
+
+type ConversionRow = Row & { conversions?: number | null }
+
+/** Purchases / conversions reported by Meta + Google (excludes Shopify order rows). */
+export function adsReportedConversionsFromRows(rows: ConversionRow[]): number {
+  let ads = 0
+  for (const r of rows) {
+    const p = (r.platform || '').toLowerCase()
+    if (p === 'meta_ads' || p === 'google_ads') {
+      ads += Number(r.conversions) || 0
+    }
+  }
+  return ads
+}
+
+/** Shopify order count from `getShopifyDailyPerformance` rows (`conversions` holds `total_orders`). */
+export function rollupShopifyOrdersFromShapedRows(rows: { conversions?: number | null }[]): number {
+  return rows.reduce((s, r) => s + (Number(r.conversions) || 0), 0)
+}
+
+export function adsPurchasesPctOfShopify(adsPurchases: number, shopifyOrders: number): number | null {
+  return shopifyOrders > 0 ? (adsPurchases / shopifyOrders) * 100 : null
+}

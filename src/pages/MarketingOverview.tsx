@@ -11,12 +11,18 @@ import AccountDateRangePicker from '../components/AccountDateRangePicker'
 import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
 import { useAuth } from '../contexts/AuthContext'
 import { useDensityStackGap } from '../contexts/UiDensityContext'
-import { scopedClientIdFromUser } from '../lib/rbac'
+import { canAccessAlerts, scopedClientIdFromUser } from '../lib/rbac'
 import FilterShell from '../components/FilterShell'
 import AgencyClientBreakdown from '../components/AgencyClientBreakdown'
 import PlatformBadge from '../components/PlatformBadge'
 import AlertSystemGuideLink from '../components/AlertSystemGuideLink'
-import { adsReportedRevenueFromRows, rollupShopifyDaily } from '../lib/shopifyMetrics'
+import {
+  adsPurchasesPctOfShopify,
+  adsReportedConversionsFromRows,
+  adsReportedRevenueFromRows,
+  rollupShopifyDaily,
+  rollupShopifyOrdersFromShapedRows,
+} from '../lib/shopifyMetrics'
 import { formatSupabaseError } from '../lib/supabaseErrors'
 import ShopifyIcon from '../components/ShopifyIcon'
 import AgencyKpiLayoutEditor from '../components/AgencyKpiLayoutEditor'
@@ -348,6 +354,19 @@ export default function MarketingOverview({
   const prevAdsRevenue = useMemo(() => adsReportedRevenueFromRows(prevRows || []), [prevRows])
   const adsRevChange = cur && prev ? pctChange(adsRevenue, prevAdsRevenue) : undefined
 
+  const adsPurchases = useMemo(() => adsReportedConversionsFromRows(curRows || []), [curRows])
+  const prevAdsPurchases = useMemo(() => adsReportedConversionsFromRows(prevRows || []), [prevRows])
+  const adsPurchasesChange = pctChange(adsPurchases, prevAdsPurchases)
+
+  const shopifyOrders = useMemo(() => rollupShopifyOrdersFromShapedRows(shopifyDailyRows), [shopifyDailyRows])
+  const prevShopifyOrders = useMemo(() => rollupShopifyOrdersFromShapedRows(prevShopifyRows), [prevShopifyRows])
+  const shopifyOrdersChange = pctChange(shopifyOrders, prevShopifyOrders)
+  const adsPurchasesPctOfShopifyOrders = adsPurchasesPctOfShopify(adsPurchases, shopifyOrders)
+
+  const adsCpa = adsPurchases > 0 && cur ? cur.spend / adsPurchases : 0
+  const prevAdsCpa = prevAdsPurchases > 0 && prev ? prev.spend / prevAdsPurchases : 0
+  const adsCpaChange = pctChange(adsCpa, prevAdsCpa)
+
   const reportedRoas = cur && cur.spend > 0 ? adsRevenue / cur.spend : 0
   const prevReportedRoas = prev && prev.spend > 0 ? prevAdsRevenue / prev.spend : 0
   const reportedRoasChange = cur && prev ? pctChange(reportedRoas, prevReportedRoas) : undefined
@@ -374,6 +393,8 @@ export default function MarketingOverview({
         'ecom_shopify_returns',
         'ecom_after_return',
         'ecom_mer',
+        'ecom_ads_purchases',
+        'ecom_shopify_orders',
       ]
       for (const id of shopifyCards) {
         if (!resolvedKpiLayout.hidden[id] && !visible.includes(id)) visible.push(id)
@@ -529,9 +550,53 @@ export default function MarketingOverview({
             <div className="text-xs text-gray-500 mt-0.5">Total Revenue (ads-reported)</div>
           </div>
         )
+      case 'ecom_ads_purchases':
+        return (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+            <div className="flex items-start justify-between mb-1 gap-1">
+              <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-600 shrink-0">
+                <ShoppingCart className="w-4 h-4" />
+              </div>
+              <div className={`text-xs font-medium shrink-0 ${adsPurchasesChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {fmtPct(adsPurchasesChange)}
+              </div>
+            </div>
+            <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">
+              {fmtMetric(adsPurchases)}
+              {adsPurchasesPctOfShopifyOrders != null && shopifyOrders > 0 && (
+                <span className="ml-1.5 text-sm font-semibold text-emerald-700">
+                  ({adsPurchasesPctOfShopifyOrders.toFixed(0)}% of Shopify orders)
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-gray-500 mt-0.5">Purchases (ads-reported)</div>
+          </div>
+        )
+      case 'ecom_shopify_orders':
+        return (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+            <div className="flex items-start justify-between mb-1 gap-1">
+              <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-700 shrink-0">
+                <ShopifyIcon className="w-4 h-4" />
+              </div>
+              <div className={`text-xs font-medium shrink-0 ${shopifyOrdersChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {fmtPct(shopifyOrdersChange)}
+              </div>
+            </div>
+            <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">{fmtMetric(shopifyOrders)}</div>
+            <div className="text-xs text-gray-500 mt-0.5">Shopify recorded orders</div>
+          </div>
+        )
       case 'ecom_cpa':
         return (
-          <MetricCard title="CPA (Cost Per Acquisition)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} tone="amber" invertTrend />
+          <MetricCard
+            title="CPA (ads-reported purchases)"
+            value={fmtMoney(adsCpa)}
+            change={adsCpaChange}
+            icon={CreditCard}
+            tone="amber"
+            invertTrend
+          />
         )
       case 'leadgen_total_revenue':
         return (
@@ -552,10 +617,35 @@ export default function MarketingOverview({
   )
 
   const primaryEcom = cur && prev && (
-    <div className={`grid grid-cols-2 md:grid-cols-5 ${densityStackGap}`}>
+    <div className={`grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 ${densityStackGap}`}>
       <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} tone="blue" />
       <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} tone="violet" />
-      <MetricCard title="Purchases" value={fmtMetric(cur.conversions)} change={convChange} icon={ShoppingCart} tone="emerald" />
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+        <div className="flex items-start justify-between mb-1 gap-1">
+          <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-600 shrink-0">
+            <ShoppingCart className="w-4 h-4" />
+          </div>
+          <div className={`text-xs font-medium shrink-0 ${adsPurchasesChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {fmtPct(adsPurchasesChange)}
+          </div>
+        </div>
+        <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">
+          {fmtMetric(adsPurchases)}
+          {adsPurchasesPctOfShopifyOrders != null && shopifyOrders > 0 && (
+            <span className="ml-1.5 text-sm font-semibold text-emerald-700">
+              ({adsPurchasesPctOfShopifyOrders.toFixed(0)}% of Shopify)
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-gray-500 mt-0.5">Purchases (ads-reported)</div>
+      </div>
+      <MetricCard
+        title="Shopify recorded orders"
+        value={fmtMetric(shopifyOrders)}
+        change={shopifyOrdersChange}
+        icon={ShoppingCart}
+        tone="teal"
+      />
       <MetricCard
         title="Reported revenue / spend"
         value={fmtRatio(reportedRoas)}
@@ -586,7 +676,7 @@ export default function MarketingOverview({
           )}
         </div>
 
-        {showAgencyExtras && (
+        {showAgencyExtras && canAccessAlerts(appUser?.role) && (
           <div className="xl:hidden">
             <AlertSystemGuideLink variant="page" />
           </div>

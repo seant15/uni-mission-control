@@ -33,9 +33,12 @@ export function canAccessMission(role: string | undefined | null): boolean {
   return r === 'super_admin' || r === 'media_buyer'
 }
 
-export function canAccessCreative(role: string | undefined | null): boolean {
+/** Agency roles always; client users when their account has Meta ad accounts connected. */
+export function canAccessCreative(role: string | undefined | null, hasMetaAds?: boolean): boolean {
   const r = normalizeRole(role)
-  return r === 'super_admin' || r === 'media_buyer'
+  if (r === 'super_admin' || r === 'media_buyer') return true
+  if (r === 'client' && hasMetaAds) return true
+  return false
 }
 
 /** Client role cannot open Alerts at all (brief matrix). */
