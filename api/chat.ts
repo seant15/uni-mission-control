@@ -17,7 +17,6 @@ interface ApiMessage {
 interface RequestBody {
   conversationId: string
   messages: ApiMessage[]
-  assistantContent?: string
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -25,7 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.OPENROUTER_API_KEY
   if (!apiKey) {
     return res.status(500).json({ error: 'AI service not configured' })
   }
@@ -44,33 +43,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'No valid messages provided' })
   }
 
+  const model = process.env.OPENROUTER_MODEL || 'deepseek/deepseek-v4-flash'
+
+  // OpenAI-compatible format with system message prepended
+  const openAiMessages = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    ...validMessages,
+  ]
+
   try {
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+    const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://uni-mission-control.vercel.app',
+        'X-Title': 'UNI Mission Control',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model,
         max_tokens: 4096,
-        system: SYSTEM_PROMPT,
-        messages: validMessages,
+        messages: openAiMessages,
       }),
     })
 
-    if (!anthropicRes.ok) {
-      const errText = await anthropicRes.text()
-      console.error('Anthropic API error:', anthropicRes.status, errText)
+    if (!orRes.ok) {
+      const errText = await orRes.text()
+      console.error('OpenRouter error:', orRes.status, errText)
       return res.status(502).json({ error: 'AI service error' })
     }
 
-    const anthropicData = await anthropicRes.json() as {
-      content: Array<{ type: string; text: string }>
+    const orData = await orRes.json() as {
+      choices: Array<{ message: { content: string } }>
     }
 
-    const content = anthropicData.content.find(b => b.type === 'text')?.text ?? ''
+    const content = orData.choices?.[0]?.message?.content ?? ''
 
     // Save assistant message server-side using service role key (bypasses RLS)
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
@@ -82,8 +89,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         conversation_id: conversationId,
         role: 'assistant',
         content,
+        metadata: { model },
       })
-      // Bump updated_at on conversation
       await supabase
         .from('ai_conversations')
         .update({ updated_at: new Date().toISOString() })
