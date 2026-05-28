@@ -2,7 +2,7 @@ import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { LayoutDashboard, AlertTriangle, Bell, Settings, Activity, Layers, Megaphone, X, DoorOpen, MessageSquarePlus, LayoutGrid, Menu, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, Bell, Settings, Activity, Layers, Megaphone, X, DoorOpen, MessageSquarePlus, LayoutGrid, Menu, ChevronsLeft, ChevronsRight, Bot } from 'lucide-react'
 import { db } from './lib/api'
 import OverviewPage from './pages/OverviewPage'
 import Alerts from './pages/Alerts'
@@ -16,6 +16,7 @@ import ShellPreviewControl from './components/ShellPreviewControl'
 import AgencySwitcher from './components/AgencySwitcher'
 import UserAvatar from './components/UserAvatar'
 import MissionBoard from './pages/MissionBoard'
+import AIChatAdmin from './pages/AIChatAdmin'
 import { RoleGuard } from './components/RoleGuard'
 import { getDashboardSettings, GLOBAL_ANNOUNCEMENT_QUERY_KEY, APP_SHELL_SETTINGS_QUERY_KEY } from './lib/settings'
 import { getShellPreviewUserId, setShellPreviewUserIdStorage } from './lib/shellPreviewStorage'
@@ -328,6 +329,9 @@ function AppShell() {
             {appUser?.role === 'super_admin' && (
               <NavLink to="/feedback" icon={MessageSquarePlus} label="Feedback" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
             )}
+            {appUser?.role === 'super_admin' && (
+              <NavLink to="/ai-chat" icon={Bot} label="AI Chat Log" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
+            )}
             {canAccessSettings(appUser?.role) && (
               <NavLink to="/dashboard/settings" icon={Settings} label="Settings" collapsed={sidebarCollapsed} onNavigate={() => setMobileNavOpen(false)} />
             )}
@@ -452,6 +456,14 @@ function AppShell() {
                 element={
                   <RoleGuard allowed={['super_admin']}>
                     <FeedbackAdmin />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/ai-chat"
+                element={
+                  <RoleGuard allowed={['super_admin']}>
+                    <AIChatAdmin />
                   </RoleGuard>
                 }
               />
