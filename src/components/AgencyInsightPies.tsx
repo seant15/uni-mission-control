@@ -19,7 +19,7 @@ type DailyRow = {
   conversions?: number | null
 }
 
-type InsightDim = 'platforms' | 'devices' | 'demographics' | 'demo_age' | 'demo_gender'
+type InsightDim = 'platforms' | 'country' | 'devices' | 'demographics' | 'demo_age' | 'demo_gender'
 type ViewMode = 'pie' | 'bar' | 'table'
 type ChartMetric = 'spend' | 'revenue' | 'roas' | 'cpa'
 
@@ -34,7 +34,8 @@ const CHART_COLORS = [
   'var(--uni-chart-8)',
 ]
 
-const DIM_DB: Record<Exclude<InsightDim, 'platforms'>, 'device' | 'age' | 'gender' | 'demographic'> = {
+const DIM_DB: Record<Exclude<InsightDim, 'platforms'>, 'device' | 'age' | 'gender' | 'demographic' | 'country'> = {
+  country: 'country',
   devices: 'device',
   demographics: 'demographic',
   demo_age: 'age',
@@ -43,6 +44,7 @@ const DIM_DB: Record<Exclude<InsightDim, 'platforms'>, 'device' | 'age' | 'gende
 
 const DIM_LABELS: Record<InsightDim, string> = {
   platforms: 'Platforms',
+  country: 'Country',
   devices: 'Devices',
   demographics: 'Demographics',
   demo_age: 'Age',
@@ -51,6 +53,8 @@ const DIM_LABELS: Record<InsightDim, string> = {
 
 const DIM_HELP: Record<InsightDim, string> = {
   platforms: 'Paid ads only (Meta + Google). Use the page platform filter for a single network.',
+  country:
+    'User location country (Meta country breakdown; Google user_location_view). Respects client, date, and platform filters. Merge toggle combines Meta + Google when platform = All.',
   devices: 'Device splits from warehouse. Respects client, date, and platform filters above.',
   demographics: 'Meta age×gender plus Google/Meta age and gender when platform = All.',
   demo_age: 'Age bands. When platform = All, segments are merged across Meta and Google.',
@@ -80,6 +84,12 @@ function normalizeDeviceLabel(raw: string): string {
 
 function labelSliceValue(dim: InsightDim, raw: string) {
   if (dim === 'platforms') return platformLabel(raw)
+  if (dim === 'country') {
+    const c = raw.replace(/_/g, ' ').trim()
+    if (!c || c.toLowerCase() === 'unknown') return 'Unknown'
+    if (/^\d+$/.test(c)) return `Geo ${c}`
+    return c.length === 2 ? c.toUpperCase() : c.replace(/\b\w/g, x => x.toUpperCase())
+  }
   if (dim === 'devices') return normalizeDeviceLabel(raw)
   return raw.replace(/_/g, ' ').replace(/\s+/g, ' ').trim() || 'Unknown'
 }
@@ -127,7 +137,7 @@ function buildSegments(
     .sort((a, b) => b.spend - a.spend)
 }
 
-type BreakdownDbDim = 'device' | 'age' | 'gender' | 'demographic'
+type BreakdownDbDim = 'device' | 'age' | 'gender' | 'demographic' | 'country'
 
 function effectiveBreakdownDims(
   activeDim: InsightDim,
@@ -233,6 +243,7 @@ export default function AgencyInsightPies({
 
   const sectionTitle = useMemo(() => {
     if (activeDim === 'platforms') return 'Spend & revenue by platform'
+    if (activeDim === 'country') return 'Spend & revenue by country'
     if (activeDim === 'demographics') return 'Spend & revenue by demographics'
     if (activeDim === 'demo_age') return 'Spend & revenue by age'
     if (activeDim === 'demo_gender') return 'Spend & revenue by gender'
@@ -250,7 +261,7 @@ export default function AgencyInsightPies({
   )
 
   const barHeight = Math.max(220, visibleSegments.length * 28)
-  const pillOrder: InsightDim[] = ['platforms', 'devices', 'demographics', 'demo_age', 'demo_gender']
+  const pillOrder: InsightDim[] = ['platforms', 'country', 'devices', 'demographics', 'demo_age', 'demo_gender']
 
   const toggleDim = (dim: InsightDim) => setActiveDim(dim)
 

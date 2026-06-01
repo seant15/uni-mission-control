@@ -280,7 +280,7 @@ export const db = {
      * Device / age / gender / demographic slices from daily_performance_breakdown.
      */
     async getPerformanceBreakdown(
-        filters: PerformanceFilters & { dimension: 'device' | 'age' | 'gender' | 'demographic' },
+        filters: PerformanceFilters & { dimension: 'device' | 'age' | 'gender' | 'demographic' | 'country' },
     ) {
         return this.getPerformanceBreakdownSlices({
             ...filters,
@@ -293,7 +293,7 @@ export const db = {
      */
     async getPerformanceBreakdownSlices(
         filters: PerformanceFilters & {
-            dimensions: Array<'device' | 'age' | 'gender' | 'demographic'>
+            dimensions: Array<'device' | 'age' | 'gender' | 'demographic' | 'country'>
         },
     ) {
         const f = applyPerformanceClientScope(filters)
