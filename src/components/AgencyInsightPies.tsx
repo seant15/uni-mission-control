@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
 import { platformLabel } from '../lib/platformStyles'
 import { filterAdsDailyRows } from '../lib/adsRows'
+import { countryDisplayLabel } from '../lib/countryLabels'
 import type { CalendarDateRange } from '../lib/dashboardDateRange'
 
 type DailyRow = {
@@ -84,12 +85,7 @@ function normalizeDeviceLabel(raw: string): string {
 
 function labelSliceValue(dim: InsightDim, raw: string) {
   if (dim === 'platforms') return platformLabel(raw)
-  if (dim === 'country') {
-    const c = raw.replace(/_/g, ' ').trim()
-    if (!c || c.toLowerCase() === 'unknown') return 'Unknown'
-    if (/^\d+$/.test(c)) return `Geo ${c}`
-    return c.length === 2 ? c.toUpperCase() : c.replace(/\b\w/g, x => x.toUpperCase())
-  }
+  if (dim === 'country') return countryDisplayLabel(raw)
   if (dim === 'devices') return normalizeDeviceLabel(raw)
   return raw.replace(/_/g, ' ').replace(/\s+/g, ' ').trim() || 'Unknown'
 }
@@ -111,7 +107,11 @@ function buildSegments(
     if (dim === 'platforms') {
       key = platformLabel((r.platform || 'unknown').toLowerCase())
     } else {
-      const val = labelSliceValue(dim, r.dimension_value || 'unknown')
+      const rawVal = r.dimension_value || 'unknown'
+      const val =
+        dim === 'country'
+          ? countryDisplayLabel(String(rawVal), r.platform)
+          : labelSliceValue(dim, String(rawVal))
       key = opts.tagByPlatform && r.platform ? `${val} · ${platformLabel(r.platform)}` : val
     }
     if (!map.has(key)) map.set(key, { spend: 0, revenue: 0, conversions: 0 })
