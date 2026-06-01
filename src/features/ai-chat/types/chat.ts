@@ -24,7 +24,7 @@ export interface Conversation {
   user_role?: string
 }
 
-export type WorkflowType = 'seo_content' | 'qa_review' | 'brand_workshop' | 'brand_design'
+export type WorkflowType = 'seo_content' | 'seo_content_qa' | 'qa_review' | 'brand_workshop' | 'brand_design'
 
 export interface WorkflowTemplate {
   id: WorkflowType

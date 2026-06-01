@@ -53,3 +53,8 @@ export function canAccessSettings(role: string | undefined | null): boolean {
 export function canAccessClientsByClientTab(role: string | undefined | null): boolean {
   return normalizeRole(role) !== 'partner'
 }
+
+/** UNI AI Assistant — agency/internal roles only; client and client_user excluded. */
+export function canAccessAIChat(role: string | undefined | null): boolean {
+  return normalizeRole(role) !== 'client'
+}

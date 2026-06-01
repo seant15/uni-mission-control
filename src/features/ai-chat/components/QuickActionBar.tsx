@@ -8,6 +8,7 @@ interface Props {
 
 const ICONS: Record<WorkflowType, string> = {
   seo_content:     '🔍',
+  seo_content_qa:  '🛡️',
   qa_review:       '✅',
   brand_workshop:  '🎯',
   brand_design:    '🎨',
