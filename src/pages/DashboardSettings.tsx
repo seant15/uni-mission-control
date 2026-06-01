@@ -157,8 +157,9 @@ export default function DashboardSettingsPage() {
           appSubtitle: settings.appSubtitle,
           appLogoUrl: settings.appLogoUrl,
           uiDensity: settings.uiDensity,
-          assistOpenclawFabEnabled: false,
+          assistOpenclawFabEnabled: settings.assistOpenclawFabEnabled,
           assistFeedbackFabEnabled: settings.assistFeedbackFabEnabled,
+          assistAiChatFabEnabled: settings.assistAiChatFabEnabled,
         })
         if (!globalRes.ok) {
           success = false
@@ -465,8 +466,16 @@ export default function DashboardSettingsPage() {
               <div className="pt-4 border-t border-gray-100 space-y-1">
                 <h3 className="text-sm font-semibold text-gray-900">Floating assist widgets</h3>
                 <p className="text-xs text-gray-500 leading-relaxed pb-2">
-                  Feedback pill visibility (stored on the org <code className="text-[11px] bg-gray-100 px-1 rounded">default_user</code> row).
+                  Org-wide toggles for bottom-right helpers (stored on the{' '}
+                  <code className="text-[11px] bg-gray-100 px-1 rounded">default_user</code> row). Client logins
+                  never see the UNI AI Assistant; these control internal team visibility only.
                 </p>
+                <AssistToggleRow
+                  title="UNI AI Assistant"
+                  description="Bottom-right chatbot for SEO, QA, and brand workflows (internal roles only)."
+                  checked={settings.assistAiChatFabEnabled}
+                  onChange={v => setSettings({ ...settings, assistAiChatFabEnabled: v })}
+                />
                 <AssistToggleRow
                   title="Feedback widget"
                   description="Bottom-right “Feedback” launcher and panel."

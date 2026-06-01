@@ -42,6 +42,7 @@ export interface DashboardSettings {
   /** Org-wide FABs — stored on `default_user`, merged for all users */
   assistOpenclawFabEnabled: boolean
   assistFeedbackFabEnabled: boolean
+  assistAiChatFabEnabled: boolean
 }
 
 export const DEFAULT_SETTINGS: DashboardSettings = {
@@ -65,6 +66,7 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   uiDensity: 'comfort',
   assistOpenclawFabEnabled: false,
   assistFeedbackFabEnabled: true,
+  assistAiChatFabEnabled: true,
 }
 
 function mapDbRow(row: Record<string, unknown> | null | undefined): Partial<DashboardSettings> | null {
@@ -98,6 +100,10 @@ function mapDbRow(row: Record<string, unknown> | null | undefined): Partial<Dash
       row.assist_feedback_fab_enabled === null || row.assist_feedback_fab_enabled === undefined
         ? undefined
         : Boolean(row.assist_feedback_fab_enabled),
+    assistAiChatFabEnabled:
+      row.assist_ai_chat_fab_enabled === null || row.assist_ai_chat_fab_enabled === undefined
+        ? undefined
+        : Boolean(row.assist_ai_chat_fab_enabled),
   }
 }
 
@@ -116,6 +122,7 @@ export async function getDashboardSettings(userId: string): Promise<DashboardSet
       uiDensity: ((g.uiDensity ?? p.uiDensity) as UiDensity | undefined) ?? DEFAULT_SETTINGS.uiDensity,
       assistOpenclawFabEnabled: g.assistOpenclawFabEnabled ?? DEFAULT_SETTINGS.assistOpenclawFabEnabled,
       assistFeedbackFabEnabled: g.assistFeedbackFabEnabled ?? DEFAULT_SETTINGS.assistFeedbackFabEnabled,
+      assistAiChatFabEnabled: g.assistAiChatFabEnabled ?? DEFAULT_SETTINGS.assistAiChatFabEnabled,
     }
 
     if (userId === 'default_user') {
@@ -192,6 +199,7 @@ export async function saveDashboardSettings(
       dbSettings.ui_density = settings.uiDensity
       dbSettings.assist_openclaw_fab_enabled = settings.assistOpenclawFabEnabled
       dbSettings.assist_feedback_fab_enabled = settings.assistFeedbackFabEnabled
+      dbSettings.assist_ai_chat_fab_enabled = settings.assistAiChatFabEnabled
     }
 
     await db.saveSettings(userId, dbSettings)

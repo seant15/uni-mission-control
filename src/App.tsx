@@ -474,6 +474,7 @@ function AppShell() {
 
         <BottomRightAssistDock
           showFeedback={shellSettings?.assistFeedbackFabEnabled !== false}
+          showAIChat={shellSettings?.assistAiChatFabEnabled !== false}
         />
       </div>
     </ShellPreviewProvider>

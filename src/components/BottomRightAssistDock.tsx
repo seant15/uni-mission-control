@@ -5,11 +5,12 @@ import { canAccessAIChat } from '../lib/rbac'
 
 type Props = {
   showFeedback?: boolean
+  showAIChat?: boolean
 }
 
-export default function BottomRightAssistDock({ showFeedback = true }: Props) {
+export default function BottomRightAssistDock({ showFeedback = true, showAIChat: showAIChatSetting = true }: Props) {
   const { appUser } = useAuth()
-  const showAIChat = canAccessAIChat(appUser?.role)
+  const showAIChat = showAIChatSetting && canAccessAIChat(appUser?.role)
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col-reverse gap-3 items-end pointer-events-none">

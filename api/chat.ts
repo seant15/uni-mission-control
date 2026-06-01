@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
+import { buildChatPerformanceContext } from './chatPerformanceContext'
 
 const SYSTEM_PROMPT = `You are an AI assistant embedded in UNI Mission Control, a marketing performance dashboard for UNI Marketing Agency. You help internal marketing team members with:
 - SEO content creation and optimisation
@@ -8,6 +9,10 @@ const SYSTEM_PROMPT = `You are an AI assistant embedded in UNI Mission Control, 
 - Brand design direction
 
 Be direct, concise, and actionable. Use bullet points over long paragraphs. Respond in the same language the user writes in. When the user provides a template with [BRACKETED PLACEHOLDERS], help them fill it out or ask for the missing information.
+
+## Mission Control performance data
+When a [LIVE DASHBOARD DATA] block is included in the system context, you have read-only warehouse metrics for the named client(s). Use those numbers directly in your answer. Do not claim you lack live dashboard access when that block is present.
+If the user asks for account performance but no live block is provided, ask for the exact client name as shown in Mission Control (or suggest they rephrase with the client name).
 
 ## SEO Content Quality Standards (Google 2026 Algorithm)
 
@@ -134,9 +139,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const model = process.env.OPENROUTER_MODEL || 'deepseek/deepseek-v4-flash'
 
-  // OpenAI-compatible format with system message prepended
+  const lastUserMessage =
+    [...validMessages].reverse().find(m => m.role === 'user')?.content?.trim() ?? ''
+  let dataContext = ''
+  try {
+    dataContext = await buildChatPerformanceContext(userClient, lastUserMessage)
+  } catch (e) {
+    console.warn('chat: performance context failed', e)
+  }
+
+  const systemContent = dataContext
+    ? `${SYSTEM_PROMPT}\n\n---\n${dataContext}`
+    : SYSTEM_PROMPT
+
   const openAiMessages = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: systemContent },
     ...validMessages,
   ]
 
