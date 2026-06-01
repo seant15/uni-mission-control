@@ -24,6 +24,8 @@ import FilterShell from '../components/FilterShell'
 import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
 import { AGENCY_REPORTING_TZ } from '../lib/hourlyBuckets'
 import { filterAdsDailyRows, sumAdsMetrics } from '../lib/adsRows'
+import { rollupShopifyDaily } from '../lib/shopifyMetrics'
+import { shouldShowHeatedMer, shopifyAfterReturnForShapedRow } from '../lib/heatedMerEligibility'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ComposedChart, Area, Line, LineChart
@@ -94,7 +96,7 @@ interface Client {
   google_ads_customer_id?: string | null
 }
 
-type MetricKey = 'spend' | 'ctr' | 'conversions' | 'costperconv' | 'roas'
+type MetricKey = 'spend' | 'ctr' | 'conversions' | 'costperconv' | 'roas' | 'mer'
 
 type AggregateRowsOptions = {
   sumFields?: string[]
@@ -353,6 +355,55 @@ export default function DataAnalytics({
     [embedded, previousPerformanceData],
   )
 
+  const selectedClientRecord = useMemo(
+    () => (selectedClient !== 'all' ? clientsFromTable?.find(c => c.id === selectedClient) : undefined),
+    [selectedClient, clientsFromTable],
+  )
+
+  const showMerKpi = useMemo(
+    () =>
+      shouldShowHeatedMer({
+        embedded,
+        businessType,
+        selectedPlatform,
+        selectedClient,
+        client: selectedClientRecord,
+      }),
+    [embedded, businessType, selectedPlatform, selectedClient, selectedClientRecord],
+  )
+
+  const { data: shopifyDailyRows = [] } = useQuery({
+    queryKey: ['heated-shopify', dateRange.start, dateRange.end, selectedClient, scopedClientId ?? ''],
+    queryFn: () =>
+      db.getShopifyDailyPerformance({
+        clientId: selectedClient,
+        startDate: dateRange.start,
+        endDate: dateRange.end,
+        scopedClientId: scopedClientId || undefined,
+      }),
+    enabled: showMerKpi && !!dateRange.start && !!dateRange.end,
+    staleTime: 5 * 60_000,
+  })
+
+  const { data: prevShopifyDailyRows = [] } = useQuery({
+    queryKey: [
+      'heated-shopify-prev',
+      previousPeriodRange.start,
+      previousPeriodRange.end,
+      selectedClient,
+      scopedClientId ?? '',
+    ],
+    queryFn: () =>
+      db.getShopifyDailyPerformance({
+        clientId: selectedClient,
+        startDate: previousPeriodRange.start,
+        endDate: previousPeriodRange.end,
+        scopedClientId: scopedClientId || undefined,
+      }),
+    enabled: showMerKpi && !!previousPeriodRange.start && !!previousPeriodRange.end,
+    staleTime: 5 * 60_000,
+  })
+
   const rhythmAccountTzHint = useMemo(() => {
     const tzs = [...new Set(performanceData.map(r => r.data_timezone).filter(Boolean) as string[])]
     return tzs.length === 1 ? tzs[0]! : null
@@ -576,6 +627,35 @@ export default function DataAnalytics({
     return acc
   }, []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
+  const shopifyAfterReturnTotal = useMemo(
+    () => rollupShopifyDaily(shopifyDailyRows).shopifyAfterReturn,
+    [shopifyDailyRows],
+  )
+  const prevShopifyAfterReturnTotal = useMemo(
+    () => rollupShopifyDaily(prevShopifyDailyRows).shopifyAfterReturn,
+    [prevShopifyDailyRows],
+  )
+  const mer = totals.cost > 0 ? shopifyAfterReturnTotal / totals.cost : 0
+  const prevMer = previousTotals.cost > 0 ? prevShopifyAfterReturnTotal / previousTotals.cost : 0
+  const merChange = calculateChange(mer, prevMer)
+
+  const chartDailyData = useMemo(() => {
+    const shopByDate = new Map<string, number>()
+    for (const row of shopifyDailyRows) {
+      const d = String(row.date || '')
+      if (!d) continue
+      shopByDate.set(d, (shopByDate.get(d) || 0) + shopifyAfterReturnForShapedRow(row))
+    }
+    return dailyDataWithMetrics.map(d => ({
+      ...d,
+      mer: d.spend > 0 ? (shopByDate.get(d.date) || 0) / d.spend : 0,
+    }))
+  }, [dailyDataWithMetrics, shopifyDailyRows])
+
+  useEffect(() => {
+    if (!showMerKpi && selectedMetric === 'mer') setSelectedMetric('roas')
+  }, [showMerKpi, selectedMetric])
+
   const showPlatformInDailyDrill = selectedPlatform === 'all'
   const dailyDrillTableRows = useMemo(() => {
     if (!showPlatformInDailyDrill) {
@@ -616,17 +696,17 @@ export default function DataAnalytics({
   })
 
   // 7-day rolling avg
-  const chartData = dailyDataWithMetrics.map((d, i) => {
-    const window = dailyDataWithMetrics.slice(Math.max(0, i - 6), i + 1)
+  const chartData = chartDailyData.map((d, i) => {
+    const window = chartDailyData.slice(Math.max(0, i - 6), i + 1)
     const rolling7 = window.reduce((s: number, r: any) => s + (r[selectedMetric] || 0), 0) / window.length
     return { ...d, rolling7 }
   })
 
   // Sparkline data (last 7 days per metric)
-  const last7 = dailyDataWithMetrics.slice(-7)
+  const last7 = chartDailyData.slice(-7)
 
   const getChartDomain = (metricKey: MetricKey): [number, number] => {
-    const values = dailyDataWithMetrics.map(d => parseFloat(d[metricKey]) || 0)
+    const values = chartDailyData.map(d => parseFloat(d[metricKey]) || 0)
     const maxValue = Math.max(...values, 1)
     return [0, Math.ceil(maxValue * 1.2)]
   }
@@ -636,6 +716,7 @@ export default function DataAnalytics({
     violet: 'p-3 rounded-lg bg-violet-50 text-violet-600',
     emerald: 'p-3 rounded-lg bg-emerald-50 text-emerald-600',
     amber: 'p-3 rounded-lg bg-amber-50 text-amber-600',
+    teal: 'p-3 rounded-lg bg-teal-50 text-teal-600',
   }
 
   const metricConfig: Record<MetricKey, any> = {
@@ -644,6 +725,11 @@ export default function DataAnalytics({
     conversions: { label: businessType === 'leadgen' ? 'Leads' : 'Purchases', color: '#10b981', formatter: (v: number) => v.toString() },
     costperconv: { label: businessType === 'leadgen' ? 'Cost Per Lead' : 'Cost Per Purchase', color: '#f59e0b', formatter: (v: number) => `$${v.toFixed(2)}` },
     roas: { label: 'ROAS', color: '#ef4444', formatter: (v: number) => `${v.toFixed(2)}x` },
+    mer: {
+      label: 'MER (after-return Shopify ÷ spend)',
+      color: '#0d9488',
+      formatter: (v: number) => `${v.toFixed(2)}x`,
+    },
   }
 
   const currentMetricConfig = metricConfig[selectedMetric]
@@ -655,12 +741,25 @@ export default function DataAnalytics({
     { title: 'Cost Per Lead (CPL)', value: `$${costPerConv.toFixed(2)}`, change: costPerConvChange, icon: CreditCard, color: 'amber', key: 'costperconv' as MetricKey, invertTrend: true },
   ]
 
-  const ecommerceKPIs = [
-    { title: 'Total Spend', value: `$${totals.cost.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, change: spendChange, icon: DollarSign, color: 'blue', key: 'spend' as MetricKey },
-    { title: 'CTR', value: `${ctr.toFixed(2)}%`, change: ctrChange, icon: MousePointer2, color: 'violet', key: 'ctr' as MetricKey },
-    { title: 'Purchases', value: totals.conversions.toLocaleString(), change: conversionsChange, icon: ShoppingCart, color: 'emerald', key: 'conversions' as MetricKey },
-    { title: 'ROAS', value: `${roas.toFixed(2)}x`, change: roasChange, icon: TrendingUp, color: 'amber', key: 'roas' as MetricKey },
-  ]
+  const ecommerceKPIs = useMemo(() => {
+    const cards = [
+      { title: 'Total Spend', value: `$${totals.cost.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, change: spendChange, icon: DollarSign, color: 'blue', key: 'spend' as MetricKey },
+      { title: 'CTR', value: `${ctr.toFixed(2)}%`, change: ctrChange, icon: MousePointer2, color: 'violet', key: 'ctr' as MetricKey },
+      { title: 'Purchases', value: totals.conversions.toLocaleString(), change: conversionsChange, icon: ShoppingCart, color: 'emerald', key: 'conversions' as MetricKey },
+      { title: 'ROAS', value: `${roas.toFixed(2)}x`, change: roasChange, icon: TrendingUp, color: 'amber', key: 'roas' as MetricKey },
+    ]
+    if (showMerKpi) {
+      cards.push({
+        title: 'MER',
+        value: `${mer.toFixed(2)}x`,
+        change: merChange,
+        icon: ShoppingCart,
+        color: 'teal',
+        key: 'mer' as MetricKey,
+      })
+    }
+    return cards
+  }, [totals.cost, ctr, totals.conversions, roas, spendChange, ctrChange, conversionsChange, roasChange, showMerKpi, mer, merChange])
 
   const currentKPIs = businessType === 'leadgen' ? leadGenKPIs : ecommerceKPIs
 
@@ -887,7 +986,13 @@ export default function DataAnalytics({
       </FilterShell>
 
       {/* KPI Cards */}
-      <div className={embedded ? 'grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3' : 'grid grid-cols-1 md:grid-cols-4 gap-4'}>
+      <div
+        className={
+          embedded
+            ? `grid grid-cols-2 gap-2 sm:gap-3 ${showMerKpi ? 'md:grid-cols-5' : 'md:grid-cols-4'}`
+            : `grid grid-cols-1 gap-4 ${showMerKpi ? 'md:grid-cols-5' : 'md:grid-cols-4'}`
+        }
+      >
         {currentKPIs.map(kpi => {
           const isPositive = (kpi as any).invertTrend ? kpi.change <= 0 : kpi.change >= 0
           const changeColor = isPositive ? 'text-green-600' : 'text-red-600'
@@ -957,7 +1062,7 @@ export default function DataAnalytics({
         <div className={`flex items-center justify-between flex-wrap gap-3 ${embedded ? 'mb-2' : 'mb-4'}`}>
           <h3 className={embedded ? 'text-sm font-semibold text-gray-900' : 'text-lg font-semibold text-gray-900'}>
             {currentMetricConfig.label} Trend (Daily)
-            {embedded ? ' — paid ads' : ''}
+            {embedded && selectedMetric === 'mer' ? ' — Shopify after-return ÷ paid spend' : embedded ? ' — paid ads' : ''}
           </h3>
           <div className="flex items-center gap-3 flex-wrap">
             {/* Secondary metric */}
