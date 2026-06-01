@@ -79,12 +79,10 @@ export function useChat() {
     try {
       const accessToken = session?.access_token
       if (!accessToken) throw new Error('Session expired — please sign in again.')
-      // Create conversation on first message
-      let convId = conversationId
-      if (!convId) {
-        convId = await createConversation(workflowType)
-        if (!convId) throw new Error('Could not create conversation')
-      }
+
+      const convId =
+        conversationId ?? (await createConversation(workflowType))
+      if (!convId) throw new Error('Could not create conversation')
 
       // Optimistic user message
       const tempId = `temp-${Date.now()}`
