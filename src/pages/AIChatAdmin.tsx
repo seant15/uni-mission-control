@@ -12,28 +12,36 @@ const WORKFLOW_LABELS: Record<string, string> = {
 }
 
 async function fetchConversations(): Promise<Conversation[]> {
-  // Fetch conversations joined with app_users for display names
-  const { data, error } = await supabase
+  const { data: rows, error } = await supabase
     .from('ai_conversations')
-    .select(`
-      *,
-      app_users!inner (
-        display_name,
-        email,
-        role
-      )
-    `)
+    .select('*')
     .order('updated_at', { ascending: false })
     .limit(200)
 
   if (error) throw error
+  if (!rows?.length) return []
 
-  return (data ?? []).map((row: any) => ({
-    ...row,
-    user_display_name: row.app_users?.display_name ?? 'Unknown',
-    user_email: row.app_users?.email ?? '',
-    user_role: row.app_users?.role ?? '',
-  })) as Conversation[]
+  const authUserIds = [...new Set(rows.map(r => r.user_id as string))]
+  const { data: appUsers, error: usersErr } = await supabase
+    .from('app_users')
+    .select('auth_user_id, display_name, email, role')
+    .in('auth_user_id', authUserIds)
+
+  if (usersErr) throw usersErr
+
+  const byAuthId = new Map(
+    (appUsers ?? []).map(u => [u.auth_user_id as string, u])
+  )
+
+  return rows.map(row => {
+    const au = byAuthId.get(row.user_id as string)
+    return {
+      ...row,
+      user_display_name: au?.display_name ?? 'Unknown',
+      user_email: au?.email ?? '',
+      user_role: au?.role ?? '',
+    }
+  }) as Conversation[]
 }
 
 async function fetchMessages(conversationId: string): Promise<ChatMessage[]> {
@@ -70,6 +78,7 @@ export default function AIChatAdmin() {
   const {
     data: conversations = [],
     isLoading: convLoading,
+    error: convError,
     refetch,
     dataUpdatedAt,
   } = useQuery({
@@ -117,6 +126,11 @@ export default function AIChatAdmin() {
 
         {convLoading ? (
           <div className="flex-1 flex items-center justify-center text-stone-400 text-sm">Loading...</div>
+        ) : convError ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-red-600 p-6 text-center">
+            <p className="text-sm font-medium">Could not load conversations</p>
+            <p className="text-xs text-red-500/90">{convError instanceof Error ? convError.message : String(convError)}</p>
+          </div>
         ) : conversations.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2 text-stone-400 p-6 text-center">
             <MessageSquare size={28} className="opacity-30" />
