@@ -19,6 +19,8 @@ export type AgencyKpiCardId =
   | 'ecom_cpa'
   | 'leadgen_total_revenue'
 
+export type AgencyKpiSectionId = 'spend' | 'traffic' | 'shopify' | 'attribution' | 'efficiency' | 'leadgen'
+
 export type AgencyKpiLayout = {
   order: AgencyKpiCardId[]
   hidden: Partial<Record<AgencyKpiCardId, boolean>>
@@ -44,30 +46,74 @@ export const AGENCY_KPI_CARD_LABELS: Record<AgencyKpiCardId, string> = {
   leadgen_total_revenue: 'Total revenue (lead gen)',
 }
 
+/** Purchase journey default (ecom): spend → traffic → Shopify → ads attribution → efficiency. */
 export const AGENCY_KPI_DEFAULT_ORDER: AgencyKpiCardId[] = [
   'primary_spend',
-  'primary_ctr',
-  'primary_conversion',
-  'primary_efficiency',
   'traffic_impressions',
   'traffic_clicks',
   'traffic_ctr_detail',
   'traffic_cpc',
-  'leadgen_total_revenue',
+  'ecom_shopify_orders',
   'ecom_shopify_real',
   'ecom_shopify_returns',
   'ecom_after_return',
-  'ecom_mer',
-  'ecom_ads_revenue',
   'ecom_ads_purchases',
-  'ecom_shopify_orders',
+  'ecom_ads_revenue',
+  'primary_efficiency',
+  'ecom_mer',
   'ecom_cpa',
+  'primary_ctr',
+  'primary_conversion',
+  'leadgen_total_revenue',
+]
+
+/** Hidden by default — duplicate of traffic_ctr_detail for most ecom views. */
+export const AGENCY_KPI_DEFAULT_HIDDEN: Partial<Record<AgencyKpiCardId, boolean>> = {
+  primary_ctr: true,
+}
+
+export const AGENCY_KPI_SECTION_LABELS: Record<AgencyKpiSectionId, string> = {
+  spend: 'Spend',
+  traffic: 'Traffic',
+  shopify: 'Shopify funnel',
+  attribution: 'Ads attribution',
+  efficiency: 'Efficiency',
+  leadgen: 'Lead gen outcomes',
+}
+
+export const AGENCY_KPI_CARD_SECTION: Record<AgencyKpiCardId, AgencyKpiSectionId> = {
+  primary_spend: 'spend',
+  primary_ctr: 'traffic',
+  primary_conversion: 'leadgen',
+  primary_efficiency: 'efficiency',
+  traffic_impressions: 'traffic',
+  traffic_clicks: 'traffic',
+  traffic_ctr_detail: 'traffic',
+  traffic_cpc: 'traffic',
+  ecom_shopify_orders: 'shopify',
+  ecom_shopify_real: 'shopify',
+  ecom_shopify_returns: 'shopify',
+  ecom_after_return: 'shopify',
+  ecom_ads_purchases: 'attribution',
+  ecom_ads_revenue: 'attribution',
+  ecom_mer: 'efficiency',
+  ecom_cpa: 'efficiency',
+  leadgen_total_revenue: 'leadgen',
+}
+
+const AGENCY_KPI_SECTION_ORDER: AgencyKpiSectionId[] = [
+  'spend',
+  'traffic',
+  'shopify',
+  'attribution',
+  'efficiency',
+  'leadgen',
 ]
 
 export function defaultAgencyKpiLayout(): AgencyKpiLayout {
   return {
     order: [...AGENCY_KPI_DEFAULT_ORDER],
-    hidden: {},
+    hidden: { ...AGENCY_KPI_DEFAULT_HIDDEN },
   }
 }
 
@@ -88,6 +134,25 @@ export function cardAppliesToBusiness(id: AgencyKpiCardId, businessType: 'leadge
   return true
 }
 
+/** Group visible card ids into journey sections for Overview KPI layout. */
+export function groupAgencyKpiIdsBySection(
+  visibleIds: AgencyKpiCardId[],
+  businessType: 'leadgen' | 'ecommerce',
+): { sectionId: AgencyKpiSectionId; label: string; ids: AgencyKpiCardId[] }[] {
+  const bySection = new Map<AgencyKpiSectionId, AgencyKpiCardId[]>()
+  for (const id of visibleIds) {
+    const section = AGENCY_KPI_CARD_SECTION[id]
+    if (businessType === 'leadgen' && (section === 'shopify' || section === 'attribution')) continue
+    if (!bySection.has(section)) bySection.set(section, [])
+    bySection.get(section)!.push(id)
+  }
+  return AGENCY_KPI_SECTION_ORDER.filter(sid => (bySection.get(sid)?.length ?? 0) > 0).map(sid => ({
+    sectionId: sid,
+    label: AGENCY_KPI_SECTION_LABELS[sid],
+    ids: bySection.get(sid)!,
+  }))
+}
+
 /** Merge saved layout with defaults (handles new card ids added in app versions). */
 export function normalizeAgencyKpiLayout(raw: unknown): AgencyKpiLayout {
   const base = defaultAgencyKpiLayout()
@@ -99,7 +164,7 @@ export function normalizeAgencyKpiLayout(raw: unknown): AgencyKpiLayout {
   for (const id of AGENCY_KPI_DEFAULT_ORDER) {
     if (!order.includes(id)) order.push(id)
   }
-  const hidden: Partial<Record<AgencyKpiCardId, boolean>> = {}
+  const hidden: Partial<Record<AgencyKpiCardId, boolean>> = { ...AGENCY_KPI_DEFAULT_HIDDEN }
   if (o.hidden && typeof o.hidden === 'object') {
     for (const [k, v] of Object.entries(o.hidden)) {
       if (valid.has(k as AgencyKpiCardId) && typeof v === 'boolean') hidden[k as AgencyKpiCardId] = v

@@ -6,6 +6,9 @@ export const GLOBAL_ANNOUNCEMENT_QUERY_KEY = ['dashboard-settings', 'global-anno
 /** Shell branding + density (merged from `default_user` + personal row in getDashboardSettings). */
 export const APP_SHELL_SETTINGS_QUERY_KEY = ['dashboard-settings', 'app-shell'] as const
 
+import type { UiTheme } from './themePreference'
+import type { AccentId } from './themeAccent'
+
 export type UiDensity = 'compact' | 'comfort'
 
 export interface DashboardSettings {
@@ -43,6 +46,12 @@ export interface DashboardSettings {
   assistOpenclawFabEnabled: boolean
   assistFeedbackFabEnabled: boolean
   assistAiChatFabEnabled: boolean
+
+  /** Personal appearance — stored on the signed-in user's row */
+  uiTheme: UiTheme
+  uiAccent: AccentId
+  /** When set, overrides org `uiDensity` for this user only */
+  personalUiDensity: UiDensity | null
 }
 
 export const DEFAULT_SETTINGS: DashboardSettings = {
@@ -67,6 +76,9 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   assistOpenclawFabEnabled: false,
   assistFeedbackFabEnabled: true,
   assistAiChatFabEnabled: true,
+  uiTheme: 'system',
+  uiAccent: 'uni',
+  personalUiDensity: null,
 }
 
 function mapDbRow(row: Record<string, unknown> | null | undefined): Partial<DashboardSettings> | null {
@@ -104,6 +116,20 @@ function mapDbRow(row: Record<string, unknown> | null | undefined): Partial<Dash
       row.assist_ai_chat_fab_enabled === null || row.assist_ai_chat_fab_enabled === undefined
         ? undefined
         : Boolean(row.assist_ai_chat_fab_enabled),
+    uiTheme:
+      row.ui_theme === 'light' || row.ui_theme === 'dark' || row.ui_theme === 'system'
+        ? row.ui_theme
+        : undefined,
+    uiAccent:
+      row.ui_accent === 'orange' || row.ui_accent === 'blue' || row.ui_accent === 'uni'
+        ? row.ui_accent
+        : undefined,
+    personalUiDensity:
+      row.personal_ui_density === 'compact' || row.personal_ui_density === 'comfort'
+        ? row.personal_ui_density
+        : row.personal_ui_density === null || row.personal_ui_density === undefined
+          ? undefined
+          : null,
   }
 }
 
@@ -119,10 +145,14 @@ export async function getDashboardSettings(userId: string): Promise<DashboardSet
       appTitle: (g.appTitle ?? p.appTitle) ?? DEFAULT_SETTINGS.appTitle,
       appSubtitle: (g.appSubtitle ?? p.appSubtitle) ?? DEFAULT_SETTINGS.appSubtitle,
       appLogoUrl: (g.appLogoUrl ?? p.appLogoUrl) ?? DEFAULT_SETTINGS.appLogoUrl,
-      uiDensity: ((g.uiDensity ?? p.uiDensity) as UiDensity | undefined) ?? DEFAULT_SETTINGS.uiDensity,
+      uiDensity:
+        (p.personalUiDensity ?? (g.uiDensity ?? p.uiDensity) ?? DEFAULT_SETTINGS.uiDensity) as UiDensity,
       assistOpenclawFabEnabled: g.assistOpenclawFabEnabled ?? DEFAULT_SETTINGS.assistOpenclawFabEnabled,
       assistFeedbackFabEnabled: g.assistFeedbackFabEnabled ?? DEFAULT_SETTINGS.assistFeedbackFabEnabled,
       assistAiChatFabEnabled: g.assistAiChatFabEnabled ?? DEFAULT_SETTINGS.assistAiChatFabEnabled,
+      uiTheme: (p.uiTheme ?? DEFAULT_SETTINGS.uiTheme) as UiTheme,
+      uiAccent: (p.uiAccent ?? DEFAULT_SETTINGS.uiAccent) as AccentId,
+      personalUiDensity: p.personalUiDensity ?? null,
     }
 
     if (userId === 'default_user') {
@@ -201,6 +231,10 @@ export async function saveDashboardSettings(
       dbSettings.assist_feedback_fab_enabled = settings.assistFeedbackFabEnabled
       dbSettings.assist_ai_chat_fab_enabled = settings.assistAiChatFabEnabled
     }
+
+    dbSettings.ui_theme = settings.uiTheme
+    dbSettings.ui_accent = settings.uiAccent
+    dbSettings.personal_ui_density = settings.personalUiDensity
 
     await db.saveSettings(userId, dbSettings)
     return { ok: true }

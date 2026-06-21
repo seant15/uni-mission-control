@@ -8,7 +8,37 @@
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color-scheme: light dark;
+  /* Light-only for now; OS dark mode must not invert native date/select controls. */
+  color-scheme: light;
+}
+
+/*
+ * 原生表单控件 — Windows/macOS 深色模式下 input[type=date] / select 常出现白字浅底。
+ * 显式文字色 + color-scheme: light 避免客户端「下拉白字看不见」。
+ */
+input[type='date'],
+input[type='datetime-local'],
+input[type='time'],
+select,
+.uni-native-field {
+  color: var(--uni-text, #1e293b);
+  color-scheme: light;
+}
+
+input[type='date'],
+input[type='datetime-local'],
+input[type='time'] {
+  background-color: #f9fafb;
+}
+
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='datetime-local']::-webkit-calendar-picker-indicator {
+  opacity: 0.65;
+}
+
+select option {
+  color: #1e293b;
+  background-color: #ffffff;
 }
 
 /* Theme accent — toggled via `data-accent` on `<html>` (see `themeAccent.ts`). */
@@ -18,6 +48,14 @@ html[data-accent='orange'] {
   --brand-500: #f97316;
   --brand-600: #ea580c;
   --brand-700: #c2410c;
+}
+
+html[data-accent='uni'] {
+  --brand-50: #fff4eb;
+  --brand-100: #ffe4cc;
+  --brand-500: #e85d04;
+  --brand-600: #d45304;
+  --brand-700: #b84703;
 }
 
 html[data-accent='blue'] {
@@ -235,4 +273,66 @@ html[data-accent='blue'] body {
 /* Gradient backgrounds */
 .bg-gradient-radial {
   background: radial-gradient(circle at center, var(--tw-gradient-from), var(--tw-gradient-to));
+}
+
+/* ── Dark theme (Settings → My appearance). Light remains default dashboard look. ── */
+html[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+html[data-theme='dark'] body {
+  background-color: #060c16;
+  background-image:
+    radial-gradient(at 0% 0%, rgba(232, 93, 4, 0.08) 0px, transparent 52%),
+    radial-gradient(at 100% 100%, rgba(15, 118, 110, 0.06) 0px, transparent 50%);
+}
+
+html[data-theme='dark'] {
+  --uni-bg: #060c16;
+  --uni-surface: #0d1117;
+  --uni-card: rgba(255, 255, 255, 0.04);
+  --uni-border: rgba(255, 255, 255, 0.08);
+  --uni-border-strong: rgba(255, 255, 255, 0.14);
+  --uni-text: #fafaf8;
+  --uni-text-muted: #9ca3af;
+  --uni-text-dim: #6b7280;
+}
+
+html[data-theme='dark'] .bg-white,
+html[data-theme='dark'] .uni-card {
+  background-color: var(--uni-surface);
+  border-color: var(--uni-border);
+  color: var(--uni-text);
+}
+
+html[data-theme='dark'] .text-gray-900,
+html[data-theme='dark'] .text-stone-900,
+html[data-theme='dark'] .text-gray-800 {
+  color: var(--uni-text);
+}
+
+html[data-theme='dark'] .text-gray-500,
+html[data-theme='dark'] .text-gray-600,
+html[data-theme='dark'] .text-stone-500,
+html[data-theme='dark'] .text-stone-600 {
+  color: var(--uni-text-muted);
+}
+
+html[data-theme='dark'] .border-gray-200,
+html[data-theme='dark'] .border-stone-200 {
+  border-color: var(--uni-border);
+}
+
+html[data-theme='dark'] input[type='date'],
+html[data-theme='dark'] input[type='datetime-local'],
+html[data-theme='dark'] select,
+html[data-theme='dark'] .uni-native-field {
+  background-color: #111827;
+  color: #f1f5f9;
+  color-scheme: dark;
+}
+
+html[data-theme='dark'] select option {
+  background-color: #111827;
+  color: #f1f5f9;
 }

@@ -19,6 +19,8 @@ import { useShellPreview } from '../contexts/ShellPreviewContext'
 import { useDensitySectionClass, useUiDensity } from '../contexts/UiDensityContext'
 import { supabase } from '../lib/supabase'
 import { getStoredAccent, setStoredAccent, type AccentId } from '../lib/themeAccent'
+import type { UiTheme } from '../lib/themePreference'
+import { applyUiThemeToDocument, setStoredUiTheme } from '../lib/themePreference'
 
 type SettingsTab = 'dashboard' | 'users' | 'profile'
 
@@ -198,13 +200,36 @@ export default function DashboardSettingsPage() {
       .from('app_users')
       .update({ display_name: profileName.trim() })
       .eq('id', appUser.id)
-    setProfileSaving(false)
     if (error) {
+      setProfileSaving(false)
       setProfileError('Failed to save. Please try again.')
-    } else {
-      setProfileSaved(true)
-      setTimeout(() => setProfileSaved(false), 3000)
+      return
     }
+    if (user?.id) {
+      const appearanceRes = await saveDashboardSettings(
+        user.id,
+        {
+          ...settings,
+          announcementEnabled: DEFAULT_SETTINGS.announcementEnabled,
+          announcementText: DEFAULT_SETTINGS.announcementText,
+          announcementStyle: DEFAULT_SETTINGS.announcementStyle,
+        },
+        true,
+      )
+      if (!appearanceRes.ok) {
+        setProfileSaving(false)
+        setProfileError(appearanceRes.error || 'Failed to save appearance.')
+        return
+      }
+      setStoredUiTheme(settings.uiTheme)
+      applyUiThemeToDocument(settings.uiTheme)
+      setStoredAccent(settings.uiAccent)
+      await queryClient.invalidateQueries({ queryKey: ['dashboard-settings', 'appearance', user.id] })
+      await queryClient.invalidateQueries({ queryKey: [...APP_SHELL_SETTINGS_QUERY_KEY] })
+    }
+    setProfileSaving(false)
+    setProfileSaved(true)
+    setTimeout(() => setProfileSaved(false), 3000)
   }
 
   if (loading) {
@@ -381,6 +406,78 @@ export default function DashboardSettingsPage() {
               />
             </div>
 
+            <div className="pt-4 border-t border-gray-100 space-y-4">
+              <h3 className="text-sm font-semibold text-gray-900">My appearance</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Theme, accent, and layout density follow your account (saved with profile). Org defaults apply when density is set to &quot;Use org default&quot;.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Theme</label>
+                <div className="flex flex-wrap gap-2">
+                  {(['light', 'dark', 'system'] as UiTheme[]).map(id => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => {
+                        setSettings({ ...settings, uiTheme: id })
+                        setStoredUiTheme(id)
+                        applyUiThemeToDocument(id)
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
+                        settings.uiTheme === id
+                          ? 'border-[var(--brand-600)] bg-[var(--brand-50)] text-[var(--brand-700)]'
+                          : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {id === 'light' ? 'Light' : id === 'dark' ? 'Dark' : 'System'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Accent color</label>
+                <div className="flex flex-wrap gap-2">
+                  {(['uni', 'orange', 'blue'] as AccentId[]).map(id => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => {
+                        setSettings({ ...settings, uiAccent: id })
+                        setStoredAccent(id)
+                        setAccent(id)
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
+                        settings.uiAccent === id
+                          ? 'border-[var(--brand-600)] bg-[var(--brand-50)] text-[var(--brand-700)]'
+                          : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {id === 'uni' ? 'UNI orange' : id === 'orange' ? 'Bright orange' : 'Blue'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Layout density</label>
+                <select
+                  value={settings.personalUiDensity ?? ''}
+                  onChange={e => {
+                    const v = e.target.value
+                    setSettings({
+                      ...settings,
+                      personalUiDensity: v === '' ? null : (v as 'compact' | 'comfort'),
+                      uiDensity: v === '' ? settings.uiDensity : (v as 'compact' | 'comfort'),
+                    })
+                  }}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)]"
+                >
+                  <option value="">Use org default ({settings.uiDensity})</option>
+                  <option value="comfort">Comfort (more spacing)</option>
+                  <option value="compact">Compact (tighter)</option>
+                </select>
+              </div>
+            </div>
+
             {profileError && (
               <p className="text-sm text-red-600">{profileError}</p>
             )}
@@ -497,13 +594,14 @@ export default function DashboardSettingsPage() {
                     Interface accent
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    {(['orange', 'blue'] as const).map(id => (
+                    {(['uni', 'orange', 'blue'] as const).map(id => (
                       <button
                         key={id}
                         type="button"
                         onClick={() => {
                           setStoredAccent(id)
                           setAccent(id)
+                          setSettings({ ...settings, uiAccent: id })
                         }}
                         className={`px-4 py-2 rounded-lg text-sm font-medium border transition ${
                           accent === id
@@ -511,11 +609,11 @@ export default function DashboardSettingsPage() {
                             : 'border-gray-200 text-gray-700 hover:bg-gray-50'
                         }`}
                       >
-                        {id === 'orange' ? 'Bright orange' : 'Blue'}
+                        {id === 'uni' ? 'UNI orange' : id === 'orange' ? 'Bright orange' : 'Blue'}
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">Primary buttons and nav highlights (stored in this browser).</p>
+                  <p className="text-xs text-gray-500 mt-1">Saved to your account when you click Save below (also cached in this browser).</p>
                 </div>
 
                 <div>

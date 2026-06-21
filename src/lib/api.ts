@@ -1052,6 +1052,33 @@ export const db = {
         return fetchShopifyDailyAsPerformanceShape(applyPerformanceClientScope(filters))
     },
 
+    async getShopifyProductSplitDaily(filters: PerformanceFilters) {
+        const f = applyPerformanceClientScope(filters)
+        if (!f.clientId || f.clientId === 'all') return []
+        let q = supabase
+            .from('shopify_daily_performance')
+            .select(
+                'client_id, date, machine_units, machine_gross, accessory_units, accessory_gross, currency',
+            )
+            .eq('client_id', f.clientId)
+        if (f.startDate) q = q.gte('date', f.startDate)
+        if (f.endDate) q = q.lte('date', f.endDate)
+        const { data, error } = await q.limit(5000)
+        if (error) throw error
+        return data ?? []
+    },
+
+    async getClientDashboardModules(clientId: string) {
+        const { data, error } = await supabase
+            .from('client_dashboard_modules')
+            .select('id, client_id, module_key, config_json, is_active, sort_order')
+            .eq('client_id', clientId)
+            .eq('is_active', true)
+            .order('sort_order', { ascending: true })
+        if (error) throw error
+        return data ?? []
+    },
+
     async createClientRecord(input: {
         name: string
         business_type?: 'leadgen' | 'ecommerce'

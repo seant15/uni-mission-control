@@ -32,7 +32,8 @@ import {
   scopedClientIdFromUser,
 } from './lib/rbac'
 import { Toaster } from 'sonner'
-import { applyAccentToDocument } from './lib/themeAccent'
+import { applyAccentToDocument, setStoredAccent } from './lib/themeAccent'
+import { applyUiThemeToDocument, setStoredUiTheme, watchSystemTheme } from './lib/themePreference'
 
 const ANNOUNCEMENT_STYLES = {
   info:    { bar: 'bg-[color-mix(in_oklab,var(--brand-100)_85%,white)] border-b border-[var(--brand-200)]/60', text: 'text-stone-800', icon: 'text-[var(--brand-700)]' },
@@ -201,6 +202,25 @@ function AppShell() {
     queryFn: () => getDashboardSettings(effectiveShellUserId),
     staleTime: 60_000,
   })
+
+  const { data: myAppearance } = useQuery({
+    queryKey: ['dashboard-settings', 'appearance', user?.id ?? 'anon'],
+    queryFn: () => getDashboardSettings(user!.id),
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  })
+
+  useEffect(() => {
+    if (!myAppearance) return
+    setStoredUiTheme(myAppearance.uiTheme)
+    applyUiThemeToDocument(myAppearance.uiTheme)
+    setStoredAccent(myAppearance.uiAccent)
+  }, [myAppearance?.uiTheme, myAppearance?.uiAccent])
+
+  useEffect(() => {
+    if (!myAppearance || myAppearance.uiTheme !== 'system') return
+    return watchSystemTheme(() => applyUiThemeToDocument('system'))
+  }, [myAppearance?.uiTheme])
 
   const brandTitle = shellSettings?.appTitle?.trim() || 'UNI Mission Control'
   const brandSubtitle = shellSettings?.appSubtitle?.trim() || 'Marketing Performance Hub'

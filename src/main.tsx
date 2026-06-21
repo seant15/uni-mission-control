@@ -3,10 +3,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './contexts/AuthContext'
 import { AgencyProvider } from './contexts/AgencyContext'
 import App from './App.tsx'
+import AppErrorBoundary from './components/AppErrorBoundary'
 import './index.css'
 import { applyAccentToDocument } from './lib/themeAccent'
+import { applyUiThemeToDocument } from './lib/themePreference'
 
 applyAccentToDocument()
+applyUiThemeToDocument()
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,11 +32,13 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <AgencyProvider>
-        <App />
-      </AgencyProvider>
-    </AuthProvider>
-  </QueryClientProvider>,
+  <AppErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <AgencyProvider>
+          <App />
+        </AgencyProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </AppErrorBoundary>,
 )

@@ -26,10 +26,12 @@ import {
 import { formatSupabaseError } from '../lib/supabaseErrors'
 import ShopifyIcon from '../components/ShopifyIcon'
 import AgencyKpiLayoutEditor from '../components/AgencyKpiLayoutEditor'
+import ClientInsightsSection from '../components/ClientInsightsSection'
 import ReportSectionHeader from '../components/ReportSectionHeader'
 import {
   cardAppliesToBusiness,
   defaultAgencyKpiLayout,
+  groupAgencyKpiIdsBySection,
   normalizeAgencyKpiLayout,
   type AgencyKpiCardId,
 } from '../lib/agencyKpiLayout'
@@ -101,6 +103,17 @@ function MetricCard({ title, value, change, icon: Icon, tone, invertTrend = fals
       </div>
       <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight truncate">{value}</div>
       <div className="text-xs text-gray-500 mt-0.5 leading-snug">{title}</div>
+    </div>
+  )
+}
+
+/** Journey section wrapper — consistent label + responsive KPI grid. */
+function KpiSection({ label, children }: { label: string; children: ReactNode }) {
+  const gap = useDensityStackGap()
+  return (
+    <div className="space-y-2">
+      <p className="uni-section-label">{label}</p>
+      <div className={`grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 ${gap}`}>{children}</div>
     </div>
   )
 }
@@ -383,25 +396,24 @@ export default function MarketingOverview({
     enabled: Boolean(showAgencyExtras && user?.id),
   })
   const resolvedKpiLayout = useMemo(() => normalizeAgencyKpiLayout(kpiRow?.agency_kpi_cards), [kpiRow])
-  const agencyKpiVisibleIds = useMemo(() => {
-    const visible = resolvedKpiLayout.order.filter(
-      id => !resolvedKpiLayout.hidden[id] && cardAppliesToBusiness(id, businessType),
-    )
-    if (showAgencyExtras && businessType === 'ecommerce') {
-      const shopifyCards: AgencyKpiCardId[] = [
-        'ecom_shopify_real',
-        'ecom_shopify_returns',
-        'ecom_after_return',
-        'ecom_mer',
-        'ecom_ads_purchases',
-        'ecom_shopify_orders',
-      ]
-      for (const id of shopifyCards) {
-        if (!resolvedKpiLayout.hidden[id] && !visible.includes(id)) visible.push(id)
-      }
-    }
-    return visible
-  }, [resolvedKpiLayout, businessType, showAgencyExtras])
+  const agencyKpiVisibleIds = useMemo(
+    () =>
+      resolvedKpiLayout.order.filter(
+        id => !resolvedKpiLayout.hidden[id] && cardAppliesToBusiness(id, businessType),
+      ),
+    [resolvedKpiLayout, businessType],
+  )
+  const agencyKpiSections = useMemo(
+    () => groupAgencyKpiIdsBySection(agencyKpiVisibleIds, businessType),
+    [agencyKpiVisibleIds, businessType],
+  )
+
+  const insightsClientId =
+    scopedClientId || (selectedClient !== 'all' ? selectedClient : null)
+  const insightsClientRecord = useMemo(
+    () => (insightsClientId ? clients.find(c => c.id === insightsClientId) : undefined),
+    [insightsClientId, clients],
+  )
 
   useEffect(() => {
     if (kpiEditorOpen) {
@@ -607,59 +619,127 @@ export default function MarketingOverview({
     }
   }
 
-  const primaryLeadGen = cur && prev && (
-    <div className={`grid grid-cols-2 md:grid-cols-4 ${densityStackGap}`}>
-      <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} tone="blue" />
-      <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} tone="violet" />
-      <MetricCard title="Leads" value={fmtMetric(cur.conversions)} change={convChange} icon={Users} tone="emerald" />
-      <MetricCard title="Cost Per Lead (CPL)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} tone="amber" invertTrend />
-    </div>
-  )
-
-  const primaryEcom = cur && prev && (
-    <div className={`grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 ${densityStackGap}`}>
-      <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} tone="blue" />
-      <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={MousePointer2} tone="violet" />
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
-        <div className="flex items-start justify-between mb-1 gap-1">
-          <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-600 shrink-0">
-            <ShoppingCart className="w-4 h-4" />
-          </div>
-          <div className={`text-xs font-medium shrink-0 ${adsPurchasesChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {fmtPct(adsPurchasesChange)}
-          </div>
-        </div>
-        <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">
-          {fmtMetric(adsPurchases)}
-          {adsPurchasesPctOfShopifyOrders != null && shopifyOrders > 0 && (
-            <span className="ml-1.5 text-sm font-semibold text-emerald-700">
-              ({adsPurchasesPctOfShopifyOrders.toFixed(0)}% of Shopify)
-            </span>
-          )}
-        </div>
-        <div className="text-xs text-gray-500 mt-0.5">Purchases (ads-reported)</div>
-      </div>
-      <MetricCard
-        title="Shopify recorded orders"
-        value={fmtMetric(shopifyOrders)}
-        change={shopifyOrdersChange}
-        icon={ShoppingCart}
-        tone="teal"
-      />
-      <MetricCard
-        title="Reported revenue / spend"
-        value={fmtRatio(reportedRoas)}
-        change={reportedRoasChange}
-        icon={TrendingUp}
-        tone="amber"
-      />
-      <MetricCard
-        title="MER — after-return Shopify ÷ spend"
-        value={fmtRatio(mer)}
-        change={merChange}
-        icon={Target}
-        tone="teal"
-      />
+  const clientKpiSections = cur && prev && (
+    <div className={`space-y-4 ${densityStackGap}`}>
+      {businessType === 'leadgen' ? (
+        <>
+          <KpiSection label="Spend & leads">
+            <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} tone="blue" />
+            <MetricCard title="Leads" value={fmtMetric(cur.conversions)} change={convChange} icon={Users} tone="emerald" />
+            <MetricCard title="Cost Per Lead (CPL)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} tone="amber" invertTrend />
+          </KpiSection>
+          <KpiSection label="Traffic">
+            <MetricCard title="Impressions" value={fmtMetric(cur.impressions)} change={pctChange(cur.impressions, prev.impressions)} icon={Eye} tone="indigo" />
+            <MetricCard title="Clicks" value={fmtMetric(cur.clicks)} change={pctChange(cur.clicks, prev.clicks)} icon={MousePointer} tone="cyan" />
+            <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={Target} tone="teal" />
+            <MetricCard title="CPC" value={fmtMoney(cur.cpc)} change={pctChange(cur.cpc, prev.cpc)} icon={DollarSign} tone="violet" invertTrend />
+          </KpiSection>
+          <KpiSection label="Lead gen outcomes">
+            <MetricCard title="Total Revenue (if tracked)" value={fmtMoney(cur.revenue)} change={revChange} icon={TrendingUp} tone="emerald" />
+          </KpiSection>
+        </>
+      ) : (
+        <>
+          <KpiSection label="Spend">
+            <MetricCard title="Total Spend" value={fmtMoney(cur.spend)} change={spendChange} icon={DollarSign} tone="blue" />
+          </KpiSection>
+          <KpiSection label="Traffic">
+            <MetricCard title="Impressions" value={fmtMetric(cur.impressions)} change={pctChange(cur.impressions, prev.impressions)} icon={Eye} tone="indigo" />
+            <MetricCard title="Clicks" value={fmtMetric(cur.clicks)} change={pctChange(cur.clicks, prev.clicks)} icon={MousePointer} tone="cyan" />
+            <MetricCard title="CTR" value={`${cur.ctr.toFixed(2)}%`} change={ctrChange} icon={Target} tone="teal" />
+            <MetricCard title="CPC" value={fmtMoney(cur.cpc)} change={pctChange(cur.cpc, prev.cpc)} icon={DollarSign} tone="violet" invertTrend />
+          </KpiSection>
+          <KpiSection label="Shopify funnel">
+            <MetricCard title="Shopify recorded orders" value={fmtMetric(shopifyOrders)} change={shopifyOrdersChange} icon={ShoppingCart} tone="teal" />
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+              <div className="flex items-start justify-between mb-1 gap-1">
+                <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-700 shrink-0">
+                  <ShopifyIcon className="w-4 h-4" />
+                </div>
+                <div className={`text-xs font-medium shrink-0 ${pctChange(shopifySplit.shopifyReal, prevShopifySplit.shopifyReal) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {fmtPct(pctChange(shopifySplit.shopifyReal, prevShopifySplit.shopifyReal))}
+                </div>
+              </div>
+              <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">{fmtMoney(shopifySplit.shopifyReal)}</div>
+              <div className="text-xs text-gray-500 mt-0.5">Shopify gross sales</div>
+            </div>
+            <MetricCard
+              title="Shopify Returns"
+              value={fmtMoney(shopifySplit.shopifyReturns)}
+              change={pctChange(shopifySplit.shopifyReturns, prevShopifySplit.shopifyReturns)}
+              icon={ArrowDownRight}
+              tone="amber"
+              invertTrend
+            />
+            <MetricCard
+              title="After-return Sales"
+              value={fmtMoney(shopifySplit.shopifyAfterReturn)}
+              change={pctChange(shopifySplit.shopifyAfterReturn, prevShopifySplit.shopifyAfterReturn)}
+              icon={ShoppingCart}
+              tone="emerald"
+            />
+          </KpiSection>
+          <KpiSection label="Ads attribution">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+              <div className="flex items-start justify-between mb-1 gap-1">
+                <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-600 shrink-0">
+                  <ShoppingCart className="w-4 h-4" />
+                </div>
+                <div className={`text-xs font-medium shrink-0 ${adsPurchasesChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {fmtPct(adsPurchasesChange)}
+                </div>
+              </div>
+              <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">
+                {fmtMetric(adsPurchases)}
+                {adsPurchasesPctOfShopifyOrders != null && shopifyOrders > 0 && (
+                  <span className="ml-1.5 text-sm font-semibold text-emerald-700">
+                    ({adsPurchasesPctOfShopifyOrders.toFixed(0)}% of Shopify orders)
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-gray-500 mt-0.5">Purchases (ads-reported)</div>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+              <div className="flex items-start justify-between mb-1 gap-1">
+                <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-600 shrink-0">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+                {adsRevChange !== undefined && (
+                  <div className={`text-xs font-medium shrink-0 ${adsRevChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {adsRevChange >= 0 ? '+' : ''}{adsRevChange.toFixed(1)}%
+                  </div>
+                )}
+              </div>
+              <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">
+                {fmtMoney(adsRevenue)}
+                {shopifySplit.adsPctOfAfterReturn != null && shopifySplit.shopifyAfterReturn > 0 && (
+                  <span className="ml-1.5 text-sm font-semibold text-emerald-700">
+                    ({shopifySplit.adsPctOfAfterReturn.toFixed(0)}% of after-return)
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-gray-500 mt-0.5">Total Revenue (ads-reported)</div>
+            </div>
+          </KpiSection>
+          <KpiSection label="Efficiency">
+            <MetricCard
+              title="Reported revenue / spend"
+              value={fmtRatio(reportedRoas)}
+              change={reportedRoasChange}
+              icon={TrendingUp}
+              tone="amber"
+            />
+            <MetricCard
+              title="MER — after-return Shopify ÷ spend"
+              value={fmtRatio(mer)}
+              change={merChange}
+              icon={Target}
+              tone="teal"
+            />
+            <MetricCard title="CPA (ads-reported purchases)" value={fmtMoney(adsCpa)} change={adsCpaChange} icon={CreditCard} tone="amber" invertTrend />
+          </KpiSection>
+        </>
+      )}
     </div>
   )
 
@@ -712,7 +792,7 @@ export default function MarketingOverview({
               <button
                 type="button"
                 onClick={() => setShowClientDropdown(!showClientDropdown)}
-                className="flex items-center gap-2 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-md text-xs min-w-[140px]"
+                className="flex items-center gap-2 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-md text-xs text-gray-900 min-w-[140px]"
               >
                 <span className="flex-1 text-left truncate">{selectedClientName}</span>
                 <ChevronDown size={14} />
@@ -722,7 +802,7 @@ export default function MarketingOverview({
                   <button
                     type="button"
                     onClick={() => { setSelectedClient('all'); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm"
+                    className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm text-gray-900"
                   >
                     All Clients
                   </button>
@@ -731,7 +811,7 @@ export default function MarketingOverview({
                       key={client.id}
                       type="button"
                       onClick={() => { setSelectedClient(client.id); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }}
-                      className="w-full text-left px-4 py-2 hover:bg-gray-50"
+                      className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-900"
                     >
                       <div className="text-sm font-medium">{client.name}</div>
                       {client.business_type && (
@@ -829,84 +909,26 @@ export default function MarketingOverview({
                   KPI layout
                 </button>
               </div>
-              <div className={`grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 ${densityStackGap}`}>
-                {agencyKpiVisibleIds.map(id => (
-                  <Fragment key={id}>{agencyKpiTile(id)}</Fragment>
+              <div className={`space-y-4 ${densityStackGap}`}>
+                {agencyKpiSections.map(section => (
+                  <KpiSection key={section.sectionId} label={section.label}>
+                    {section.ids.map(id => (
+                      <Fragment key={id}>{agencyKpiTile(id)}</Fragment>
+                    ))}
+                  </KpiSection>
                 ))}
               </div>
+              {insightsClientId && insightsClientRecord && (
+                <ClientInsightsSection
+                  clientId={insightsClientId}
+                  clientName={insightsClientRecord.name}
+                  currencySymbol={insightsClientRecord.currency_symbol || '$'}
+                  dateRange={dateRange}
+                />
+              )}
             </>
           ) : (
-            <>
-          {businessType === 'leadgen' ? primaryLeadGen : primaryEcom}
-
-          <div className={`grid grid-cols-2 md:grid-cols-4 ${densityStackGap}`}>
-            <MetricCard title="Impressions" value={fmtMetric(cur.impressions)} change={prev ? pctChange(cur.impressions, prev.impressions) : undefined} icon={Eye} tone="indigo" />
-            <MetricCard title="Clicks" value={fmtMetric(cur.clicks)} change={prev ? pctChange(cur.clicks, prev.clicks) : undefined} icon={MousePointer} tone="cyan" />
-            <MetricCard title="CTR (detail)" value={`${cur.ctr.toFixed(2)}%`} change={prev ? pctChange(cur.ctr, prev.ctr) : undefined} icon={Target} tone="teal" />
-            <MetricCard title="CPC" value={fmtMoney(cur.cpc)} change={prev ? pctChange(cur.cpc, prev.cpc) : undefined} icon={DollarSign} tone="violet" invertTrend />
-          </div>
-
-                    {businessType === 'ecommerce' && (
-            <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 ${densityStackGap}`}>
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
-                <div className="flex items-start justify-between mb-1 gap-1">
-                  <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-700 shrink-0">
-                    <ShopifyIcon className="w-4 h-4" />
-                  </div>
-                  {prev && (
-                    <div className={`text-xs font-medium shrink-0 ${pctChange(shopifySplit.shopifyReal, prevShopifySplit.shopifyReal) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {fmtPct(pctChange(shopifySplit.shopifyReal, prevShopifySplit.shopifyReal))}
-                    </div>
-                  )}
-                </div>
-                <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">{fmtMoney(shopifySplit.shopifyReal)}</div>
-                <div className="text-xs text-gray-500 mt-0.5">Shopify gross sales</div>
-              </div>
-              <MetricCard
-                title="Shopify Returns"
-                value={fmtMoney(shopifySplit.shopifyReturns)}
-                change={prev ? pctChange(shopifySplit.shopifyReturns, prevShopifySplit.shopifyReturns) : undefined}
-                icon={ArrowDownRight}
-                tone="amber"
-                invertTrend
-              />
-              <MetricCard
-                title="After-return Sales"
-                value={fmtMoney(shopifySplit.shopifyAfterReturn)}
-                change={prev ? pctChange(shopifySplit.shopifyAfterReturn, prevShopifySplit.shopifyAfterReturn) : undefined}
-                icon={ShoppingCart}
-                tone="emerald"
-              />
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
-                <div className="flex items-start justify-between mb-1 gap-1">
-                  <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-600 shrink-0">
-                    <TrendingUp className="w-4 h-4" />
-                  </div>
-                  {adsRevChange !== undefined && (
-                    <div className={`text-xs font-medium shrink-0 ${adsRevChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {adsRevChange >= 0 ? '+' : ''}{adsRevChange.toFixed(1)}%
-                    </div>
-                  )}
-                </div>
-                <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">
-                  {fmtMoney(adsRevenue)}
-                  {shopifySplit.adsPctOfAfterReturn != null && shopifySplit.shopifyAfterReturn > 0 && (
-                    <span className="ml-1.5 text-sm font-semibold text-emerald-700">
-                      ({shopifySplit.adsPctOfAfterReturn.toFixed(0)}% of after-return)
-                    </span>
-                  )}
-                </div>
-                <div className="text-xs text-gray-500 mt-0.5">Total Revenue (ads-reported)</div>
-              </div>
-              <MetricCard title="CPA (Cost Per Acquisition)" value={fmtMoney(cur.cpa)} change={cpaChange} icon={CreditCard} tone="amber" invertTrend />
-            </div>
-          )}
-{businessType === 'leadgen' && (
-            <div className={`grid grid-cols-1 md:grid-cols-2 ${densityStackGap}`}>
-              <MetricCard title="Total Revenue (if tracked)" value={fmtMoney(cur.revenue)} change={revChange} icon={TrendingUp} tone="emerald" />
-            </div>
-          )}
-            </>
+            clientKpiSections
           )}
 
           {showAgencyRollup && (

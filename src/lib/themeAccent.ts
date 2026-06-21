@@ -1,14 +1,15 @@
-export type AccentId = 'orange' | 'blue'
+export type AccentId = 'orange' | 'blue' | 'uni'
 
 const STORAGE_KEY = 'uni_accent'
 
 export function getStoredAccent(): AccentId {
   try {
     const v = localStorage.getItem(STORAGE_KEY)
-    return v === 'blue' ? 'blue' : 'orange'
+    if (v === 'blue' || v === 'orange' || v === 'uni') return v
   } catch {
-    return 'orange'
+    /* ignore */
   }
+  return 'uni'
 }
 
 export function setStoredAccent(id: AccentId): void {
