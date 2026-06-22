@@ -5,6 +5,15 @@ import { Trash2, Eye, Paperclip, Pencil, Check } from 'lucide-react'
 import { db } from '../../lib/api'
 import type { FeedbackRow, FeedbackCategory, FeedbackStatus, FeedbackPriority, FeedbackSeverity } from '../../types/feedback'
 import { CATEGORY_LABELS, STATUS_LABELS } from '../../types/feedback'
+import DashboardSection, {
+  DataTableShell,
+  DataTable,
+  DataTableHead,
+  DataTableHeadCell,
+  DataTableBody,
+  DataTableRow,
+} from '../../components/ui/DataTable'
+import EmptyState from '../../components/ui/EmptyState'
 
 interface Props {
   rows: FeedbackRow[]
@@ -91,33 +100,35 @@ export default function FeedbackTable({ rows, onViewDetail }: Props) {
 
   if (rows.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 py-20 flex flex-col items-center text-center gap-3">
-        <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
-          <Paperclip size={20} className="text-gray-400" />
-        </div>
-        <p className="text-sm font-medium text-gray-500">No feedback found</p>
-        <p className="text-xs text-gray-400">Adjust your filters or wait for new submissions.</p>
-      </div>
+      <DashboardSection>
+        <EmptyState
+          icon={<Paperclip size={20} className="text-[var(--uni-text-muted)]" />}
+          title="No feedback found"
+          description="Adjust your filters or wait for new submissions."
+        />
+      </DashboardSection>
     )
   }
 
+  const HEADERS = ['#', 'Submitted', 'User', 'Page', 'Category', 'Severity', 'Message', 'Files', 'Priority', 'Status', 'Owner', 'Notes', 'Actions']
+
   return (
     <>
-      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-        <table className="w-full text-sm min-w-[1100px]">
-          <thead>
-            <tr className="border-b border-gray-100 text-left">
-              {['#','Submitted','User','Page','Category','Severity','Message','Files','Priority','Status','Owner','Notes','Actions'].map(h => (
-                <th key={h} className="px-3 py-3 text-xs font-semibold text-gray-400 whitespace-nowrap">{h}</th>
+      <DataTableShell>
+        <DataTable minWidth={1100}>
+          <DataTableHead>
+            <tr>
+              {HEADERS.map(h => (
+                <DataTableHeadCell key={h}>{h}</DataTableHeadCell>
               ))}
             </tr>
-          </thead>
-          <tbody>
+          </DataTableHead>
+          <DataTableBody>
             {rows.map((row, idx) => (
-              <tr
+              <DataTableRow
                 key={row.id}
+                clickable
                 onClick={() => onViewDetail(row)}
-                className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
               >
                 {/* # */}
                 <td className="px-3 py-3 text-xs text-gray-400">{idx + 1}</td>
@@ -282,11 +293,11 @@ export default function FeedbackTable({ rows, onViewDetail }: Props) {
                     )}
                   </div>
                 </td>
-              </tr>
+              </DataTableRow>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </DataTableBody>
+        </DataTable>
+      </DataTableShell>
     </>
   )
 }

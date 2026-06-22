@@ -4,6 +4,14 @@ import { ChevronDown, ChevronRight, Layers, LayoutGrid, Trash2 } from 'lucide-re
 import { toast } from 'sonner'
 import { db } from '../../lib/api'
 import { canMutateAlerts } from '../../lib/rbac'
+import DashboardSection, {
+  DataTableShell,
+  DataTable,
+  DataTableHead,
+  DataTableHeadCell,
+  DataTableBody,
+} from '../../components/ui/DataTable'
+import EmptyState from '../../components/ui/EmptyState'
 import AlertActionPanel from './AlertActionPanel'
 import type { AlertGroup, Alert, AlertSeverity, AlertStatus } from '../../types/alerts'
 
@@ -468,11 +476,9 @@ export default function AlertGroupList({
   }, [somePageSelected, allPageSelected, showBulk])
   if (groups.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center text-gray-500">
-        <div className="text-4xl mb-3">✅</div>
-        <h3 className="text-lg font-medium text-gray-900 mb-1">All clear</h3>
-        <p className="text-sm text-gray-500">No alerts match your current filters.</p>
-      </div>
+      <DashboardSection>
+        <EmptyState icon="✅" title="All clear" description="No alerts match your current filters." />
+      </DashboardSection>
     )
   }
 
@@ -489,12 +495,12 @@ export default function AlertGroupList({
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <table className="w-full">
-        <thead className="bg-gray-50 border-b border-gray-200">
+    <DataTableShell>
+      <DataTable>
+        <DataTableHead>
           <tr>
             {showBulk && (
-              <th className="px-2 py-3 w-10 text-left">
+              <DataTableHeadCell className="w-10">
                 <input
                   ref={pageCheckboxRef}
                   type="checkbox"
@@ -504,16 +510,16 @@ export default function AlertGroupList({
                   title="Select all on this page"
                   aria-label="Select all alerts on this page"
                 />
-              </th>
+              </DataTableHeadCell>
             )}
             {visibleColumns.map(col => (
-              <th key={col} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <DataTableHeadCell key={col}>
                 {COLUMN_HEADERS[col] ?? col}
-              </th>
+              </DataTableHeadCell>
             ))}
           </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-50">
+        </DataTableHead>
+        <DataTableBody>
           {groups.map(group => (
             <GroupRow
               key={group.group_key}
@@ -529,8 +535,8 @@ export default function AlertGroupList({
               totalColumns={totalColumns}
             />
           ))}
-        </tbody>
-      </table>
-    </div>
+        </DataTableBody>
+      </DataTable>
+    </DataTableShell>
   )
 }

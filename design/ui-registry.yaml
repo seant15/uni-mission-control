@@ -1,0 +1,83 @@
+# Mission Control UI registry — tab → required components (dashboard analogue of elementor/registry.yaml)
+# status: locked = validate:ui fails on violations; migrating = warn only
+
+version: 1
+reference_site: 00-unimarketingagency/design/
+
+tabs:
+  overview:
+    route: /
+    status: migrating
+    requires: [FilterShell, DashboardSection, DataTable]
+    files:
+      - src/pages/OverviewPage.tsx
+      - src/pages/MarketingOverview.tsx
+
+  heated:
+    route: /?tab=heated
+    status: migrating
+    requires: [FilterShell, DashboardSection, DataTable, ReportSectionHeader]
+    files:
+      - src/pages/DataAnalytics.tsx
+
+  alerts:
+    route: /alerts
+    status: locked
+    requires: [TabPageShell, TabNav, DataTable, DashboardSection, EmptyState]
+    files:
+      - src/pages/Alerts.tsx
+      - src/pages/Alerts/AlertGroupList.tsx
+
+  mission:
+    route: /mission
+    status: locked
+    requires: [TabPageShell, FilterShell, DashboardSection]
+    files:
+      - src/pages/MissionBoard.tsx
+
+  feedback:
+    route: /feedback
+    status: locked
+    requires: [TabPageShell, DataTable, EmptyState]
+    files:
+      - src/pages/FeedbackAdmin.tsx
+      - src/pages/FeedbackAdmin/FeedbackTable.tsx
+
+  realtime:
+    route: /realtime-performance
+    status: migrating
+    requires: [FilterShell, DataTable]
+    files:
+      - src/pages/RealtimePerformance.tsx
+
+  creative:
+    route: /creative-performance
+    status: migrating
+    requires: [FilterShell, DataTable]
+    files:
+      - src/pages/CreativePerformance.tsx
+
+  settings:
+    route: /dashboard/settings
+    status: migrating
+    requires: [TabPageShell, DashboardSection]
+    files:
+      - src/pages/DashboardSettings.tsx
+
+shared_components:
+  TabPageShell: src/components/ui/TabPageShell.tsx
+  TabNav: src/components/ui/TabNav.tsx
+  DashboardSection: src/components/ui/DashboardSection.tsx
+  DataTable: src/components/ui/DataTable.tsx
+  EmptyState: src/components/ui/EmptyState.tsx
+  FilterShell: src/components/FilterShell.tsx
+  ReportSectionHeader: src/components/ReportSectionHeader.tsx
+
+forbidden_in_locked_tabs:
+  - pattern: 'bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden'
+    message: Use DataTableShell / DashboardSection instead of raw card wrapper
+  - pattern: '<table className="w-full"'
+    unless: uni-data-table
+    message: Tables must use DataTable with class uni-data-table
+  - pattern: 'thead className="bg-gray-50'
+    message: Use DataTableHead / uni-data-table-head

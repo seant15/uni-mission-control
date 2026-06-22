@@ -6,6 +6,8 @@ import { toast } from 'sonner'
 import { db } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { MISSION_COLUMNS, type MissionCardRow, type MissionColumn, type MissionCardPriority } from '../types/mission'
+import TabPageShell from '../components/ui/TabPageShell'
+import FilterShell from '../components/FilterShell'
 
 const PRIORITY_OPTIONS: { id: MissionCardPriority; label: string }[] = [
   { id: 'low', label: 'Low' },
@@ -192,22 +194,16 @@ export default function MissionBoard() {
   const savePending = modalMode === 'create' ? createMutation.isPending : saveEditMutation.isPending
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-            <LayoutGrid className="text-[var(--brand-600)]" />
-            Mission Board
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Track work from alerts and notes. Use Edit on a card to change title, notes, or column.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <TabPageShell
+      title="Mission Board"
+      subtitle="Track work from alerts and notes. Use Edit on a card to change title, notes, or column."
+      icon={<LayoutGrid size={22} />}
+      headerExtra={
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           <button
             type="button"
             onClick={() => refetch()}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--uni-border)] bg-[var(--uni-card)] text-sm font-medium text-[var(--uni-text)] hover:bg-[color-mix(in_srgb,var(--uni-border)_30%,transparent)]"
           >
             <RefreshCw size={16} /> Refresh
           </button>
@@ -219,10 +215,10 @@ export default function MissionBoard() {
             <Plus size={16} /> New card
           </button>
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Filters</span>
+      }
+    >
+      <FilterShell stickyBelowHeader={false} className="!static">
+        <span className="uni-inline-filter-label">Filters</span>
         <select
           value={filterClientId}
           onChange={e => setFilterClientId(e.target.value)}
@@ -262,7 +258,7 @@ export default function MissionBoard() {
             Clear filters
           </button>
         )}
-      </div>
+      </FilterShell>
 
       {error && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -475,6 +471,6 @@ export default function MissionBoard() {
           </div>
         </div>
       )}
-    </div>
+    </TabPageShell>
   )
 }

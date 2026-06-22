@@ -336,3 +336,18 @@ html[data-theme='dark'] select option {
   background-color: #111827;
   color: #f1f5f9;
 }
+
+html[data-theme='dark'] .uni-filter-shell,
+html[data-theme='dark'] .uni-section-panel,
+html[data-theme='dark'] .uni-app-header {
+  background-color: var(--uni-surface);
+  border-color: var(--uni-border);
+}
+
+html[data-theme='dark'] .uni-data-table-head {
+  background: color-mix(in srgb, var(--uni-border) 45%, var(--uni-surface));
+}
+
+html[data-theme='dark'] .uni-tab-nav-item-active {
+  color: var(--brand-500, #f97316);
+}

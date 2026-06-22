@@ -10,6 +10,8 @@ import FeedbackStats from './FeedbackAdmin/FeedbackStats'
 import FeedbackFiltersBar from './FeedbackAdmin/FeedbackFilters'
 import FeedbackTable from './FeedbackAdmin/FeedbackTable'
 import FeedbackDrawer from './FeedbackAdmin/FeedbackDrawer'
+import TabPageShell from '../components/ui/TabPageShell'
+import DashboardSection from '../components/ui/DataTable'
 
 export default function FeedbackAdmin() {
   const { appUser } = useAuth()
@@ -63,19 +65,17 @@ export default function FeedbackAdmin() {
   if (!appUser || appUser.role !== 'super_admin') return null
 
   return (
-    <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex items-center gap-3">
-        <MessageSquarePlus size={22} className="text-[var(--brand-600)]" />
-        <h1 className="text-xl font-bold text-gray-900">Feedback</h1>
-        {unresolvedCount > 0 && (
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold">
+    <TabPageShell
+      title="Feedback"
+      icon={<MessageSquarePlus size={22} />}
+      headerExtra={
+        unresolvedCount > 0 ? (
+          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold -mt-8 sm:mt-0">
             {unresolvedCount > 99 ? '99+' : unresolvedCount}
           </span>
-        )}
-      </div>
-
-      {/* KPI tiles */}
+        ) : undefined
+      }
+    >
       <FeedbackStats rows={data} />
 
       {/* Filter bar */}
@@ -83,9 +83,9 @@ export default function FeedbackAdmin() {
 
       {/* Loading / error states */}
       {isLoading && (
-        <div className="bg-white rounded-xl border border-gray-200 py-16 flex items-center justify-center">
-          <p className="text-sm text-gray-400">Loading feedback...</p>
-        </div>
+        <DashboardSection bodyClassName="py-16 flex items-center justify-center">
+          <p className="text-sm text-[var(--uni-text-muted)]">Loading feedback...</p>
+        </DashboardSection>
       )}
 
       {error && (
@@ -107,6 +107,6 @@ export default function FeedbackAdmin() {
         row={selectedRow}
         onClose={() => setSelectedRow(null)}
       />
-    </div>
+    </TabPageShell>
   )
 }

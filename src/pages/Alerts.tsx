@@ -12,6 +12,9 @@ import AlertColumnCustomizer from './Alerts/AlertColumnCustomizer'
 import AlertRulesTab from './Alerts/AlertRulesTab'
 import AbTestDeliveryTab from './Alerts/AbTestDeliveryTab'
 import AlertSystemGuideLink from '../components/AlertSystemGuideLink'
+import TabPageShell from '../components/ui/TabPageShell'
+import type { TabNavItem } from '../components/ui/TabNav'
+import DashboardSection from '../components/ui/DataTable'
 import type {
   Alert,
   AlertGroup,
@@ -23,6 +26,12 @@ import { DEFAULT_ALERT_COLUMNS as DEFAULT_COLS } from '../types/alerts'
 const PAGE_SIZE = 25
 const TABS = ['Alerts', 'Alert Rules', 'A/B & delivery'] as const
 type Tab = typeof TABS[number]
+
+const TAB_NAV_ITEMS: TabNavItem[] = [
+  { id: 'Alerts', label: 'Alerts' },
+  { id: 'Alert Rules', label: 'Alert Rules' },
+  { id: 'A/B & delivery', label: 'A/B & delivery' },
+]
 
 // Group alerts by group_key (client-side)
 function groupAlerts(alerts: Alert[]): AlertGroup[] {
@@ -218,32 +227,17 @@ export default function Alerts() {
     onError: (e: Error) => toast.error(e.message),
   })
 
-  return (
-    <div className="space-y-5">
-      {/* Page header + tabs */}
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Alerts</h1>
-          <p className="text-sm text-gray-500 mt-0.5 leading-snug">Performance monitoring across all clients</p>
-        </div>
-        <div className="flex border-b border-gray-200">
-          {TABS.filter(t => t === 'Alerts' || canManageRules).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-5 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                activeTab === tab
-                  ? 'border-[var(--brand-600)] text-[var(--brand-700)]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-      </div>
+  const alertTabs = TAB_NAV_ITEMS.filter(t => t.id === 'Alerts' || canManageRules)
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+  return (
+    <TabPageShell
+      title="Alerts"
+      subtitle="Performance monitoring across all clients"
+      tabs={alertTabs}
+      activeTabId={activeTab}
+      onTabChange={id => setActiveTab(id as Tab)}
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end -mt-2">
         <p className="text-xs text-gray-500 sm:mr-auto max-w-md leading-snug hidden sm:block">
           Architecture, severities, engines, and tuning — opens in a new tab (read-only).
         </p>
@@ -320,16 +314,16 @@ export default function Alerts() {
 
           {/* Loading skeleton */}
           {isLoading && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden animate-pulse">
+            <DashboardSection bodyClassName="animate-pulse">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center gap-4 px-4 py-4 border-b border-gray-100">
-                  <div className="h-5 w-16 bg-gray-100 rounded-full" />
-                  <div className="h-4 w-28 bg-gray-100 rounded" />
-                  <div className="h-4 flex-1 bg-gray-100 rounded" />
-                  <div className="h-5 w-14 bg-gray-100 rounded-full" />
+                <div key={i} className="flex items-center gap-4 px-4 py-4 border-b border-[var(--uni-border)]">
+                  <div className="h-5 w-16 bg-[var(--uni-border)] rounded-full" />
+                  <div className="h-4 w-28 bg-[var(--uni-border)] rounded" />
+                  <div className="h-4 flex-1 bg-[var(--uni-border)] rounded" />
+                  <div className="h-5 w-14 bg-[var(--uni-border)] rounded-full" />
                 </div>
               ))}
-            </div>
+            </DashboardSection>
           )}
 
           {/* Alert group list */}
@@ -372,6 +366,6 @@ export default function Alerts() {
       ) : (
         <AbTestDeliveryTab currentUserId={appUser?.id ?? ''} />
       )}
-    </div>
+    </TabPageShell>
   )
 }

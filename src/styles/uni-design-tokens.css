@@ -178,3 +178,248 @@
   text-transform: uppercase;
   color: var(--uni-text-muted);
 }
+
+/* ── Tab page shell (locked dashboard routes) ── */
+.uni-tab-page {
+  width: 100%;
+  min-width: 0;
+}
+
+.uni-tab-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.uni-tab-page-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.uni-tab-page-icon {
+  flex-shrink: 0;
+  color: var(--brand-600, var(--uni-orange));
+  margin-top: 0.15rem;
+}
+
+.uni-tab-page-title {
+  font-family: var(--uni-font-display);
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--uni-text);
+  line-height: 1.25;
+}
+
+.uni-tab-page-subtitle {
+  font-size: 0.8125rem;
+  color: var(--uni-text-muted);
+  margin-top: 0.125rem;
+  line-height: 1.45;
+}
+
+/* In-page tab bar */
+.uni-tab-nav {
+  display: flex;
+  border-bottom: 1px solid var(--uni-border);
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.uni-tab-nav-item {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--uni-text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.uni-tab-nav-item:hover {
+  color: var(--uni-text);
+}
+
+.uni-tab-nav-item-active {
+  color: var(--brand-700, #c2410c);
+  border-bottom-color: var(--brand-600, var(--uni-orange));
+}
+
+/* Sticky filter strip — tokenized FilterShell */
+.uni-filter-shell {
+  position: sticky;
+  z-index: 30;
+  border-radius: var(--uni-radius-lg);
+  border: 1px solid var(--uni-border);
+  background: color-mix(in srgb, var(--uni-surface) 95%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  padding: 0.5rem 0.625rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .uni-filter-shell {
+    padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
+  }
+}
+
+.uni-filter-shell.top-0 {
+  top: 0;
+}
+
+/* Section panel — card wrapper for tables / blocks */
+.uni-section-panel {
+  background: var(--uni-card);
+  border: 1px solid var(--uni-border);
+  border-radius: var(--uni-radius-lg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+
+.uni-section-panel-flush {
+  overflow: visible;
+}
+
+/* Data tables — locked thead/tbody rhythm */
+.uni-data-table-shell {
+  overflow-x: auto;
+}
+
+.uni-data-table {
+  width: 100%;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  border-collapse: collapse;
+}
+
+.uni-data-table-head {
+  background: color-mix(in srgb, var(--uni-border) 35%, var(--uni-surface));
+  border-bottom: 1px solid var(--uni-border);
+}
+
+.uni-data-table-th {
+  padding: var(--uni-table-cell-y, 0.625rem) var(--uni-table-cell-x, 0.75rem);
+  text-align: left;
+  font-family: var(--uni-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--uni-text-muted);
+  white-space: nowrap;
+}
+
+.uni-data-table-th-right {
+  text-align: right;
+}
+
+.uni-data-table-th-center {
+  text-align: center;
+}
+
+.uni-data-table tbody tr {
+  border-bottom: 1px solid color-mix(in srgb, var(--uni-border) 55%, transparent);
+  transition: background-color 0.12s;
+}
+
+.uni-data-table tbody tr:hover {
+  background: color-mix(in srgb, var(--uni-border) 25%, transparent);
+}
+
+.uni-data-table tbody td {
+  padding: var(--uni-table-cell-y, 0.625rem) var(--uni-table-cell-x, 0.75rem);
+  color: var(--uni-text);
+  vertical-align: middle;
+}
+
+.uni-data-table-head th {
+  /* legacy th inside locked tables without DataTableHeadCell */
+  padding: var(--uni-table-cell-y, 0.625rem) var(--uni-table-cell-x, 0.75rem);
+}
+
+.uni-data-table-row {
+  border-bottom: 1px solid color-mix(in srgb, var(--uni-border) 55%, transparent);
+  transition: background-color 0.12s;
+}
+
+.uni-data-table-row:hover {
+  background: color-mix(in srgb, var(--uni-border) 25%, transparent);
+}
+
+.uni-data-table-row-clickable {
+  cursor: pointer;
+}
+
+.uni-data-table-cell {
+  padding: var(--uni-table-cell-y, 0.625rem) var(--uni-table-cell-x, 0.75rem);
+  color: var(--uni-text);
+  vertical-align: middle;
+}
+
+.uni-data-table-cell-muted {
+  color: var(--uni-text-muted);
+}
+
+/* Empty / zero states inside sections */
+.uni-empty-state {
+  padding: 3rem 1.5rem;
+  text-align: center;
+  color: var(--uni-text-muted);
+}
+
+.uni-empty-state-title {
+  font-family: var(--uni-font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--uni-text);
+  margin-bottom: 0.25rem;
+}
+
+.uni-empty-state-body {
+  font-size: 0.8125rem;
+  color: var(--uni-text-muted);
+}
+
+/* Inline filter bar (Mission Board, etc.) */
+.uni-inline-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--uni-radius-md);
+  border: 1px solid var(--uni-border);
+  background: var(--uni-card);
+}
+
+.uni-inline-filter-label {
+  font-family: var(--uni-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--uni-text-muted);
+}
+
+/* App chrome */
+.uni-app-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--uni-surface);
+  border-bottom: 1px solid var(--uni-border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}

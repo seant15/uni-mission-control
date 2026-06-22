@@ -39,11 +39,11 @@ function SortTh({
   const Icon = !active ? ArrowUpDown : sort.sortDir === 'asc' ? ArrowUp : ArrowDown
   const alignClass = align === 'left' ? 'text-left' : 'text-right'
   return (
-    <th className={`px-3 py-2.5 text-xs font-medium text-gray-500 ${alignClass}`}>
+    <th className={`uni-data-table-th ${alignClass}`}>
       <button
         type="button"
         onClick={() => sort.toggle(field)}
-        className={`flex items-center gap-1 text-xs font-medium uppercase hover:text-gray-800 ${align === 'right' ? 'ml-auto' : ''} ${active ? 'text-[var(--brand-600)]' : 'text-gray-500'}`}
+        className={`flex items-center gap-1 hover:text-[var(--uni-text)] ${align === 'right' ? 'ml-auto' : ''} ${active ? 'text-[var(--brand-600)]' : ''}`}
       >
         {label}
         <Icon size={11} className={active ? 'text-[var(--brand-600)]' : 'text-gray-400'} />
@@ -138,9 +138,9 @@ export default function MetaAdSetPerformanceTable({
           No ad set data for this selection
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+        <div className="uni-data-table-shell">
+          <table className="uni-data-table text-sm">
+            <thead className="uni-data-table-head">
               <tr>
                 {nestedCreatives && <th className="px-3 py-2.5 w-8" />}
                 <SortTh label="Ad Set" field="ad_set_name" sort={adsetSort} align="left" />

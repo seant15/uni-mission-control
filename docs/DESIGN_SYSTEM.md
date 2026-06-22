@@ -1,14 +1,31 @@
 # Mission Control design system (2026-06)
 
-Light dashboard is the primary product surface (~60%+ of UI). UNI Marketing site (`unimarketingagency.com`) informs accent, typography, and section rhythm — not a full dark marketing clone.
+Light dashboard is the primary product surface. UNI Marketing site (`unimarketingagency.com`) informs accent, typography, and section rhythm.
+
+**Constitution (locked tabs):** read `design/DESIGN.md` before UI work. Validate with `npm run validate:ui`.
 
 ## Token sources
 
 | Layer | File |
 |-------|------|
-| Dashboard tokens | `src/styles/uni-design-tokens.css` |
+| Dashboard tokens + classes | `src/styles/uni-design-tokens.css` |
 | Accent + theme | `src/index.css` (`data-accent`, `data-theme`) |
+| Dashboard registry | `design/ui-registry.yaml` |
 | Marketing reference | `00-unimarketingagency/design/tokens.json` |
+
+## Locked components (use before inventing)
+
+| Component | Path |
+|-----------|------|
+| Tab page | `TabPageShell` |
+| In-page tabs | `TabNav` |
+| Sections | `DashboardSection` |
+| Tables | `DataTableShell`, `DataTable`, `DataTableHead*` |
+| Empty states | `EmptyState` |
+| Filters | `FilterShell` |
+| Section titles | `ReportSectionHeader` |
+
+Import: `src/components/ui`
 
 ## Accents (`data-accent`)
 
@@ -18,20 +35,16 @@ Light dashboard is the primary product surface (~60%+ of UI). UNI Marketing site
 
 ## Themes (`data-theme`)
 
-- `light` — default; existing cards, FilterShell, KPI grids
-- `dark` — `#060c16` surfaces, light text (Settings → My appearance)
-- `system` — follows OS preference
+- `light` — default
+- `dark` — `#060c16` surfaces (Settings → My appearance)
+- `system` — follows OS
 
-Personal prefs stored in `dashboard_settings.ui_theme`, `ui_accent`, `personal_ui_density`.
+Personal prefs: `dashboard_settings.ui_theme`, `ui_accent`, `personal_ui_density`.
 
-## Primitives
+## Tab lock status
 
-Use existing classes before inventing new ones:
-
-- Section label: `.uni-section-label`
-- Card: `.uni-card`, `.uni-card-header`, `.uni-card-body`
-- KPI journey sections: `KpiSection` in `MarketingOverview.tsx`
+See `design/ui-registry.yaml`. **Locked:** Alerts, Mission, Feedback. **Migrating:** Overview, Heated, Creative, Realtime, Settings.
 
 ## Client insights
 
-One-off widgets: `client_dashboard_modules` + `ClientInsightsSection` below Agency KPI cards when a client is selected and has active modules.
+`client_dashboard_modules` + `ClientInsightsSection` below Agency KPI when a client has active modules.

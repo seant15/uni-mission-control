@@ -11,7 +11,8 @@
     "deploy": "vercel --prod",
     "deploy:preview": "vercel",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "validate:ui": "node scripts/validate-ui-constitution.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
