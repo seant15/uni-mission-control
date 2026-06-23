@@ -212,6 +212,116 @@ html {
   font-weight: 700;
 }
 
+/* Sidebar footer — light card on dark sidebar (default); dark theme blends with shell */
+.uni-sidebar-footer-block {
+  margin-top: auto;
+  border-top: 1px solid rgba(251, 146, 60, 0.25);
+  background: linear-gradient(to bottom, rgba(255, 247, 237, 0.98), rgba(245, 245, 244, 0.9));
+}
+
+.uni-sidebar-user-card {
+  background: rgba(255, 255, 255, 0.95);
+  color: #1c1917;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  outline: 1px solid rgba(254, 215, 170, 0.55);
+}
+
+.uni-sidebar-avatar-ring {
+  --tw-ring-color: rgba(254, 215, 170, 0.6);
+}
+
+.uni-sidebar-user-role {
+  color: #78716c;
+}
+
+.uni-sidebar-signout-btn {
+  color: #292524;
+  background: rgba(255, 247, 237, 0.9);
+  border: 1px solid rgba(231, 229, 228, 0.9);
+}
+
+.uni-sidebar-signout-btn:hover {
+  background: rgba(255, 237, 213, 0.95);
+}
+
+.uni-sidebar-signout-icon {
+  color: #57534e;
+}
+
+html[data-theme='dark'] .uni-sidebar-footer-block {
+  border-top-color: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(to bottom, rgba(15, 23, 42, 0.85), rgba(15, 23, 42, 0.98));
+}
+
+html[data-theme='dark'] .uni-sidebar-user-card {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1f5f9;
+  outline-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+html[data-theme='dark'] .uni-sidebar-avatar-ring {
+  --tw-ring-color: rgba(255, 255, 255, 0.15);
+}
+
+html[data-theme='dark'] .uni-sidebar-user-role {
+  color: #94a3b8;
+}
+
+html[data-theme='dark'] .uni-sidebar-footer-link {
+  color: #cbd5e1;
+}
+
+html[data-theme='dark'] .uni-sidebar-footer-link:hover {
+  color: #ffffff;
+}
+
+html[data-theme='dark'] .uni-sidebar-signout-btn {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+html[data-theme='dark'] .uni-sidebar-signout-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+html[data-theme='dark'] .uni-sidebar-signout-icon {
+  color: #94a3b8;
+}
+
+html[data-theme='dark'] .uni-sidebar-control-shell {
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+html[data-theme='dark'] .uni-sidebar-control-shell:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+}
+
+html[data-theme='dark'] .uni-sidebar-control-menu {
+  background: #0f172a !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #e2e8f0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+html[data-theme='dark'] .uni-sidebar-control-menu button {
+  color: #cbd5e1;
+}
+
+html[data-theme='dark'] .uni-sidebar-control-menu button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='dark'] .uni-sidebar-control-menu button[aria-selected='true'],
+html[data-theme='dark'] .uni-sidebar-control-menu .is-selected {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.12);
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -303,6 +413,11 @@ html[data-theme='dark'] .uni-card {
   background-color: var(--uni-surface);
   border-color: var(--uni-border);
   color: var(--uni-text);
+}
+
+html[data-theme='dark'] .bg-white\/80,
+html[data-theme='dark'] .bg-white\/95 {
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 html[data-theme='dark'] .text-gray-900,
@@ -410,4 +525,117 @@ html[data-theme='dark'] .bg-\[var\(--brand-50\)\] {
 
 html[data-theme='dark'] .text-\[var\(--brand-700\)\] {
   color: var(--brand-400, #fb923c);
+}
+
+/* ── Dark theme: semantic status / surface utility overrides ──
+   Root fix for scattered light Tailwind classes across pages. */
+
+html[data-theme='dark'] .text-stone-700,
+html[data-theme='dark'] .text-stone-800 {
+  color: var(--uni-text);
+}
+
+html[data-theme='dark'] .bg-stone-50,
+html[data-theme='dark'] .bg-stone-100 {
+  background-color: #0c1219;
+}
+
+html[data-theme='dark'] .hover\:bg-stone-50:hover,
+html[data-theme='dark'] .hover\:bg-stone-50\/80:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme='dark'] .border-stone-100,
+html[data-theme='dark'] .border-stone-200,
+html[data-theme='dark'] .border-stone-300 {
+  border-color: var(--uni-border);
+}
+
+html[data-theme='dark'] .bg-amber-50,
+html[data-theme='dark'] .bg-amber-100,
+html[data-theme='dark'] .bg-amber-100\/95 {
+  background-color: rgba(217, 119, 6, 0.14);
+}
+
+html[data-theme='dark'] .text-amber-950,
+html[data-theme='dark'] .text-amber-900,
+html[data-theme='dark'] .text-amber-800,
+html[data-theme='dark'] .text-amber-700 {
+  color: #fcd34d;
+}
+
+html[data-theme='dark'] .border-amber-200,
+html[data-theme='dark'] .border-amber-300 {
+  border-color: rgba(251, 191, 36, 0.28);
+}
+
+html[data-theme='dark'] .bg-emerald-50,
+html[data-theme='dark'] .bg-emerald-100,
+html[data-theme='dark'] .bg-emerald-100\/95 {
+  background-color: rgba(16, 185, 129, 0.14);
+}
+
+html[data-theme='dark'] .text-emerald-950,
+html[data-theme='dark'] .text-emerald-900,
+html[data-theme='dark'] .text-emerald-800,
+html[data-theme='dark'] .text-emerald-700,
+html[data-theme='dark'] .text-emerald-600 {
+  color: #6ee7b7;
+}
+
+html[data-theme='dark'] .border-emerald-200 {
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+html[data-theme='dark'] .bg-red-50 {
+  background-color: rgba(239, 68, 68, 0.14);
+}
+
+html[data-theme='dark'] .text-red-800 {
+  color: #fca5a5;
+}
+
+html[data-theme='dark'] .border-red-200 {
+  border-color: rgba(248, 113, 113, 0.28);
+}
+
+html[data-theme='dark'] .bg-green-100 {
+  background-color: rgba(34, 197, 94, 0.14);
+}
+
+html[data-theme='dark'] .text-green-700 {
+  color: #86efac;
+}
+
+html[data-theme='dark'] .bg-slate-100 {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='dark'] .text-slate-700 {
+  color: #cbd5e1;
+}
+
+html[data-theme='dark'] input[type='checkbox'] {
+  accent-color: var(--brand-500, #f97316);
+}
+
+html[data-theme='dark'] ::-webkit-scrollbar-track {
+  background: #0c1219;
+}
+
+html[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+html[data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Announcement bar variants */
+html[data-theme='dark'] .bg-stone-200\/90 {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='dark'] .border-stone-300\/80 {
+  border-color: var(--uni-border);
 }

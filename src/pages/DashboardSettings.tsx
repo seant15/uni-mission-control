@@ -317,7 +317,7 @@ export default function DashboardSettingsPage() {
       {activeTab === 'users' && (
         <div className="space-y-4">
           {appUser?.role === 'super_admin' && shellPreview?.previewUserId && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 leading-relaxed">
+            <div className="uni-callout-warn rounded-xl px-4 py-3 text-sm leading-relaxed">
               You are previewing the <span className="font-semibold">shell</span> (title, subtitle, logo, layout density, assist toggles)
               as user <code className="text-xs bg-white/80 px-1 rounded">{shellPreview.previewUserId}</code>.
               Change or clear this from the sidebar control labeled &quot;Shell&quot; under the brand block.
@@ -517,9 +517,9 @@ export default function DashboardSettingsPage() {
               {saveError}
             </div>
           )}
-          <p className="text-sm text-stone-700 bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 leading-relaxed">
+          <p className="uni-info-banner text-sm rounded-xl px-4 py-3 leading-relaxed">
             These defaults apply to the <span className="font-semibold">Account Performance</span> page (Heated / Data Analytics): business type, default chart metric, date range, chart height, table pagination, and cache behavior.
-            <span className="block mt-1 text-stone-600">Marketing Overview (agency pies and client breakdown) and Real-time Performance keep their own filters on each screen.</span>
+            <span className="uni-info-banner-muted block mt-1">Marketing Overview (agency pies and client breakdown) and Real-time Performance keep their own filters on each screen.</span>
           </p>
 
           {appUser?.role === 'super_admin' && (

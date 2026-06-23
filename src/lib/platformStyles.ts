@@ -19,10 +19,10 @@ export function platformLabel(platform: string | null | undefined): string {
 
 export function platformBadgeClass(platform: string | null | undefined): string {
   const key = (platform || '').toLowerCase()
-  if (key === 'meta_ads') return 'bg-[#1e3a5f] text-white border border-[#2d4a6f]'
-  if (key === 'google_ads') return 'bg-amber-100 text-amber-950 border border-amber-300'
-  if (key === 'shopify') return 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-  return 'bg-slate-100 text-slate-700 border border-slate-200'
+  if (key === 'meta_ads') return 'uni-platform-badge uni-platform-badge--meta'
+  if (key === 'google_ads') return 'uni-platform-badge uni-platform-badge--google'
+  if (key === 'shopify') return 'uni-platform-badge uni-platform-badge--shopify'
+  return 'uni-platform-badge uni-platform-badge--default'
 }
 
 export function platformShortLabel(platform: string | null | undefined): string {

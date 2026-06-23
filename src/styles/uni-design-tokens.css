@@ -423,3 +423,99 @@
   border-bottom: 1px solid var(--uni-border);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
+
+/* ── Semantic banners / dropdowns / badges (theme-aware) ── */
+
+.uni-info-banner {
+  color: var(--uni-text);
+  background: color-mix(in srgb, var(--uni-border) 35%, var(--uni-surface));
+  border: 1px solid var(--uni-border);
+}
+
+.uni-info-banner-muted {
+  color: var(--uni-text-muted);
+}
+
+.uni-dropdown-panel {
+  background: var(--uni-surface);
+  border: 1px solid var(--uni-border);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+}
+
+.uni-dropdown-item {
+  color: var(--uni-text);
+}
+
+.uni-dropdown-item:hover {
+  background: color-mix(in srgb, var(--uni-border) 40%, transparent);
+}
+
+.uni-platform-badge {
+  border-width: 1px;
+  border-style: solid;
+}
+
+.uni-platform-badge--meta {
+  background: #1e3a5f;
+  color: #ffffff;
+  border-color: #2d4a6f;
+}
+
+.uni-platform-badge--google {
+  background: #fef3c7;
+  color: #78350f;
+  border-color: #fcd34d;
+}
+
+.uni-platform-badge--shopify {
+  background: #d1fae5;
+  color: #065f46;
+  border-color: #6ee7b7;
+}
+
+.uni-platform-badge--default {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #e2e8f0;
+}
+
+html[data-theme='dark'] {
+  --uni-accent-bg: rgba(16, 185, 129, 0.14);
+  --uni-accent-border: rgba(52, 211, 153, 0.28);
+  --uni-info-bg: rgba(56, 189, 248, 0.12);
+  --uni-warning-bg: rgba(217, 119, 6, 0.14);
+  --uni-danger-bg: rgba(239, 68, 68, 0.14);
+  --uni-orange-bg: rgba(249, 115, 22, 0.14);
+  --uni-purple-bg: rgba(168, 85, 247, 0.14);
+}
+
+html[data-theme='dark'] .uni-card-header {
+  background: color-mix(in srgb, var(--uni-border) 30%, var(--uni-surface));
+}
+
+html[data-theme='dark'] .uni-callout-warn {
+  color: #fcd34d;
+  border-color: rgba(251, 191, 36, 0.28);
+}
+
+html[data-theme='dark'] .uni-platform-badge--google {
+  background: rgba(251, 191, 36, 0.16);
+  color: #fcd34d;
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+html[data-theme='dark'] .uni-platform-badge--shopify {
+  background: rgba(16, 185, 129, 0.16);
+  color: #6ee7b7;
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+html[data-theme='dark'] .uni-platform-badge--default {
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  border-color: var(--uni-border);
+}
+
+html[data-theme='dark'] .uni-dropdown-panel {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}

@@ -357,9 +357,9 @@ function AppShell() {
             )}
           </nav>
 
-          <div className="mt-auto border-t border-orange-200/50 bg-gradient-to-b from-orange-50/98 via-stone-50/95 to-stone-100/90 p-2 space-y-2">
+          <div className="uni-sidebar-footer-block mt-auto p-2 space-y-2">
             <div
-              className={`flex items-center gap-2.5 p-2.5 rounded-xl bg-white/95 text-stone-900 ring-1 ring-orange-100 shadow-sm ${
+              className={`uni-sidebar-user-card flex items-center gap-2.5 p-2.5 rounded-xl shadow-sm ${
                 sidebarCollapsed ? 'lg:flex-col lg:items-center' : ''
               }`}
             >
@@ -370,7 +370,7 @@ function AppShell() {
                   setMobileNavOpen(false)
                   navigate('/dashboard/settings?tab=profile')
                 }}
-                className="rounded-full flex-shrink-0 ring-2 ring-orange-200/60 hover:brightness-110 transition"
+                className="uni-sidebar-avatar-ring rounded-full flex-shrink-0 ring-2 hover:brightness-110 transition"
               >
                 <UserAvatar
                   displayName={appUser?.display_name}
@@ -386,18 +386,18 @@ function AppShell() {
                 >
                   {appUser?.display_name || 'User'}
                 </Link>
-                <p className="text-[11px] text-stone-500 capitalize leading-tight">{effRole.replace('_', ' ')}</p>
+                <p className="uni-sidebar-user-role text-[11px] capitalize leading-tight">{effRole.replace('_', ' ')}</p>
               </div>
             </div>
             <button
               type="button"
               onClick={handleSignOut}
               title="Sign out of UNI Mission Control"
-              className={`w-full flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-semibold text-stone-800 bg-orange-50/90 hover:bg-orange-100/95 border border-stone-200/90 transition ${
+              className={`uni-sidebar-signout-btn w-full flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-semibold transition ${
                 sidebarCollapsed ? 'lg:px-0' : ''
               }`}
             >
-              <DoorOpen size={15} className="shrink-0 text-stone-600" aria-hidden />
+              <DoorOpen size={15} className="uni-sidebar-signout-icon shrink-0" aria-hidden />
               <span className={sidebarCollapsed ? 'lg:sr-only' : ''}>Sign out</span>
             </button>
           </div>

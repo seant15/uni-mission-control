@@ -44,14 +44,14 @@ export default function AccountDateRangePicker({
         type="date"
         value={dateRange.start}
         onChange={e => onChange({ ...dateRange, start: e.target.value })}
-        className="uni-native-field px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 max-w-[11rem]"
+        className="uni-native-field px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-900 max-w-[11rem]"
       />
       <span className="text-gray-400 text-xs">to</span>
       <input
         type="date"
         value={dateRange.end}
         onChange={e => onChange({ ...dateRange, end: e.target.value })}
-        className="uni-native-field px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 max-w-[11rem]"
+        className="uni-native-field px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-900 max-w-[11rem]"
       />
       <button
         type="button"
@@ -61,13 +61,13 @@ export default function AccountDateRangePicker({
         <Calendar size={13} /> Presets
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-72 overflow-y-auto">
+        <div className="uni-dropdown-panel absolute top-full left-0 mt-1 w-48 rounded-lg shadow-lg z-50 max-h-72 overflow-y-auto">
           {presets.map(preset => (
             <button
               key={preset.label}
               type="button"
               onClick={() => pick(preset)}
-              className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm text-gray-900 first:rounded-t-lg last:rounded-b-lg"
+              className="uni-dropdown-item w-full text-left px-4 py-2 text-sm first:rounded-t-lg last:rounded-b-lg"
             >
               {preset.label}
             </button>
