@@ -351,3 +351,63 @@ html[data-theme='dark'] .uni-data-table-head {
 html[data-theme='dark'] .uni-tab-nav-item-active {
   color: var(--brand-500, #f97316);
 }
+
+/* App shell — replace light gradient when dark theme is active */
+html[data-theme='dark'] .uni-app-shell {
+  background-color: var(--uni-bg);
+  background-image:
+    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(232, 93, 4, 0.07), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 100% 100%, rgba(15, 118, 110, 0.05), transparent 50%);
+}
+
+html[data-theme='dark'] .text-gray-700,
+html[data-theme='dark'] .text-gray-400 {
+  color: var(--uni-text-muted);
+}
+
+html[data-theme='dark'] .text-gray-500 {
+  color: var(--uni-text-dim);
+}
+
+html[data-theme='dark'] .border-gray-100 {
+  border-color: var(--uni-border);
+}
+
+html[data-theme='dark'] .bg-gray-50,
+html[data-theme='dark'] .bg-gray-100 {
+  background-color: #0c1219;
+}
+
+html[data-theme='dark'] input[type='text'],
+html[data-theme='dark'] input[type='email'],
+html[data-theme='dark'] input[type='password'],
+html[data-theme='dark'] input:not([type]),
+html[data-theme='dark'] textarea {
+  background-color: #111827;
+  color: #e5e7eb;
+  border-color: var(--uni-border-strong);
+  color-scheme: dark;
+}
+
+html[data-theme='dark'] input[readonly],
+html[data-theme='dark'] input:disabled {
+  background-color: #0a1018;
+  color: var(--uni-text-muted);
+}
+
+html[data-theme='dark'] .hover\:bg-gray-50:hover,
+html[data-theme='dark'] .hover\:bg-gray-100:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme='dark'] .shadow-sm {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme='dark'] .bg-\[var\(--brand-50\)\] {
+  background-color: color-mix(in srgb, var(--brand-600, #ea580c) 16%, #111827);
+}
+
+html[data-theme='dark'] .text-\[var\(--brand-700\)\] {
+  color: var(--brand-400, #fb923c);
+}

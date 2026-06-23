@@ -248,7 +248,7 @@ function AppShell() {
 
   return (
     <ShellPreviewProvider value={shellPreviewValue}>
-    <div className="flex min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/25 to-amber-50/40">
+    <div className="uni-app-shell flex min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/25 to-amber-50/40">
         {mobileNavOpen && (
           <button
             type="button"

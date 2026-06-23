@@ -168,17 +168,62 @@ function aggregateRows<T extends Record<string, any>>(
 }
 
 
-// Pct change badge
-function PctBadge({ current, previous, invertTrend = false }: { current: number; previous: number; invertTrend?: boolean }) {
+// Pct change badge (use CompareTd for drill tables — keep value columns clean)
+function PctBadge({
+  current,
+  previous,
+  invertTrend = false,
+}: {
+  current: number
+  previous: number
+  invertTrend?: boolean
+}) {
   if (!previous || previous === 0) return null
   const pct = ((current - previous) / previous) * 100
   const isGood = invertTrend ? pct <= 0 : pct >= 0
   const ArrowIcon = pct >= 0 ? ArrowUpRight : ArrowDownRight
   return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ml-1 ${isGood ? 'text-green-600' : 'text-red-600'}`}>
+    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${isGood ? 'text-green-600' : 'text-red-600'}`}>
       <ArrowIcon size={10} />
       {Math.abs(pct).toFixed(1)}%
     </span>
+  )
+}
+
+function CompareTh({ label, first = false }: { label: string; first?: boolean }) {
+  return (
+    <th
+      className={`px-3 py-3 text-xs font-medium text-stone-500 text-right whitespace-nowrap ${
+        first ? 'border-l border-stone-200 bg-stone-50/80' : 'bg-stone-50/80'
+      }`}
+    >
+      {label}
+    </th>
+  )
+}
+
+function CompareTd({
+  current,
+  previous,
+  invertTrend = false,
+  first = false,
+}: {
+  current: number
+  previous?: number
+  invertTrend?: boolean
+  first?: boolean
+}) {
+  const prev = previous ?? 0
+  const cellClass = `px-3 py-3 text-right text-xs whitespace-nowrap bg-stone-50/30 ${
+    first ? 'border-l border-stone-200' : ''
+  }`
+  if (!prev || prev === 0) {
+    return <td className={cellClass}>—</td>
+  }
+  return (
+    <td className={cellClass}>
+      <PctBadge current={current} previous={prev} invertTrend={invertTrend} />
+    </td>
   )
 }
 
@@ -1374,7 +1419,7 @@ export default function DataAnalytics({
               <div className={tableWrapMt}>
                 <VirtualizedTableShell
                   rows={metaCampaignTableRows}
-                  colSpan={11}
+                  colSpan={17}
                   thead={(
                     <tr>
                       <SortTh label="Campaign" field="campaign_name" sort={metaCampaignSort} align="left" />
@@ -1388,6 +1433,12 @@ export default function DataAnalytics({
                       <SortTh label="Conv." field="conversions" sort={metaCampaignSort} />
                       <SortTh label="CPA" field="_cpa" sort={metaCampaignSort} />
                       <SortTh label="ROAS" field="_roas" sort={metaCampaignSort} />
+                      <CompareTh label="Spend Δ" first />
+                      <CompareTh label="CTR Δ" />
+                      <CompareTh label="Reach Δ" />
+                      <CompareTh label="Conv. Δ" />
+                      <CompareTh label="CPA Δ" />
+                      <CompareTh label="ROAS Δ" />
                     </tr>
                   )}
                   renderRow={(camp: any) => {
@@ -1395,48 +1446,45 @@ export default function DataAnalytics({
                     const ctr = camp.impressions > 0 ? camp.clicks / camp.impressions * 100 : 0
                     const roas = camp.spend > 0 ? camp.revenue / camp.spend : 0
                     const cpa = camp.conversions > 0 ? camp.spend / camp.conversions : 0
+                    const prevCtr = prev && prev.impressions > 0 ? (prev.clicks / prev.impressions) * 100 : 0
+                    const prevCpa = prev && prev.conversions > 0 ? prev.spend / prev.conversions : 0
+                    const prevRoas = prev && prev.spend > 0 ? prev.revenue / prev.spend : 0
                     const freqDisplay = camp.frequency != null && camp.frequency > 0 ? camp.frequency.toFixed(2) : '—'
                     return (
                       <tr key={camp._key} className="hover:bg-slate-50">
                         <td className="px-4 py-3 font-medium max-w-[280px] truncate">{camp.campaign_name}</td>
-                        <td className="px-4 py-3 text-right font-medium">
+                        <td className="px-4 py-3 text-right font-medium tabular-nums">
                           {selectedClientCurrencySym}{camp.spend.toFixed(2)}
-                          {prev && <PctBadge current={camp.spend} previous={prev.spend} />}
                         </td>
-                        <td className="px-4 py-3 text-right">{camp.clicks.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right">
-                          {ctr.toFixed(2)}%
-                          {prev && prev.impressions > 0 && <PctBadge current={ctr} previous={prev.clicks / prev.impressions * 100} />}
-                        </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right tabular-nums">{camp.clicks.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{ctr.toFixed(2)}%</td>
+                        <td className="px-4 py-3 text-right tabular-nums">
                           {camp.reach > 0 ? camp.reach.toLocaleString() : '—'}
-                          {prev && prev.reach > 0 && camp.reach > 0 && <PctBadge current={camp.reach} previous={prev.reach} />}
                         </td>
-                        <td className="px-4 py-3 text-right text-gray-700">{freqDisplay}</td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right text-gray-700 tabular-nums">{freqDisplay}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">
                           {camp.outbound_clicks > 0 ? camp.outbound_clicks.toLocaleString() : '—'}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right tabular-nums">
                           {camp.video_p25_watched > 0 ? camp.video_p25_watched.toLocaleString() : '—'}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right tabular-nums">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${camp.conversions > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                             {camp.conversions}
                           </span>
-                          {prev && <PctBadge current={camp.conversions} previous={prev.conversions} />}
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold">
+                        <td className="px-4 py-3 text-right font-semibold tabular-nums">
                           {cpa > 0 ? `${selectedClientCurrencySym}${cpa.toFixed(2)}` : '-'}
-                          {prev && cpa > 0 && (
-                            <PctBadge current={cpa} previous={prev.conversions > 0 ? prev.spend / prev.conversions : 0} invertTrend />
-                          )}
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold">
+                        <td className="px-4 py-3 text-right font-semibold tabular-nums">
                           {roas > 0 ? `${roas.toFixed(2)}x` : '-'}
-                          {prev && roas > 0 && (
-                            <PctBadge current={roas} previous={prev.spend > 0 ? prev.revenue / prev.spend : 0} />
-                          )}
                         </td>
+                        <CompareTd current={camp.spend} previous={prev?.spend} first />
+                        <CompareTd current={ctr} previous={prevCtr} />
+                        <CompareTd current={camp.reach} previous={prev?.reach} />
+                        <CompareTd current={camp.conversions} previous={prev?.conversions} />
+                        <CompareTd current={cpa} previous={prevCpa} invertTrend />
+                        <CompareTd current={roas} previous={prevRoas} />
                       </tr>
                     )
                   }}
@@ -1457,7 +1505,7 @@ export default function DataAnalytics({
               <div className={tableWrapMt}>
                 <VirtualizedTableShell
                   rows={googleCampaignTableRows}
-                  colSpan={7}
+                  colSpan={12}
                   thead={(
                     <tr>
                       <SortTh label="Campaign" field="campaign_name" sort={googleCampaignSort} align="left" />
@@ -1467,6 +1515,11 @@ export default function DataAnalytics({
                       <SortTh label="Conv." field="conversions" sort={googleCampaignSort} />
                       <SortTh label="CPA" field="_cpa" sort={googleCampaignSort} />
                       <SortTh label="ROAS" field="_roas" sort={googleCampaignSort} />
+                      <CompareTh label="Spend Δ" first />
+                      <CompareTh label="CTR Δ" />
+                      <CompareTh label="Conv. Δ" />
+                      <CompareTh label="CPA Δ" />
+                      <CompareTh label="ROAS Δ" />
                     </tr>
                   )}
                   renderRow={(camp: any) => {
@@ -1474,36 +1527,33 @@ export default function DataAnalytics({
                     const ctr = camp.impressions > 0 ? camp.clicks / camp.impressions * 100 : 0
                     const roas = camp.spend > 0 ? camp.revenue / camp.spend : 0
                     const cpa = camp.conversions > 0 ? camp.spend / camp.conversions : 0
+                    const prevCtr = prev && prev.impressions > 0 ? (prev.clicks / prev.impressions) * 100 : 0
+                    const prevCpa = prev && prev.conversions > 0 ? prev.spend / prev.conversions : 0
+                    const prevRoas = prev && prev.spend > 0 ? prev.revenue / prev.spend : 0
                     return (
                       <tr key={camp._key} className="hover:bg-red-50">
                         <td className="px-4 py-3 font-medium max-w-[280px] truncate">{camp.campaign_name}</td>
-                        <td className="px-4 py-3 text-right font-medium">
+                        <td className="px-4 py-3 text-right font-medium tabular-nums">
                           {selectedClientCurrencySym}{camp.spend.toFixed(2)}
-                          {prev && <PctBadge current={camp.spend} previous={prev.spend} />}
                         </td>
-                        <td className="px-4 py-3 text-right">{camp.clicks.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right">
-                          {ctr.toFixed(2)}%
-                          {prev && prev.impressions > 0 && <PctBadge current={ctr} previous={prev.clicks / prev.impressions * 100} />}
-                        </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right tabular-nums">{camp.clicks.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{ctr.toFixed(2)}%</td>
+                        <td className="px-4 py-3 text-right tabular-nums">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${camp.conversions > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                             {camp.conversions}
                           </span>
-                          {prev && <PctBadge current={camp.conversions} previous={prev.conversions} />}
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold">
+                        <td className="px-4 py-3 text-right font-semibold tabular-nums">
                           {cpa > 0 ? `${selectedClientCurrencySym}${cpa.toFixed(2)}` : '-'}
-                          {prev && cpa > 0 && (
-                            <PctBadge current={cpa} previous={prev.conversions > 0 ? prev.spend / prev.conversions : 0} invertTrend />
-                          )}
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold">
+                        <td className="px-4 py-3 text-right font-semibold tabular-nums">
                           {roas > 0 ? `${roas.toFixed(2)}x` : '-'}
-                          {prev && roas > 0 && (
-                            <PctBadge current={roas} previous={prev.spend > 0 ? prev.revenue / prev.spend : 0} />
-                          )}
                         </td>
+                        <CompareTd current={camp.spend} previous={prev?.spend} first />
+                        <CompareTd current={ctr} previous={prevCtr} />
+                        <CompareTd current={camp.conversions} previous={prev?.conversions} />
+                        <CompareTd current={cpa} previous={prevCpa} invertTrend />
+                        <CompareTd current={roas} previous={prevRoas} />
                       </tr>
                     )
                   }}
@@ -1524,7 +1574,7 @@ export default function DataAnalytics({
               <div className={tableWrapMt}>
                 <VirtualizedTableShell
                   rows={keywordTableRows}
-                  colSpan={9}
+                  colSpan={11}
                   thead={(
                     <tr>
                       <SortTh label="Keyword" field="keyword" sort={keywordSort} align="left" />
@@ -1536,6 +1586,8 @@ export default function DataAnalytics({
                       <SortTh label="CTR" field="_ctr" sort={keywordSort} />
                       <SortTh label="Conv." field="conversions" sort={keywordSort} />
                       <SortTh label="CPC" field="_cpc" sort={keywordSort} />
+                      <CompareTh label="Spend Δ" first />
+                      <CompareTh label="Conv. Δ" />
                     </tr>
                   )}
                   renderRow={(kw: any) => {
@@ -1550,17 +1602,15 @@ export default function DataAnalytics({
                         <td className="px-4 py-3">
                           <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">{kw.match_type}</span>
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right tabular-nums">
                           {selectedClientCurrencySym}{kw.spend.toFixed(2)}
-                          {prev && <PctBadge current={kw.spend} previous={prev.spend} />}
                         </td>
-                        <td className="px-4 py-3 text-right">{kw.clicks}</td>
-                        <td className="px-4 py-3 text-right">{ctr.toFixed(2)}%</td>
-                        <td className="px-4 py-3 text-right">
-                          {kw.conversions}
-                          {prev && <PctBadge current={kw.conversions} previous={prev.conversions} />}
-                        </td>
-                        <td className="px-4 py-3 text-right">{cpc > 0 ? `$${cpc.toFixed(2)}` : '-'}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{kw.clicks}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{ctr.toFixed(2)}%</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{kw.conversions}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{cpc > 0 ? `$${cpc.toFixed(2)}` : '-'}</td>
+                        <CompareTd current={kw.spend} previous={prev?.spend} first />
+                        <CompareTd current={kw.conversions} previous={prev?.conversions} />
                       </tr>
                     )
                   }}
@@ -1581,7 +1631,7 @@ export default function DataAnalytics({
               <div className={tableWrapMt}>
                 <VirtualizedTableShell
                   rows={searchTermTableRows}
-                  colSpan={9}
+                  colSpan={11}
                   thead={(
                     <tr>
                       <SortTh label="Search Term" field="search_term" sort={searchTermSort} align="left" />
@@ -1593,6 +1643,8 @@ export default function DataAnalytics({
                       <SortTh label="CTR" field="_ctr" sort={searchTermSort} />
                       <SortTh label="CPC" field="_cpc" sort={searchTermSort} />
                       <SortTh label="Conv." field="conversions" sort={searchTermSort} />
+                      <CompareTh label="Spend Δ" first />
+                      <CompareTh label="Conv. Δ" />
                     </tr>
                   )}
                   renderRow={(term: any) => {
@@ -1606,20 +1658,20 @@ export default function DataAnalytics({
                         <td className="px-4 py-3">
                           <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">{term.match_type}</span>
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right tabular-nums">
                           {selectedClientCurrencySym}{term.spend.toFixed(2)}
-                          {prev && <PctBadge current={term.spend} previous={prev.spend} />}
                         </td>
-                        <td className="px-4 py-3 text-right">{term.impressions.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right">{term.clicks}</td>
-                        <td className="px-4 py-3 text-right">{ctr.toFixed(2)}%</td>
-                        <td className="px-4 py-3 text-right">{cpc > 0 ? `$${cpc.toFixed(2)}` : '-'}</td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right tabular-nums">{term.impressions.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{term.clicks}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{ctr.toFixed(2)}%</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{cpc > 0 ? `$${cpc.toFixed(2)}` : '-'}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${term.conversions > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                             {term.conversions}
                           </span>
-                          {prev && <PctBadge current={term.conversions} previous={prev.conversions} />}
                         </td>
+                        <CompareTd current={term.spend} previous={prev?.spend} first />
+                        <CompareTd current={term.conversions} previous={prev?.conversions} />
                       </tr>
                     )
                   }}

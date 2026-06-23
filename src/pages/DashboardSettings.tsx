@@ -377,7 +377,7 @@ export default function DashboardSettingsPage() {
                 type="text"
                 value={profileName}
                 onChange={e => setProfileName(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)] outline-none"
+                className="uni-native-field w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)] outline-none"
                 placeholder="Your name"
               />
               <p className="text-xs text-gray-400 mt-1">Shown in the sidebar and used as your avatar initial</p>
@@ -390,7 +390,7 @@ export default function DashboardSettingsPage() {
                 type="text"
                 value={user?.email || ''}
                 readOnly
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                className="uni-native-field w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
               />
               <p className="text-xs text-gray-400 mt-1">Email cannot be changed here</p>
             </div>
@@ -402,7 +402,7 @@ export default function DashboardSettingsPage() {
                 type="text"
                 value={appUser?.role?.replace(/_/g, ' ') || ''}
                 readOnly
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed capitalize"
+                className="uni-native-field w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed capitalize"
               />
             </div>
 
@@ -424,12 +424,25 @@ export default function DashboardSettingsPage() {
                         applyUiThemeToDocument(id)
                       }}
                       className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
+                        id === 'dark' ? 'flex flex-col items-center gap-0.5 min-w-[5.5rem]' : ''
+                      } ${
                         settings.uiTheme === id
                           ? 'border-[var(--brand-600)] bg-[var(--brand-50)] text-[var(--brand-700)]'
                           : 'border-gray-200 text-gray-700 hover:bg-gray-50'
                       }`}
                     >
-                      {id === 'light' ? 'Light' : id === 'dark' ? 'Dark' : 'System'}
+                      {id === 'light' ? (
+                        'Light'
+                      ) : id === 'dark' ? (
+                        <>
+                          <span>Dark</span>
+                          <span className="text-[9px] font-semibold uppercase tracking-wide text-amber-600/90">
+                            In-Development
+                          </span>
+                        </>
+                      ) : (
+                        'System'
+                      )}
                     </button>
                   ))}
                 </div>
@@ -469,7 +482,7 @@ export default function DashboardSettingsPage() {
                       uiDensity: v === '' ? settings.uiDensity : (v as 'compact' | 'comfort'),
                     })
                   }}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)]"
+                  className="uni-native-field w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)]"
                 >
                   <option value="">Use org default ({settings.uiDensity})</option>
                   <option value="comfort">Comfort (more spacing)</option>
