@@ -367,7 +367,7 @@ export const db = {
         const agencyId = getScopedAgencyId()
         let q = supabase
             .from('clients')
-            .select('id, name, business_type, currency, currency_symbol, meta_ad_account_id, google_ads_customer_id, agency_id, status')
+            .select('id, name, business_type, currency, currency_symbol, meta_ad_account_id, google_ads_customer_id, agency_id, status, target_ad_spend_30d_by_platform')
             .in('status', [...ACTIVE_CLIENT_STATUSES])
             .order('name')
         if (opts?.scopedClientId) {
@@ -1096,6 +1096,24 @@ export const db = {
                 status: 'active',
             })
             .select('id, name')
+            .single()
+        if (error) throw error
+        return data
+    },
+
+    async updateClientAdSpendTargets(
+        clientId: string,
+        targets: Record<string, number | null>,
+    ) {
+        const cleaned: Record<string, number> = {}
+        for (const [k, v] of Object.entries(targets)) {
+            if (v != null && Number.isFinite(v) && v > 0) cleaned[k] = v
+        }
+        const { data, error } = await supabase
+            .from('clients')
+            .update({ target_ad_spend_30d_by_platform: cleaned })
+            .eq('id', clientId)
+            .select('id, target_ad_spend_30d_by_platform')
             .single()
         if (error) throw error
         return data

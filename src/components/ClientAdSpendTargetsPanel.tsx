@@ -1,0 +1,135 @@
+import { useEffect, useMemo, useState } from 'react'
+import { Save, Target } from 'lucide-react'
+import { toast } from 'sonner'
+import { db } from '../lib/api'
+import { parseAdSpendTargets } from '../lib/adSpendTarget'
+import { formatSupabaseError } from '../lib/supabaseErrors'
+
+type ClientRow = {
+  id: string
+  name: string
+  target_ad_spend_30d_by_platform?: unknown
+}
+
+export default function ClientAdSpendTargetsPanel({
+  clients,
+  onSaved,
+}: {
+  clients: ClientRow[]
+  onSaved?: () => void
+}) {
+  const [draft, setDraft] = useState<Record<string, { meta: string; google: string }>>({})
+  const [savingId, setSavingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const next: Record<string, { meta: string; google: string }> = {}
+    for (const c of clients) {
+      const t = parseAdSpendTargets(c.target_ad_spend_30d_by_platform)
+      next[c.id] = {
+        meta: t.meta_ads != null ? String(t.meta_ads) : '',
+        google: t.google_ads != null ? String(t.google_ads) : '',
+      }
+    }
+    setDraft(next)
+  }, [clients])
+
+  const sorted = useMemo(
+    () => [...clients].sort((a, b) => a.name.localeCompare(b.name)),
+    [clients],
+  )
+
+  async function saveClient(clientId: string) {
+    const row = draft[clientId]
+    if (!row) return
+    setSavingId(clientId)
+    try {
+      await db.updateClientAdSpendTargets(clientId, {
+        meta_ads: row.meta.trim() ? Number(row.meta) : null,
+        google_ads: row.google.trim() ? Number(row.google) : null,
+      })
+      toast.success('30d spend targets saved')
+      onSaved?.()
+    } catch (e: unknown) {
+      toast.error(formatSupabaseError(e))
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  if (!sorted.length) return null
+
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-stone-100 flex items-center gap-2">
+        <Target size={16} className="text-[var(--brand-600)]" />
+        <div>
+          <h3 className="text-sm font-semibold text-stone-900">Client ad spend targets (30d)</h3>
+          <p className="text-xs text-stone-500 mt-0.5">
+            Rolling 30-day caps per platform. Heated View Spend KPI and trend chart show usage % and pace line.
+          </p>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-stone-50 text-xs text-stone-500 uppercase">
+            <tr>
+              <th className="text-left px-4 py-2 font-medium">Client</th>
+              <th className="text-left px-3 py-2 font-medium">Meta ($ / 30d)</th>
+              <th className="text-left px-3 py-2 font-medium">Google ($ / 30d)</th>
+              <th className="px-3 py-2 w-24" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stone-100">
+            {sorted.map(c => {
+              const d = draft[c.id] ?? { meta: '', google: '' }
+              return (
+                <tr key={c.id} className="hover:bg-stone-50/80">
+                  <td className="px-4 py-2 font-medium text-stone-800 whitespace-nowrap">{c.name}</td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="number"
+                      min={0}
+                      step={100}
+                      value={d.meta}
+                      onChange={e => setDraft(prev => ({
+                        ...prev,
+                        [c.id]: { ...d, meta: e.target.value },
+                      }))}
+                      className="w-28 text-sm border border-stone-200 rounded-lg px-2 py-1.5"
+                      placeholder="10000"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="number"
+                      min={0}
+                      step={100}
+                      value={d.google}
+                      onChange={e => setDraft(prev => ({
+                        ...prev,
+                        [c.id]: { ...d, google: e.target.value },
+                      }))}
+                      className="w-28 text-sm border border-stone-200 rounded-lg px-2 py-1.5"
+                      placeholder="35000"
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      type="button"
+                      disabled={savingId === c.id}
+                      onClick={() => saveClient(c.id)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-stone-200 hover:bg-stone-100 disabled:opacity-50"
+                    >
+                      <Save size={12} />
+                      {savingId === c.id ? '…' : 'Save'}
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}

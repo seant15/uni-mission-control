@@ -5,6 +5,7 @@ import {
   Check, X, Save, AlertCircle, Key, Eye, EyeOff, Building2,
 } from 'lucide-react'
 import AddClientModal from '../components/AddClientModal'
+import ClientAdSpendTargetsPanel from '../components/ClientAdSpendTargetsPanel'
 import { supabase } from '../lib/supabase'
 import { ACTIVE_CLIENT_STATUSES } from '../lib/api'
 import {
@@ -542,7 +543,7 @@ function UserCard({ user, clients, agencies, currentAdminId, onSaved }: UserCard
 export default function UserManagement() {
   const { appUser } = useAuth()
   const [users, setUsers] = useState<AppUserWithAccess[]>([])
-  const [clients, setClients] = useState<{ id: string; name: string; agency_id?: string | null }[]>([])
+  const [clients, setClients] = useState<{ id: string; name: string; agency_id?: string | null; target_ad_spend_30d_by_platform?: unknown }[]>([])
   const [agencies, setAgencies] = useState<{ id: string; name: string; slug: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -560,7 +561,7 @@ export default function UserManagement() {
     setLoading(true)
     const [usersData, clientsRes, agenciesRes] = await Promise.all([
       getAllUsersWithAccess(),
-      supabase.from('clients').select('id, name, agency_id').in('status', [...ACTIVE_CLIENT_STATUSES]).order('name'),
+      supabase.from('clients').select('id, name, agency_id, target_ad_spend_30d_by_platform').in('status', [...ACTIVE_CLIENT_STATUSES]).order('name'),
       supabase.from('agencies').select('id, name, slug').order('name'),
     ])
     setUsers(usersData)
@@ -672,6 +673,8 @@ export default function UserManagement() {
       {showAddClient && (
         <AddClientModal agencies={agencies} onClose={() => setShowAddClient(false)} onCreated={loadData} />
       )}
+
+      <ClientAdSpendTargetsPanel clients={clients} onSaved={loadData} />
 
       {/* Add user form */}
       {showAddForm && (

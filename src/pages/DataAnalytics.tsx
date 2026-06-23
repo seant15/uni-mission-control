@@ -30,6 +30,15 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ComposedChart, Area, Line, LineChart
 } from 'recharts'
+import {
+  cumulativePaceForDay,
+  parseAdSpendTargets,
+  platformSpendLabel,
+  resolveActiveSpendTarget,
+  rollupCostByPlatform,
+  spendTargetUsagePct,
+  type AdPlatformSpendKey,
+} from '../lib/adSpendTarget'
 
 // ── Sort helpers ──────────────────────────────────────────────────────────────
 function useTableSort(defaultField: string, defaultDir: 'asc' | 'desc' = 'desc') {
@@ -94,6 +103,7 @@ interface Client {
   currency_symbol?: string
   meta_ad_account_id?: string | null
   google_ads_customer_id?: string | null
+  target_ad_spend_30d_by_platform?: unknown
 }
 
 type MetricKey = 'spend' | 'ctr' | 'conversions' | 'costperconv' | 'roas' | 'mer'
@@ -537,6 +547,57 @@ export default function DataAnalytics({
   const availablePlatforms = platformsFromDB || []
   const clients: Client[] = clientsFromTable || []
 
+  const spendTargetClient = useMemo(
+    () => (selectedClient !== 'all' ? clients.find(c => c.id === selectedClient) : undefined),
+    [clients, selectedClient],
+  )
+  const spendTargets = useMemo(
+    () => parseAdSpendTargets(spendTargetClient?.target_ad_spend_30d_by_platform),
+    [spendTargetClient],
+  )
+  const activeSpendTarget = useMemo(
+    () => resolveActiveSpendTarget(spendTargets, selectedPlatform),
+    [spendTargets, selectedPlatform],
+  )
+  const rolling30Range = useMemo(() => defaultCalendarRangeLastNDays(30), [])
+
+  const { data: rolling30Performance = [] } = useQuery({
+    queryKey: ['rolling30-spend', selectedClient, scopedClientId ?? ''],
+    queryFn: () => db.getDailyPerformance({
+      clientId: selectedClient,
+      startDate: rolling30Range.start,
+      endDate: rolling30Range.end,
+      scopedClientId: scopedClientId || undefined,
+      adsOnly: true,
+    }),
+    enabled: selectedClient !== 'all' && (spendTargets.meta_ads != null || spendTargets.google_ads != null),
+    staleTime: 5 * 60_000,
+  })
+
+  const rolling30ByPlatform = useMemo(
+    () => rollupCostByPlatform(rolling30Performance as DailyPerformance[]),
+    [rolling30Performance],
+  )
+
+  const spendTargetSubtitleLines = useMemo(() => {
+    if (selectedClient === 'all') return [] as string[]
+    const lines: string[] = []
+    const keys: AdPlatformSpendKey[] = selectedPlatform === 'all'
+      ? ['meta_ads', 'google_ads']
+      : selectedPlatform === 'meta_ads' || selectedPlatform === 'google_ads'
+        ? [selectedPlatform]
+        : []
+    for (const key of keys) {
+      const target = spendTargets[key]
+      if (!target) continue
+      const spent = rolling30ByPlatform[key] ?? 0
+      const pct = spendTargetUsagePct(spent, target)
+      if (pct == null) continue
+      lines.push(`${platformSpendLabel(key)} ${pct.toFixed(0)}% of $${target.toLocaleString()} (30d)`)
+    }
+    return lines
+  }, [selectedClient, selectedPlatform, spendTargets, rolling30ByPlatform])
+
   // Aggregated data
   const metaCampaignAggOpts: AggregateRowsOptions = {
     sumFields: [
@@ -695,11 +756,14 @@ export default function DataAnalytics({
     conv: 64,
   })
 
-  // 7-day rolling avg
+  // 7-day rolling avg + optional 30d spend pace line
   const chartData = chartDailyData.map((d, i) => {
     const window = chartDailyData.slice(Math.max(0, i - 6), i + 1)
     const rolling7 = window.reduce((s: number, r: any) => s + (r[selectedMetric] || 0), 0) / window.length
-    return { ...d, rolling7 }
+    const paceLine = selectedMetric === 'spend' && activeSpendTarget > 0
+      ? cumulativePaceForDay(activeSpendTarget, i + 1)
+      : undefined
+    return { ...d, rolling7, paceLine }
   })
 
   // Sparkline data (last 7 days per metric)
@@ -707,6 +771,10 @@ export default function DataAnalytics({
 
   const getChartDomain = (metricKey: MetricKey): [number, number] => {
     const values = chartDailyData.map(d => parseFloat(d[metricKey]) || 0)
+    if (metricKey === 'spend' && activeSpendTarget > 0) {
+      const paceMax = cumulativePaceForDay(activeSpendTarget, chartDailyData.length)
+      values.push(paceMax)
+    }
     const maxValue = Math.max(...values, 1)
     return [0, Math.ceil(maxValue * 1.2)]
   }
@@ -735,7 +803,7 @@ export default function DataAnalytics({
   const currentMetricConfig = metricConfig[selectedMetric]
 
   const leadGenKPIs = [
-    { title: 'Total Spend', value: `$${totals.cost.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, change: spendChange, icon: DollarSign, color: 'blue', key: 'spend' as MetricKey },
+    { title: 'Total Spend', value: `$${totals.cost.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, change: spendChange, icon: DollarSign, color: 'blue', key: 'spend' as MetricKey, targetLines: spendTargetSubtitleLines },
     { title: 'CTR', value: `${ctr.toFixed(2)}%`, change: ctrChange, icon: MousePointer2, color: 'violet', key: 'ctr' as MetricKey },
     { title: 'Leads', value: totals.conversions.toLocaleString(), change: conversionsChange, icon: Users, color: 'emerald', key: 'conversions' as MetricKey },
     { title: 'Cost Per Lead (CPL)', value: `$${costPerConv.toFixed(2)}`, change: costPerConvChange, icon: CreditCard, color: 'amber', key: 'costperconv' as MetricKey, invertTrend: true },
@@ -743,7 +811,7 @@ export default function DataAnalytics({
 
   const ecommerceKPIs = useMemo(() => {
     const cards = [
-      { title: 'Total Spend', value: `$${totals.cost.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, change: spendChange, icon: DollarSign, color: 'blue', key: 'spend' as MetricKey },
+      { title: 'Total Spend', value: `$${totals.cost.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, change: spendChange, icon: DollarSign, color: 'blue', key: 'spend' as MetricKey, targetLines: spendTargetSubtitleLines },
       { title: 'CTR', value: `${ctr.toFixed(2)}%`, change: ctrChange, icon: MousePointer2, color: 'violet', key: 'ctr' as MetricKey },
       { title: 'Purchases', value: totals.conversions.toLocaleString(), change: conversionsChange, icon: ShoppingCart, color: 'emerald', key: 'conversions' as MetricKey },
       { title: 'ROAS', value: `${roas.toFixed(2)}x`, change: roasChange, icon: TrendingUp, color: 'amber', key: 'roas' as MetricKey },
@@ -759,7 +827,7 @@ export default function DataAnalytics({
       })
     }
     return cards
-  }, [totals.cost, ctr, totals.conversions, roas, spendChange, ctrChange, conversionsChange, roasChange, showMerKpi, mer, merChange])
+  }, [totals.cost, ctr, totals.conversions, roas, spendChange, ctrChange, conversionsChange, roasChange, showMerKpi, mer, merChange, spendTargetSubtitleLines])
 
   const currentKPIs = businessType === 'leadgen' ? leadGenKPIs : ecommerceKPIs
 
@@ -1022,6 +1090,13 @@ export default function DataAnalytics({
                 <div>
                   <p className={embedded ? 'text-xs text-gray-500' : 'text-sm text-gray-500'}>{kpi.title}</p>
                   <p className={embedded ? 'text-lg font-bold text-gray-900 mt-0.5 leading-tight' : 'text-2xl font-bold text-gray-900 mt-1'}>{kpi.value}</p>
+                  {'targetLines' in kpi && Array.isArray((kpi as { targetLines?: string[] }).targetLines) && (kpi as { targetLines: string[] }).targetLines.length > 0 && (
+                    <div className={`${embedded ? 'text-[10px]' : 'text-xs'} text-slate-500 mt-1 space-y-0.5 leading-snug`}>
+                      {(kpi as { targetLines: string[] }).targetLines.map(line => (
+                        <div key={line}>{line}</div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div
                   className={
@@ -1115,11 +1190,25 @@ export default function DataAnalytics({
               <Tooltip
                 formatter={(value: any, name: string) => {
                   if (name === 'rolling7') return [currentMetricConfig.formatter(value), '7-day avg']
+                  if (name === 'paceLine') return [`$${Number(value).toFixed(0)}`, '30d target pace (cumulative)']
                   if (secondaryMetric !== 'none' && name === secondaryMetric) return [metricConfig[secondaryMetric as MetricKey].formatter(value), metricConfig[secondaryMetric as MetricKey].label]
                   return [currentMetricConfig.formatter(value), currentMetricConfig.label]
                 }}
               />
               <Area yAxisId="left" type="monotone" dataKey={selectedMetric} stroke={currentMetricConfig.color} fillOpacity={1} fill="url(#colorMetric)" isAnimationActive={settings.animateChart} />
+              {selectedMetric === 'spend' && activeSpendTarget > 0 && (
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="paceLine"
+                  stroke="#64748b"
+                  strokeDasharray="6 4"
+                  dot={false}
+                  strokeWidth={2}
+                  name="paceLine"
+                  isAnimationActive={false}
+                />
+              )}
               {showRolling7 && (
                 <Line yAxisId="left" type="monotone" dataKey="rolling7" stroke="#a855f7" strokeDasharray="4 4" dot={false} strokeWidth={2} name="rolling7" isAnimationActive={false} />
               )}
@@ -1128,6 +1217,11 @@ export default function DataAnalytics({
               )}
             </ComposedChart>
           </ResponsiveContainer>
+        )}
+        {performanceData.length > 0 && selectedMetric === 'spend' && activeSpendTarget > 0 && (
+          <p className="text-xs text-slate-500 mt-2">
+            Dashed line: cumulative 30d target pace (${(activeSpendTarget / 30).toLocaleString(undefined, { maximumFractionDigits: 0 })}/day).
+          </p>
         )}
         {performanceData.length > 0 && (
           <p className="text-xs text-gray-500 mt-3 leading-relaxed">{dailyDataTimezoneFootnote}</p>
