@@ -674,9 +674,7 @@ export default function UserManagement() {
         <AddClientModal agencies={agencies} onClose={() => setShowAddClient(false)} onCreated={loadData} />
       )}
 
-      <ClientAdSpendTargetsPanel clients={clients} onSaved={loadData} />
-
-      {/* Add user form */}
+      {/* Add user form — above spend targets so user list stays reachable */}
       {showAddForm && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
           <h3 className="text-sm font-semibold text-blue-800">New User</h3>
@@ -735,6 +733,8 @@ export default function UserManagement() {
           </div>
         </div>
       )}
+
+      <ClientAdSpendTargetsPanel clients={clients} onSaved={loadData} />
 
       {/* Role legend */}
       <div className="flex items-center gap-4 text-xs text-gray-500">

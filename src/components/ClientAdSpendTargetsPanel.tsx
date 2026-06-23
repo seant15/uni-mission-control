@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Save, Target } from 'lucide-react'
+import { ChevronDown, ChevronRight, Save, Target } from 'lucide-react'
 import { toast } from 'sonner'
 import { db } from '../lib/api'
 import { parseAdSpendTargets } from '../lib/adSpendTarget'
@@ -20,6 +20,7 @@ export default function ClientAdSpendTargetsPanel({
 }) {
   const [draft, setDraft] = useState<Record<string, { meta: string; google: string }>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     const next: Record<string, { meta: string; google: string }> = {}
@@ -60,15 +61,27 @@ export default function ClientAdSpendTargetsPanel({
 
   return (
     <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-stone-100 flex items-center gap-2">
-        <Target size={16} className="text-[var(--brand-600)]" />
-        <div>
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="w-full px-4 py-3 border-b border-stone-100 flex items-center gap-2 text-left hover:bg-stone-50/80 transition"
+        aria-expanded={expanded}
+      >
+        {expanded ? (
+          <ChevronDown size={16} className="text-stone-500 shrink-0" />
+        ) : (
+          <ChevronRight size={16} className="text-stone-500 shrink-0" />
+        )}
+        <Target size={16} className="text-[var(--brand-600)] shrink-0" />
+        <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-stone-900">Client ad spend targets (30d)</h3>
           <p className="text-xs text-stone-500 mt-0.5">
-            Rolling 30-day caps per platform. Heated View Spend KPI and trend chart show usage % and pace line.
+            Rolling 30-day caps per platform. Shown in Agency View platform table and Heated spend pace line.
           </p>
         </div>
-      </div>
+        <span className="text-[11px] text-stone-400 shrink-0">{sorted.length} clients</span>
+      </button>
+      {expanded && (
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-stone-50 text-xs text-stone-500 uppercase">
@@ -130,6 +143,7 @@ export default function ClientAdSpendTargetsPanel({
           </tbody>
         </table>
       </div>
+      )}
     </div>
   )
 }
