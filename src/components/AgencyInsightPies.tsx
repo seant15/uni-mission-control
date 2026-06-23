@@ -9,6 +9,7 @@ import { useAgency } from '../contexts/AgencyContext'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
 import { platformLabel } from '../lib/platformStyles'
+import { useChartAxisStroke, useChartGridStroke } from '../lib/chartTheme'
 import { filterAdsDailyRows } from '../lib/adsRows'
 import { countryDisplayLabel } from '../lib/countryLabels'
 import type { CalendarDateRange } from '../lib/dashboardDateRange'
@@ -185,6 +186,8 @@ export default function AgencyInsightPies({
   const [chartMetrics, setChartMetrics] = useState<Set<ChartMetric>>(() => new Set(['spend', 'revenue']))
   const [aggregateMode, setAggregateMode] = useState(true)
   const [hiddenSegments, setHiddenSegments] = useState<Set<string>>(new Set())
+  const chartGridStroke = useChartGridStroke()
+  const chartAxisStroke = useChartAxisStroke()
 
   const adsDailyRows = useMemo(() => filterAdsDailyRows(dailyRows), [dailyRows])
 
@@ -434,9 +437,9 @@ export default function AgencyInsightPies({
             ) : viewMode === 'bar' ? (
               <ResponsiveContainer width="100%" height={barHeight}>
                 <BarChart data={barData} layout="vertical" margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis type="number" tick={{ fontSize: 10 }} />
-                  <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 10 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: chartAxisStroke }} />
+                  <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 10, fill: chartAxisStroke }} />
                   <Tooltip />
                   <Legend />
                   {chartMetrics.has('spend') && <Bar dataKey="spend" name="Spend" fill="var(--uni-chart-1)" radius={[0, 4, 4, 0]} />}

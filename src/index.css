@@ -401,8 +401,8 @@ html[data-theme='dark'] {
   --uni-bg: #060c16;
   --uni-surface: #0d1117;
   --uni-card: rgba(255, 255, 255, 0.04);
-  --uni-border: rgba(255, 255, 255, 0.08);
-  --uni-border-strong: rgba(255, 255, 255, 0.14);
+  --uni-border: rgba(255, 255, 255, 0.09);
+  --uni-border-strong: rgba(249, 115, 22, 0.24);
   --uni-text: #fafaf8;
   --uni-text-muted: #9ca3af;
   --uni-text-dim: #6b7280;
@@ -435,7 +435,12 @@ html[data-theme='dark'] .text-stone-600 {
 
 html[data-theme='dark'] .border-gray-200,
 html[data-theme='dark'] .border-stone-200 {
-  border-color: var(--uni-border);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme='dark'] .border-gray-300,
+html[data-theme='dark'] .hover\:border-gray-300:hover {
+  border-color: rgba(249, 115, 22, 0.22);
 }
 
 html[data-theme='dark'] input[type='date'],
@@ -638,4 +643,77 @@ html[data-theme='dark'] .bg-stone-200\/90 {
 
 html[data-theme='dark'] .border-stone-300\/80 {
   border-color: var(--uni-border);
+}
+
+/* Slate surfaces — were missing from v2; caused bright table headers & kanban columns */
+html[data-theme='dark'] .bg-slate-50,
+html[data-theme='dark'] .bg-slate-100 {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+html[data-theme='dark'] .bg-slate-50\/90,
+html[data-theme='dark'] .bg-slate-50\/80,
+html[data-theme='dark'] .bg-slate-50\/50 {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+html[data-theme='dark'] .bg-slate-100\/80,
+html[data-theme='dark'] .bg-slate-100\/90 {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+html[data-theme='dark'] .hover\:bg-slate-50:hover,
+html[data-theme='dark'] .hover\:bg-slate-50\/80:hover,
+html[data-theme='dark'] .hover\:bg-slate-100:hover,
+html[data-theme='dark'] .hover\:bg-slate-100\/90:hover {
+  background-color: rgba(255, 255, 255, 0.07);
+}
+
+html[data-theme='dark'] .text-slate-900,
+html[data-theme='dark'] .text-slate-800 {
+  color: var(--uni-text);
+}
+
+html[data-theme='dark'] .text-slate-700,
+html[data-theme='dark'] .text-slate-600 {
+  color: var(--uni-text-muted);
+}
+
+html[data-theme='dark'] .text-slate-500,
+html[data-theme='dark'] .text-slate-400 {
+  color: var(--uni-text-dim);
+}
+
+html[data-theme='dark'] .border-slate-200,
+html[data-theme='dark'] .border-slate-100 {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='dark'] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html[data-theme='dark'] .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme='dark'] .bg-white\/95 {
+  background-color: rgba(13, 17, 23, 0.92);
+}
+
+/* KPI icon shells & tinted badges */
+html[data-theme='dark'] .bg-cyan-50,
+html[data-theme='dark'] .bg-indigo-50,
+html[data-theme='dark'] .bg-teal-50,
+html[data-theme='dark'] .bg-purple-50,
+html[data-theme='dark'] .bg-blue-50 {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme='dark'] .text-cyan-600,
+html[data-theme='dark'] .text-indigo-600,
+html[data-theme='dark'] .text-teal-600,
+html[data-theme='dark'] .text-purple-800 {
+  color: #a5b4fc;
+}
+
+html[data-theme='dark'] .text-indigo-700 {
+  color: #c4b5fd;
 }

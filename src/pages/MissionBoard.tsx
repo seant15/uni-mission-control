@@ -279,17 +279,17 @@ export default function MissionBoard() {
           {MISSION_COLUMNS.map(col => (
             <div
               key={col.id}
-              className="flex-shrink-0 w-[210px] bg-slate-100/80 rounded-xl border border-slate-200 flex flex-col max-h-[70vh]"
+              className="uni-kanban-column flex-shrink-0 w-[210px] rounded-xl border flex flex-col max-h-[70vh]"
             >
-              <div className="px-3 py-2.5 border-b border-slate-200 font-semibold text-sm text-slate-700 flex justify-between items-center">
+              <div className="uni-kanban-column-header px-3 py-2.5 border-b font-semibold text-sm flex justify-between items-center">
                 <span>{col.label}</span>
-                <span className="text-xs font-normal text-slate-500">{byColumn[col.id].length}</span>
+                <span className="text-xs font-normal uni-kanban-column-count">{byColumn[col.id].length}</span>
               </div>
               <div className="p-3 overflow-y-auto flex-1 space-y-3">
                 {byColumn[col.id].map(card => (
                   <div
                     key={card.id}
-                    className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:border-blue-200 transition-colors"
+                    className="uni-kanban-card rounded-lg border p-3 shadow-sm transition-colors"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="font-medium text-gray-900 text-sm leading-snug flex-1 min-w-0">{card.title}</div>

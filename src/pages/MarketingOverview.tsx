@@ -95,7 +95,7 @@ function MetricCard({ title, value, change, icon: Icon, tone, invertTrend = fals
   const absChange = change !== undefined ? Math.abs(change) : undefined
   const shell = KPI_ICON_SHELL[tone] ?? KPI_ICON_SHELL.slate
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 transition-shadow hover:shadow-md hover:border-gray-300/80">
+    <div className="uni-metric-card rounded-lg shadow-sm border p-3 transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between mb-1 gap-1">
         <div className={`${shell} shrink-0`}>
           <Icon className="w-4 h-4" />
@@ -875,7 +875,7 @@ export default function MarketingOverview({
               />
               <div className="overflow-x-auto mt-3">
                 <table className="w-full">
-                  <thead className="bg-gray-50">
+                  <thead className="uni-table-head-row">
                     <tr>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Platform</th>
                       <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Spend</th>
@@ -889,9 +889,9 @@ export default function MarketingOverview({
                       <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Share</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="uni-table-body divide-y divide-gray-100">
                     {(platformBreakdown as any[]).map((p, i) => (
-                      <tr key={i} className="hover:bg-gray-50">
+                      <tr key={i} className="uni-table-row-hover">
                         <td className="px-3 py-2 text-sm">
                           <PlatformBadge platform={p.platform} />
                         </td>

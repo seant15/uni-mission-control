@@ -78,7 +78,7 @@ export default function VirtualizedTableShell<T>({
       style={maxHeight ? { maxHeight } : undefined}
     >
       <table className={tableClassName}>
-        <thead className={useVirtual ? 'sticky top-0 z-10 bg-gray-50' : 'bg-gray-50'}>{thead}</thead>
+        <thead className={useVirtual ? 'uni-table-head-row sticky top-0 z-10' : 'uni-table-head-row'}>{thead}</thead>
         <tbody className={tbodyClassName}>{tbodyContent}</tbody>
       </table>
     </div>

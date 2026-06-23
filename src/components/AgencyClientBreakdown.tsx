@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
 import type { CalendarDateRange } from '../lib/dashboardDateRange'
 import { previousComparableCalendarRange } from '../lib/dashboardDateRange'
+import { useChartAxisStroke, useChartGridStroke } from '../lib/chartTheme'
 
 type ChartMetric = 'total_spend' | 'total_revenue' | 'roas' | 'conversions'
 type SortField = 'account_name' | 'total_spend' | 'total_revenue' | 'roas' | 'conversions' | 'platform'
@@ -97,6 +98,8 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform, sec
   const [chartMetric, setChartMetric] = useState<ChartMetric>('total_spend')
   const [sortField, setSortField] = useState<SortField>('total_spend')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const chartGridStroke = useChartGridStroke()
+  const chartAxisStroke = useChartAxisStroke()
 
   const previousRange = useMemo(
     () => (dateRange.start && dateRange.end ? previousComparableCalendarRange(dateRange) : { start: '', end: '' }),
@@ -253,9 +256,9 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform, sec
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={chartData} margin={{ bottom: 28, left: 4, right: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="name" angle={-30} textAnchor="end" tick={{ fontSize: 10 }} height={50} />
-                  <YAxis tick={{ fontSize: 10 }} width={36} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
+                  <XAxis dataKey="name" angle={-30} textAnchor="end" tick={{ fontSize: 10, fill: chartAxisStroke }} height={50} />
+                  <YAxis tick={{ fontSize: 10, fill: chartAxisStroke }} width={36} />
                   <Tooltip
                     formatter={(v: number) =>
                       chartMetric === 'total_spend' || chartMetric === 'total_revenue'
@@ -283,7 +286,7 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform, sec
               </div>
               <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 sticky top-0">
+                  <thead className="uni-table-head-row sticky top-0">
                     <tr>
                       {([
                         ['account_name', 'Account', 'text-left'],
@@ -308,9 +311,9 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform, sec
                       <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase">CCY</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="uni-table-body divide-y divide-slate-100">
                     {sorted.map(a => (
-                      <tr key={a.id} className="hover:bg-slate-50/80">
+                      <tr key={a.id} className="uni-table-row-hover">
                         <td className="px-2 py-1.5 font-medium text-slate-900 whitespace-nowrap max-w-[140px] truncate">{a.account_name}</td>
                         <td className="px-2 py-1.5 text-slate-600 text-xs">{a.platform}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums">{a.currency_symbol}{a.total_spend.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>

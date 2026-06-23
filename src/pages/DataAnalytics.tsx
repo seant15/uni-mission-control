@@ -27,6 +27,7 @@ import { previousComparableCalendarRange } from '../lib/dashboardDateRange'
 import { AGENCY_REPORTING_TZ } from '../lib/hourlyBuckets'
 import { filterAdsDailyRows, sumAdsMetrics } from '../lib/adsRows'
 import { rollupShopifyDaily } from '../lib/shopifyMetrics'
+import { useChartAxisStroke, useChartGridStroke } from '../lib/chartTheme'
 import { shouldShowHeatedMer, shopifyAfterReturnForShapedRow } from '../lib/heatedMerEligibility'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -289,6 +290,8 @@ export default function DataAnalytics({
   const keywordsDrillActive = heatedDrillTab === 'keywords'
   const searchDrillActive = heatedDrillTab === 'search'
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  const chartGridStroke = useChartGridStroke()
+  const chartAxisStroke = useChartAxisStroke()
 
   // Load settings (cache timeout only; filters come from OverviewFiltersContext)
   useEffect(() => {
@@ -1246,11 +1249,11 @@ export default function DataAnalytics({
                   <stop offset="95%" stopColor={currentMetricConfig.color} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              {settings.showGridLines && <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />}
-              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-              <YAxis yAxisId="left" tick={{ fontSize: 12 }} domain={getChartDomain(selectedMetric)} />
+              {settings.showGridLines && <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />}
+              <XAxis dataKey="date" tick={{ fontSize: 12, fill: chartAxisStroke }} />
+              <YAxis yAxisId="left" tick={{ fontSize: 12, fill: chartAxisStroke }} domain={getChartDomain(selectedMetric)} />
               {secondaryMetric !== 'none' && (
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: chartAxisStroke }} />
               )}
               <Tooltip
                 formatter={(value: any, name: string) => {

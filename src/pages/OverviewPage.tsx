@@ -63,7 +63,7 @@ export default function OverviewPage() {
             </p>
           </div>
         </div>
-        <div className="flex rounded-lg border border-gray-200 p-0.5 bg-white shadow-sm shrink-0">
+        <div className="uni-tab-switcher flex rounded-lg border p-0.5 shadow-sm shrink-0">
           <button
             type="button"
             onClick={() => setTab('agency')}

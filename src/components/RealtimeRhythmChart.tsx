@@ -13,6 +13,7 @@ import {
   rhythmTimezoneFootnote,
   hourlyRowUtcMs,
 } from '../lib/hourlyBuckets'
+import { useChartAxisStroke, useChartGridStroke } from '../lib/chartTheme'
 
 export type RhythmMode = 'hourly' | 'weekday'
 export type RhythmMetric =
@@ -126,6 +127,8 @@ export default function RealtimeRhythmChart({
   const [selectedMetrics, setSelectedMetrics] = useState<Set<RhythmMetric>>(
     () => new Set<RhythmMetric>(['cost', 'revenue']),
   )
+  const chartGridStroke = useChartGridStroke()
+  const chartAxisStroke = useChartAxisStroke()
 
   const displayZone = useMemo(
     () =>
@@ -284,9 +287,9 @@ export default function RealtimeRhythmChart({
         ) : (
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 10 }} width={48} />
+              <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: chartAxisStroke }} />
+              <YAxis tick={{ fontSize: 10, fill: chartAxisStroke }} width={48} />
               <Tooltip
                 formatter={(v: number, name: string) => {
                   const m = name as RhythmMetric

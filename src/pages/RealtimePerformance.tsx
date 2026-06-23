@@ -407,7 +407,7 @@ export default function RealtimePerformance() {
       </div>
 
       {/* Controls — sticky filter bar */}
-      <div className="sticky top-[52px] z-30 rounded-xl border border-gray-200 bg-white/95 backdrop-blur-sm shadow-sm px-3 py-2.5 sm:px-4 sm:py-3 flex items-center gap-4 sm:gap-6 flex-wrap">
+      <div className="uni-filter-shell sticky top-[52px] z-30 uni-filter-sticky-below-header px-3 py-2.5 sm:px-4 sm:py-3 flex items-center gap-4 sm:gap-6 flex-wrap">
         {/* Window selector */}
         <div>
           <label className="text-xs font-medium text-gray-500 uppercase block mb-1">Time Window</label>
@@ -557,7 +557,7 @@ export default function RealtimePerformance() {
                     cols={['account', 'platform', 'client', 'spend', 'spendVs', 'conv', 'convVs', 'roas', 'roasVs']}
                     widths={rtColW}
                   />
-                  <thead className="bg-gray-50 border-b border-gray-200">
+                  <thead className="uni-table-head-row border-b border-gray-200">
                     <tr>
                       <RtResizeTh id="account" widths={rtColW} startResize={rtColResize}>
                         Account
@@ -596,7 +596,7 @@ export default function RealtimePerformance() {
                       </RtResizeTh>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="uni-table-body divide-y divide-gray-100">
                     {sortedClientGroups.flatMap(group => {
                       const curRoasG = group.cur.cost > 0 ? group.cur.revenue / group.cur.cost : 0
                       const prevRoasG = group.prev.cost > 0 ? group.prev.revenue / group.prev.cost : 0
@@ -613,7 +613,7 @@ export default function RealtimePerformance() {
                       const clientRow = (
                         <tr
                           key={`${group.client_id}-client`}
-                          className="bg-slate-50/90 cursor-pointer hover:bg-slate-100/90"
+                          className="uni-table-group-row cursor-pointer"
                           onClick={toggleClient}
                         >
                           <td className="px-4 py-2 text-xs text-slate-500" colSpan={2}>
