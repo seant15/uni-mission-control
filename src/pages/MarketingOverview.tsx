@@ -1,5 +1,5 @@
 ﻿import { Fragment, useState, useEffect, useRef, useMemo, useCallback, type ComponentType, type ReactNode } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   DollarSign, TrendingUp, Target, MousePointer, Eye, MousePointer2, CreditCard,
   AlertTriangle, ArrowUpRight, ArrowDownRight,
@@ -219,7 +219,10 @@ export default function MarketingOverview({
       scopedClientId: scopedClientId || undefined,
     }),
     enabled: !!dateRange.start && !!dateRange.end,
-    refetchOnMount: 'always',
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   })
 
   const { data: dailyPrevRows, isLoading: loadingDailyPrev } = useQuery({
@@ -233,7 +236,10 @@ export default function MarketingOverview({
       scopedClientId: scopedClientId || undefined,
     }),
     enabled: !!previousRange.start && !!previousRange.end,
-    refetchOnMount: 'always',
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   })
 
   const curRows = dailyCurRows ?? []

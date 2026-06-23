@@ -7,6 +7,7 @@ import {
   ArrowUpRight, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown, BookOpen,
 } from 'lucide-react'
 import MetaAdSetPerformanceTable from '../components/MetaAdSetPerformanceTable'
+import VirtualizedTableShell from '../components/VirtualizedTableShell'
 import AgencyInsightPies from '../components/AgencyInsightPies'
 import OverviewAiNotesRail from '../components/OverviewAiNotesRail'
 import PlatformBadge from '../components/PlatformBadge'
@@ -242,6 +243,10 @@ export default function DataAnalytics({
   const [showRolling7, setShowRolling7] = useState(false)
   type HeatedDrillTab = 'daily' | 'meta' | 'google' | 'keywords' | 'search' | 'adsets'
   const [heatedDrillTab, setHeatedDrillTab] = useState<HeatedDrillTab>('daily')
+  const metaDrillActive = heatedDrillTab === 'meta'
+  const googleDrillActive = heatedDrillTab === 'google'
+  const keywordsDrillActive = heatedDrillTab === 'keywords'
+  const searchDrillActive = heatedDrillTab === 'search'
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
 
   // Load settings
@@ -427,7 +432,7 @@ export default function DataAnalytics({
   }, [performanceData])
 
   // Meta campaigns
-  const { data: metaCampaigns } = useQuery({
+  const { data: metaCampaigns, isFetching: metaCampaignsFetching } = useQuery({
     queryKey: ['meta_campaigns', selectedClient, selectedAdAccount, dateRange, scopedClientId ?? ''],
     queryFn: () => db.getMetaCampaigns({
       clientId: selectedClient,
@@ -436,7 +441,11 @@ export default function DataAnalytics({
       endDate: dateRange.end,
       scopedClientId: scopedClientId || undefined,
     }),
-    enabled: selectedPlatform === 'all' || selectedPlatform === 'meta_ads',
+    enabled:
+      metaDrillActive &&
+      (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') &&
+      !!dateRange.start &&
+      !!dateRange.end,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   })
@@ -450,25 +459,12 @@ export default function DataAnalytics({
       endDate: previousPeriodRange.end,
       scopedClientId: scopedClientId || undefined,
     }),
-    enabled: (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && !!previousPeriodRange.start,
+    enabled:
+      metaDrillActive &&
+      (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') &&
+      !!previousPeriodRange.start,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
-  })
-
-  const { data: metaAdsetsForCount = [] } = useQuery({
-    queryKey: ['meta_adsets_count', selectedClient, selectedAdAccount, dateRange, scopedClientId ?? ''],
-    queryFn: () => db.getMetaAdsets({
-      clientId: selectedClient,
-      adAccountId: selectedAdAccount || undefined,
-      startDate: dateRange.start,
-      endDate: dateRange.end,
-      scopedClientId: scopedClientId || undefined,
-    }),
-    enabled:
-      (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') &&
-      !!dateRange.start &&
-      !!dateRange.end,
-    staleTime: 5 * 60 * 1000,
   })
 
   const { data: alertsRaw } = useQuery({
@@ -479,7 +475,7 @@ export default function DataAnalytics({
   })
 
   // Google campaigns
-  const { data: googleCampaigns } = useQuery({
+  const { data: googleCampaigns, isFetching: googleCampaignsFetching } = useQuery({
     queryKey: ['google_campaigns', selectedClient, selectedAdAccount, dateRange, scopedClientId ?? ''],
     queryFn: () => db.getGoogleCampaigns({
       clientId: selectedClient,
@@ -488,7 +484,11 @@ export default function DataAnalytics({
       endDate: dateRange.end,
       scopedClientId: scopedClientId || undefined,
     }),
-    enabled: selectedPlatform === 'all' || selectedPlatform === 'google_ads',
+    enabled:
+      googleDrillActive &&
+      (selectedPlatform === 'all' || selectedPlatform === 'google_ads') &&
+      !!dateRange.start &&
+      !!dateRange.end,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   })
@@ -502,15 +502,22 @@ export default function DataAnalytics({
       endDate: previousPeriodRange.end,
       scopedClientId: scopedClientId || undefined,
     }),
-    enabled: (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && !!previousPeriodRange.start,
+    enabled:
+      googleDrillActive &&
+      (selectedPlatform === 'all' || selectedPlatform === 'google_ads') &&
+      !!previousPeriodRange.start,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   })
 
-  const { data: googleKeywords } = useQuery({
+  const { data: googleKeywords, isFetching: googleKeywordsFetching } = useQuery({
     queryKey: ['google_keywords', selectedClient, dateRange],
     queryFn: () => db.getGoogleKeywords(selectedClient, dateRange.start, dateRange.end),
-    enabled: selectedPlatform === 'all' || selectedPlatform === 'google_ads',
+    enabled:
+      keywordsDrillActive &&
+      (selectedPlatform === 'all' || selectedPlatform === 'google_ads') &&
+      !!dateRange.start &&
+      !!dateRange.end,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   })
@@ -519,15 +526,22 @@ export default function DataAnalytics({
   const { data: prevGoogleKeywords } = useQuery({
     queryKey: ['google_keywords_prev', selectedClient, previousPeriodRange],
     queryFn: () => db.getGoogleKeywords(selectedClient, previousPeriodRange.start, previousPeriodRange.end),
-    enabled: (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && !!previousPeriodRange.start,
+    enabled:
+      keywordsDrillActive &&
+      (selectedPlatform === 'all' || selectedPlatform === 'google_ads') &&
+      !!previousPeriodRange.start,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   })
 
-  const { data: googleSearchTerms } = useQuery({
+  const { data: googleSearchTerms, isFetching: googleSearchTermsFetching } = useQuery({
     queryKey: ['google_search_terms', selectedClient, dateRange],
     queryFn: () => db.getGoogleSearchTerms(selectedClient, dateRange.start, dateRange.end),
-    enabled: selectedPlatform === 'all' || selectedPlatform === 'google_ads',
+    enabled:
+      searchDrillActive &&
+      (selectedPlatform === 'all' || selectedPlatform === 'google_ads') &&
+      !!dateRange.start &&
+      !!dateRange.end,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   })
@@ -535,7 +549,10 @@ export default function DataAnalytics({
   const { data: prevGoogleSearchTerms } = useQuery({
     queryKey: ['google_search_terms_prev', selectedClient, previousPeriodRange],
     queryFn: () => db.getGoogleSearchTerms(selectedClient, previousPeriodRange.start, previousPeriodRange.end),
-    enabled: (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && !!previousPeriodRange.start,
+    enabled:
+      searchDrillActive &&
+      (selectedPlatform === 'all' || selectedPlatform === 'google_ads') &&
+      !!previousPeriodRange.start,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   })
@@ -583,6 +600,60 @@ export default function DataAnalytics({
   const prevAggKeywordsMap = new Map((aggregateRows(prevGoogleKeywords || [], 'keyword_id', 'keyword', ['campaign_name', 'ad_group_name', 'match_type'])).map(r => [r.keyword_id, r]))
   const aggSearchTerms = aggregateRows(googleSearchTerms || [], 'search_term', 'search_term', ['campaign_name', 'ad_group_name', 'match_type'])
   const prevAggSearchTermsMap = new Map((aggregateRows(prevGoogleSearchTerms || [], 'search_term', 'search_term', ['campaign_name', 'ad_group_name', 'match_type'])).map(r => [r.search_term, r]))
+
+  const metaCampaignTableRows = useMemo(
+    () =>
+      metaCampaignSort.sortRows(
+        aggMetaCampaigns.map((c: any) => ({
+          ...c,
+          _ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
+          _roas: c.spend > 0 ? c.revenue / c.spend : 0,
+          _cpa: c.conversions > 0 ? c.spend / c.conversions : 0,
+          frequency: c.frequency ?? 0,
+          reach: Number(c.reach) || 0,
+          outbound_clicks: Number(c.outbound_clicks) || 0,
+          video_p25_watched: Number(c.video_p25_watched) || 0,
+        })),
+      ),
+    [aggMetaCampaigns, metaCampaignSort.sortField, metaCampaignSort.sortDir],
+  )
+
+  const googleCampaignTableRows = useMemo(
+    () =>
+      googleCampaignSort.sortRows(
+        aggGoogleCampaigns.map((c: any) => ({
+          ...c,
+          _ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
+          _roas: c.spend > 0 ? c.revenue / c.spend : 0,
+          _cpa: c.conversions > 0 ? c.spend / c.conversions : 0,
+        })),
+      ),
+    [aggGoogleCampaigns, googleCampaignSort.sortField, googleCampaignSort.sortDir],
+  )
+
+  const keywordTableRows = useMemo(
+    () =>
+      keywordSort.sortRows(
+        aggKeywords.map((k: any) => ({
+          ...k,
+          _ctr: k.impressions > 0 ? (k.clicks / k.impressions) * 100 : 0,
+          _cpc: k.clicks > 0 ? k.spend / k.clicks : 0,
+        })),
+      ),
+    [aggKeywords, keywordSort.sortField, keywordSort.sortDir],
+  )
+
+  const searchTermTableRows = useMemo(
+    () =>
+      searchTermSort.sortRows(
+        aggSearchTerms.map((t: any) => ({
+          ...t,
+          _ctr: t.impressions > 0 ? (t.clicks / t.impressions) * 100 : 0,
+          _cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
+        })),
+      ),
+    [aggSearchTerms, searchTermSort.sortField, searchTermSort.sortDir],
+  )
 
   // Totals
   const totals = kpiRows.reduce((acc, day) => ({
@@ -839,11 +910,10 @@ export default function DataAnalytics({
     embedded && uiDensity === 'compact' ? 'space-y-3' : embedded && uiDensity === 'comfort' ? 'space-y-5' : 'space-y-6'
 
   const canDailyTab = dailyDataWithMetrics.length > 0
-  const canMetaTab = (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') && aggMetaCampaigns.length > 0
-  const canGoogleTab = (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggGoogleCampaigns.length > 0
-  const canKwTab = (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggKeywords.length > 0
-  const canSearchTab = (selectedPlatform === 'all' || selectedPlatform === 'google_ads') && aggSearchTerms.length > 0
-  const metaAdsetCount = Array.isArray(metaAdsetsForCount) ? metaAdsetsForCount.length : 0
+  const canMetaTab = selectedPlatform === 'all' || selectedPlatform === 'meta_ads'
+  const canGoogleTab = selectedPlatform === 'all' || selectedPlatform === 'google_ads'
+  const canKwTab = selectedPlatform === 'all' || selectedPlatform === 'google_ads'
+  const canSearchTab = selectedPlatform === 'all' || selectedPlatform === 'google_ads'
   const canAdsetsTab =
     (selectedPlatform === 'all' || selectedPlatform === 'meta_ads') &&
     !!dateRange.start &&
@@ -1204,12 +1274,12 @@ export default function DataAnalytics({
       {performanceData.length > 0 && (
         <div className={shellCard}>
           <ReportSectionHeader sectionLabel="Heated drill" title="Campaign & keyword breakdowns" />
-          <p className="text-xs text-stone-500 mb-2 mt-1">Tabs with no rows for the current filters are disabled.</p>
+          <p className="text-xs text-stone-500 mb-2 mt-1">Drill tabs load data on demand. Platform filters disable irrelevant tabs.</p>
           <div className="flex flex-wrap gap-1.5 mb-3 items-center">
             {([
               { id: 'daily' as const, label: 'Daily breakdown', disabled: !canDailyTab },
               { id: 'meta' as const, label: 'Meta campaigns' + (aggMetaCampaigns.length ? ` (${aggMetaCampaigns.length})` : ''), disabled: !canMetaTab },
-              { id: 'adsets' as const, label: 'Meta ad sets' + (metaAdsetCount ? ` (${metaAdsetCount})` : ''), disabled: !canAdsetsTab },
+              { id: 'adsets' as const, label: 'Meta ad sets', disabled: !canAdsetsTab },
               { id: 'google' as const, label: 'Google campaigns' + (aggGoogleCampaigns.length ? ` (${aggGoogleCampaigns.length})` : ''), disabled: !canGoogleTab },
               { id: 'keywords' as const, label: 'Google keywords' + (aggKeywords.length ? ` (${aggKeywords.length})` : ''), disabled: !canKwTab },
               { id: 'search' as const, label: 'Search terms' + (aggSearchTerms.length ? ` (${aggSearchTerms.length})` : ''), disabled: !canSearchTab },
@@ -1285,9 +1355,16 @@ export default function DataAnalytics({
                 title="Campaign performance vs previous period"
                 badge={<BookOpen className="text-[var(--brand-600)]" size={18} aria-hidden />}
               />
+              {metaCampaignsFetching && metaCampaignTableRows.length === 0 ? (
+                <p className={`text-sm text-gray-400 ${tableWrapMt}`}>Loading campaigns…</p>
+              ) : metaCampaignTableRows.length === 0 ? (
+                <p className={`text-sm text-gray-400 ${tableWrapMt}`}>No Meta campaign rows for this selection.</p>
+              ) : (
               <div className={tableWrapMt}>
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
+                <VirtualizedTableShell
+                  rows={metaCampaignTableRows}
+                  colSpan={11}
+                  thead={(
                     <tr>
                       <SortTh label="Campaign" field="campaign_name" sort={metaCampaignSort} align="left" />
                       <SortTh label="Spend" field="spend" sort={metaCampaignSort} />
@@ -1301,18 +1378,8 @@ export default function DataAnalytics({
                       <SortTh label="CPA" field="_cpa" sort={metaCampaignSort} />
                       <SortTh label="ROAS" field="_roas" sort={metaCampaignSort} />
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                  {metaCampaignSort.sortRows(aggMetaCampaigns.map((c: any) => ({
-                    ...c,
-                    _ctr: c.impressions > 0 ? c.clicks / c.impressions * 100 : 0,
-                    _roas: c.spend > 0 ? c.revenue / c.spend : 0,
-                    _cpa: c.conversions > 0 ? c.spend / c.conversions : 0,
-                    frequency: c.frequency ?? 0,
-                    reach: Number(c.reach) || 0,
-                    outbound_clicks: Number(c.outbound_clicks) || 0,
-                    video_p25_watched: Number(c.video_p25_watched) || 0,
-                  }))).map((camp: any) => {
+                  )}
+                  renderRow={(camp: any) => {
                     const prev = prevAggMetaCampaignsMap.get(camp.campaign_id)
                     const ctr = camp.impressions > 0 ? camp.clicks / camp.impressions * 100 : 0
                     const roas = camp.spend > 0 ? camp.revenue / camp.spend : 0
@@ -1361,19 +1428,26 @@ export default function DataAnalytics({
                         </td>
                       </tr>
                     )
-                  })}
-                </tbody>
-                </table>
+                  }}
+                />
               </div>
+              )}
             </div>
           )}
 
           {heatedDrillTab === 'google' && canGoogleTab && (
             <div>
               <ReportSectionHeader sectionLabel="Google Ads" title="Campaign performance vs previous period" />
+              {googleCampaignsFetching && googleCampaignTableRows.length === 0 ? (
+                <p className={`text-sm text-gray-400 ${tableWrapMt}`}>Loading campaigns…</p>
+              ) : googleCampaignTableRows.length === 0 ? (
+                <p className={`text-sm text-gray-400 ${tableWrapMt}`}>No Google campaign rows for this selection.</p>
+              ) : (
               <div className={tableWrapMt}>
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
+                <VirtualizedTableShell
+                  rows={googleCampaignTableRows}
+                  colSpan={7}
+                  thead={(
                     <tr>
                       <SortTh label="Campaign" field="campaign_name" sort={googleCampaignSort} align="left" />
                       <SortTh label="Spend" field="spend" sort={googleCampaignSort} />
@@ -1383,14 +1457,8 @@ export default function DataAnalytics({
                       <SortTh label="CPA" field="_cpa" sort={googleCampaignSort} />
                       <SortTh label="ROAS" field="_roas" sort={googleCampaignSort} />
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                  {googleCampaignSort.sortRows(aggGoogleCampaigns.map((c: any) => ({
-                    ...c,
-                    _ctr: c.impressions > 0 ? c.clicks / c.impressions * 100 : 0,
-                    _roas: c.spend > 0 ? c.revenue / c.spend : 0,
-                    _cpa: c.conversions > 0 ? c.spend / c.conversions : 0,
-                  }))).map((camp: any) => {
+                  )}
+                  renderRow={(camp: any) => {
                     const prev = prevAggGoogleCampaignsMap.get(camp.campaign_id)
                     const ctr = camp.impressions > 0 ? camp.clicks / camp.impressions * 100 : 0
                     const roas = camp.spend > 0 ? camp.revenue / camp.spend : 0
@@ -1427,19 +1495,26 @@ export default function DataAnalytics({
                         </td>
                       </tr>
                     )
-                  })}
-                </tbody>
-                </table>
+                  }}
+                />
               </div>
+              )}
             </div>
           )}
 
           {heatedDrillTab === 'keywords' && canKwTab && (
             <div>
               <ReportSectionHeader sectionLabel="Google Ads" title="Keywords vs previous period" />
+              {googleKeywordsFetching && keywordTableRows.length === 0 ? (
+                <p className={`text-sm text-gray-400 ${tableWrapMt}`}>Loading keywords…</p>
+              ) : keywordTableRows.length === 0 ? (
+                <p className={`text-sm text-gray-400 ${tableWrapMt}`}>No keyword rows for this selection.</p>
+              ) : (
               <div className={tableWrapMt}>
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
+                <VirtualizedTableShell
+                  rows={keywordTableRows}
+                  colSpan={9}
+                  thead={(
                     <tr>
                       <SortTh label="Keyword" field="keyword" sort={keywordSort} align="left" />
                       <SortTh label="Campaign" field="campaign_name" sort={keywordSort} align="left" />
@@ -1451,13 +1526,8 @@ export default function DataAnalytics({
                       <SortTh label="Conv." field="conversions" sort={keywordSort} />
                       <SortTh label="CPC" field="_cpc" sort={keywordSort} />
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                  {keywordSort.sortRows(aggKeywords.map((k: any) => ({
-                    ...k,
-                    _ctr: k.impressions > 0 ? k.clicks / k.impressions * 100 : 0,
-                    _cpc: k.clicks > 0 ? k.spend / k.clicks : 0,
-                  }))).map((kw: any) => {
+                  )}
+                  renderRow={(kw: any) => {
                     const prev = prevAggKeywordsMap.get(kw.keyword_id)
                     const ctr = kw.impressions > 0 ? kw.clicks / kw.impressions * 100 : 0
                     const cpc = kw.clicks > 0 ? kw.spend / kw.clicks : 0
@@ -1482,19 +1552,26 @@ export default function DataAnalytics({
                         <td className="px-4 py-3 text-right">{cpc > 0 ? `$${cpc.toFixed(2)}` : '-'}</td>
                       </tr>
                     )
-                  })}
-                </tbody>
-                </table>
+                  }}
+                />
               </div>
+              )}
             </div>
           )}
 
           {heatedDrillTab === 'search' && canSearchTab && (
             <div>
               <ReportSectionHeader sectionLabel="Google Ads" title="Search terms vs previous period" />
+              {googleSearchTermsFetching && searchTermTableRows.length === 0 ? (
+                <p className={`text-sm text-gray-400 ${tableWrapMt}`}>Loading search terms…</p>
+              ) : searchTermTableRows.length === 0 ? (
+                <p className={`text-sm text-gray-400 ${tableWrapMt}`}>No search term rows for this selection.</p>
+              ) : (
               <div className={tableWrapMt}>
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
+                <VirtualizedTableShell
+                  rows={searchTermTableRows}
+                  colSpan={9}
+                  thead={(
                     <tr>
                       <SortTh label="Search Term" field="search_term" sort={searchTermSort} align="left" />
                       <SortTh label="Campaign" field="campaign_name" sort={searchTermSort} align="left" />
@@ -1506,13 +1583,8 @@ export default function DataAnalytics({
                       <SortTh label="CPC" field="_cpc" sort={searchTermSort} />
                       <SortTh label="Conv." field="conversions" sort={searchTermSort} />
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                  {searchTermSort.sortRows(aggSearchTerms.map((t: any) => ({
-                    ...t,
-                    _ctr: t.impressions > 0 ? t.clicks / t.impressions * 100 : 0,
-                    _cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
-                  }))).map((term: any) => {
+                  )}
+                  renderRow={(term: any) => {
                     const prev = prevAggSearchTermsMap.get(term.search_term)
                     const ctr = term.impressions > 0 ? term.clicks / term.impressions * 100 : 0
                     const cpc = term.clicks > 0 ? term.spend / term.clicks : 0
@@ -1539,10 +1611,10 @@ export default function DataAnalytics({
                         </td>
                       </tr>
                     )
-                  })}
-                </tbody>
-                </table>
+                  }}
+                />
               </div>
+              )}
             </div>
           )}
 
