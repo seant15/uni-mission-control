@@ -1,4 +1,4 @@
-﻿import { Fragment, useState, useEffect, useRef, useMemo, type ComponentType, type ReactNode } from 'react'
+﻿import { Fragment, useState, useEffect, useRef, useMemo, useCallback, type ComponentType, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   DollarSign, TrendingUp, Target, MousePointer, Eye, MousePointer2, CreditCard,
@@ -29,6 +29,12 @@ import AgencyKpiLayoutEditor from '../components/AgencyKpiLayoutEditor'
 import ClientInsightsSection from '../components/ClientInsightsSection'
 import ReportSectionHeader from '../components/ReportSectionHeader'
 import {
+  formatSpendTargetUsage,
+  platformKeyFromBreakdown,
+  rollupCostByPlatform,
+  sumAdSpendTargetsForClients,
+} from '../lib/adSpendTarget'
+import {
   cardAppliesToBusiness,
   defaultAgencyKpiLayout,
   normalizeAgencyKpiLayout,
@@ -41,6 +47,7 @@ interface Client {
   business_type?: 'leadgen' | 'ecommerce'
   currency?: string
   currency_symbol?: string
+  target_ad_spend_30d_by_platform?: unknown
 }
 
 function aggregate(rows: any[]) {
@@ -283,6 +290,51 @@ export default function MarketingOverview({
         cpa: p.conversions > 0 ? p.spend / p.conversions : 0,
       })).sort((a: any, b: any) => b.spend - a.spend)
     : []
+
+  const rolling30Range = useMemo(() => defaultCalendarRangeLastNDays(30), [])
+
+  const clientsInScope = useMemo(() => {
+    if (selectedClient !== 'all') {
+      const one = clients.find(c => c.id === selectedClient)
+      return one ? [one] : []
+    }
+    return clients
+  }, [clients, selectedClient])
+
+  const aggregatedSpendTargets = useMemo(
+    () => sumAdSpendTargetsForClients(clientsInScope),
+    [clientsInScope],
+  )
+
+  const hasSpendTargets = (aggregatedSpendTargets.meta_ads ?? 0) > 0 || (aggregatedSpendTargets.google_ads ?? 0) > 0
+
+  const { data: rolling30SpendRows = [] } = useQuery({
+    queryKey: ['agency-rolling30-spend', selectedClient, scopedClientId ?? ''],
+    queryFn: () =>
+      db.getDailyPerformance({
+        clientId: selectedClient,
+        startDate: rolling30Range.start,
+        endDate: rolling30Range.end,
+        scopedClientId: scopedClientId || undefined,
+        adsOnly: true,
+      }),
+    enabled: hasSpendTargets,
+    staleTime: 5 * 60_000,
+  })
+
+  const rolling30SpendByPlatform = useMemo(
+    () => rollupCostByPlatform(rolling30SpendRows as Array<{ platform?: string; cost?: number }>),
+    [rolling30SpendRows],
+  )
+
+  const targetSpendLabelForPlatform = useCallback((platform: string) => {
+    const key = platformKeyFromBreakdown(platform)
+    if (!key) return null
+    const target = aggregatedSpendTargets[key]
+    if (!target) return null
+    const spent = rolling30SpendByPlatform[key] ?? 0
+    return formatSpendTargetUsage(spent, target)
+  }, [aggregatedSpendTargets, rolling30SpendByPlatform])
 
   const periodLabel = `${dateRange.start} → ${dateRange.end}`
 
@@ -815,6 +867,9 @@ export default function MarketingOverview({
                     <tr>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Platform</th>
                       <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Spend</th>
+                      {hasSpendTargets && (
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">30d target</th>
+                      )}
                       <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Revenue</th>
                       <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">ROAS</th>
                       <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Conversions</th>
@@ -829,6 +884,11 @@ export default function MarketingOverview({
                           <PlatformBadge platform={p.platform} />
                         </td>
                         <td className="px-3 py-2 text-sm text-right">{fmtMoney(p.spend)}</td>
+                        {hasSpendTargets && (
+                          <td className="px-3 py-2 text-sm text-right text-slate-600">
+                            {targetSpendLabelForPlatform(p.platform) ?? '—'}
+                          </td>
+                        )}
                         <td className="px-3 py-2 text-sm text-right text-green-600 font-medium">{fmtMoney(p.revenue)}</td>
                         <td className="px-3 py-2 text-sm text-right">
                           <span className={`font-semibold ${p.roas >= 2 ? 'text-green-600' : p.roas >= 1 ? 'text-[var(--brand-600)]' : 'text-red-600'}`}>

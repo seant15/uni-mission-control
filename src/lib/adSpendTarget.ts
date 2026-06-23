@@ -30,10 +30,35 @@ export function spendTargetUsagePct(spent: number, target: number): number | nul
   return (spent / target) * 100
 }
 
-/** Cumulative 30d pace for day index 1..N within a chart range. */
-export function cumulativePaceForDay(target30d: number, dayIndex1Based: number): number {
-  if (target30d <= 0 || dayIndex1Based <= 0) return 0
-  return (target30d / 30) * dayIndex1Based
+/** Flat daily spend pace to hit a 30d target (for chart reference line). */
+export function dailySpendPace(target30d: number): number {
+  if (!Number.isFinite(target30d) || target30d <= 0) return 0
+  return target30d / 30
+}
+
+export function sumAdSpendTargetsForClients(
+  clients: Array<{ target_ad_spend_30d_by_platform?: unknown }>,
+): AdSpendTargetByPlatform {
+  const out: AdSpendTargetByPlatform = {}
+  for (const client of clients) {
+    const t = parseAdSpendTargets(client.target_ad_spend_30d_by_platform)
+    if (t.meta_ads) out.meta_ads = (out.meta_ads ?? 0) + t.meta_ads
+    if (t.google_ads) out.google_ads = (out.google_ads ?? 0) + t.google_ads
+  }
+  return out
+}
+
+export function formatSpendTargetUsage(spent: number, target: number): string | null {
+  const pct = spendTargetUsagePct(spent, target)
+  if (pct == null) return null
+  return `${pct.toFixed(0)}% of $${target.toLocaleString()}`
+}
+
+export function platformKeyFromBreakdown(platform: string): AdPlatformSpendKey | null {
+  const p = platform.toLowerCase()
+  if (p === 'meta_ads' || p === 'meta') return 'meta_ads'
+  if (p === 'google_ads' || p === 'google') return 'google_ads'
+  return null
 }
 
 export function platformSpendLabel(platform: AdPlatformSpendKey): string {
