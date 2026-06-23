@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { useSearchParams, Navigate } from 'react-router-dom'
 import { LayoutDashboard } from 'lucide-react'
 import { useDensitySectionClass } from '../contexts/UiDensityContext'
+import { OverviewFiltersProvider } from '../contexts/OverviewFiltersContext'
 import MarketingOverview from './MarketingOverview'
 import DataAnalytics from './DataAnalytics'
 
@@ -35,12 +36,20 @@ export default function OverviewPage() {
 
   const setTab = useCallback(
     (next: OverviewTabId) => {
-      setSearchParams({ tab: next }, { replace: true })
+      setSearchParams(
+        prev => {
+          const params = new URLSearchParams(prev)
+          params.set('tab', next)
+          return params
+        },
+        { replace: true },
+      )
     },
-    [setSearchParams]
+    [setSearchParams],
   )
 
   return (
+    <OverviewFiltersProvider>
     <div className={sectionClass}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -79,5 +88,6 @@ export default function OverviewPage() {
       {tab === 'agency' && <MarketingOverview embedded showAgencyExtras />}
       {tab === 'heated' && <DataAnalytics embedded showHeatedRail />}
     </div>
+    </OverviewFiltersProvider>
   )
 }

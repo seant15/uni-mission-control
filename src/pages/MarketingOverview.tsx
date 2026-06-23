@@ -6,10 +6,10 @@ import {
   Users, ShoppingCart, ChevronDown, Settings2,
 } from 'lucide-react'
 import { db } from '../lib/api'
-import { getDashboardSettings } from '../lib/settings'
 import AccountDateRangePicker from '../components/AccountDateRangePicker'
 import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
 import { useAuth } from '../contexts/AuthContext'
+import { useOverviewFilters } from '../contexts/OverviewFiltersContext'
 import { useDensityStackGap } from '../contexts/UiDensityContext'
 import { canAccessAlerts, scopedClientIdFromUser } from '../lib/rbac'
 import FilterShell from '../components/FilterShell'
@@ -126,13 +126,19 @@ export default function MarketingOverview({
   const queryClient = useQueryClient()
   const densityStackGap = useDensityStackGap()
   const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
-  const [dateRange, setDateRange] = useState(() => defaultCalendarRangeLastNDays(30))
-  const [selectedClient, setSelectedClient] = useState<string>('all')
-  const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
-  const [selectedAdAccount, setSelectedAdAccount] = useState<string>('')
+  const {
+    ready: filtersReady,
+    filters,
+    ui,
+    setSelectedClient,
+    setSelectedPlatform,
+    setSelectedAdAccount,
+    setDateRange,
+    patchUi,
+  } = useOverviewFilters()
+  const { selectedClient, selectedPlatform, selectedAdAccount, dateRange } = filters
+  const { businessType, businessTypeManual } = ui
   const [showClientDropdown, setShowClientDropdown] = useState(false)
-  const [businessType, setBusinessType] = useState<'leadgen' | 'ecommerce'>('ecommerce')
-  const [businessTypeManual, setBusinessTypeManual] = useState(false)
   const clientDropdownRef = useRef<HTMLDivElement>(null)
   const [kpiEditorOpen, setKpiEditorOpen] = useState(false)
   const [draftKpiLayout, setDraftKpiLayout] = useState(defaultAgencyKpiLayout)
@@ -147,16 +153,8 @@ export default function MarketingOverview({
   useEffect(() => {
     if (scopedClientId) {
       setSelectedClient(scopedClientId)
-      setSelectedAdAccount('')
     }
-  }, [scopedClientId])
-
-  useEffect(() => {
-    getDashboardSettings('default_user').then(loaded => {
-      setBusinessType(loaded.defaultBusinessType)
-      setDateRange(defaultCalendarRangeLastNDays(loaded.defaultDateRange))
-    })
-  }, [])
+  }, [scopedClientId, setSelectedClient])
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
@@ -203,10 +201,10 @@ export default function MarketingOverview({
     if (clientId && clientId !== 'all') {
       const client = clients.find(c => c.id === clientId)
       if (client?.business_type) {
-        setBusinessType(client.business_type)
+        patchUi({ businessType: client.business_type })
       }
     }
-  }, [selectedClient, selectedAdAccount, clients, adAccountsFromDB, businessTypeManual])
+  }, [selectedClient, selectedAdAccount, clients, adAccountsFromDB, businessTypeManual, patchUi])
 
   const { data: dailyCurRows, isLoading: loadingDailyCur, error: errDailyCur } = useQuery({
     queryKey: ['mkt_cur', dateRange.start, dateRange.end, selectedClient, selectedPlatform, selectedAdAccount, scopedClientId ?? ''],
@@ -218,7 +216,7 @@ export default function MarketingOverview({
       endDate: dateRange.end,
       scopedClientId: scopedClientId || undefined,
     }),
-    enabled: !!dateRange.start && !!dateRange.end,
+    enabled: filtersReady && !!dateRange.start && !!dateRange.end,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -235,7 +233,7 @@ export default function MarketingOverview({
       endDate: previousRange.end,
       scopedClientId: scopedClientId || undefined,
     }),
-    enabled: !!previousRange.start && !!previousRange.end,
+    enabled: filtersReady && !!previousRange.start && !!previousRange.end,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -669,6 +667,14 @@ export default function MarketingOverview({
     }
   }
 
+  if (!filtersReady) {
+    return (
+      <div className="flex items-center justify-center py-16 text-sm text-gray-400">
+        Loading filters…
+      </div>
+    )
+  }
+
   return (
     <div className={`min-w-0 ${showAgencyExtras ? 'space-y-3' : 'space-y-4'}`}>
         <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between lg:gap-3">
@@ -693,21 +699,21 @@ export default function MarketingOverview({
           <div className="flex rounded-md border border-gray-200 p-0.5 shrink-0">
             <button
               type="button"
-              onClick={() => { setBusinessType('leadgen'); setBusinessTypeManual(true) }}
+              onClick={() => patchUi({ businessType: 'leadgen', businessTypeManual: true })}
               className={`px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center gap-1 ${businessType === 'leadgen' ? 'bg-[var(--brand-600)] text-white' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <Users size={13} /> Lead Gen
             </button>
             <button
               type="button"
-              onClick={() => { setBusinessType('ecommerce'); setBusinessTypeManual(true) }}
+              onClick={() => patchUi({ businessType: 'ecommerce', businessTypeManual: true })}
               className={`px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center gap-1 ${businessType === 'ecommerce' ? 'bg-[var(--brand-600)] text-white' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <ShoppingCart size={13} /> eCommerce
             </button>
           </div>
           {businessTypeManual && (
-            <button type="button" onClick={() => setBusinessTypeManual(false)} className="text-xs text-[var(--brand-600)] underline shrink-0">Auto</button>
+            <button type="button" onClick={() => patchUi({ businessTypeManual: false })} className="text-xs text-[var(--brand-600)] underline shrink-0">Auto</button>
           )}
           {scopedClientId ? (
             <div className="flex items-center gap-2 px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-md text-xs text-slate-700 min-w-[140px]">
@@ -727,7 +733,7 @@ export default function MarketingOverview({
                 <div className="absolute top-full right-0 mt-1 w-full min-w-[200px] bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-56 overflow-y-auto">
                   <button
                     type="button"
-                    onClick={() => { setSelectedClient('all'); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }}
+                    onClick={() => { setSelectedClient('all'); patchUi({ businessTypeManual: false }); setShowClientDropdown(false) }}
                     className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm text-gray-900"
                   >
                     All Clients
@@ -736,7 +742,7 @@ export default function MarketingOverview({
                     <button
                       key={client.id}
                       type="button"
-                      onClick={() => { setSelectedClient(client.id); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }}
+                      onClick={() => { setSelectedClient(client.id); patchUi({ businessTypeManual: false }); setShowClientDropdown(false) }}
                       className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-900"
                     >
                       <div className="text-sm font-medium">{client.name}</div>

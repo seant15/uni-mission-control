@@ -158,7 +158,7 @@ async function fetchShopifyDailyAsPerformanceShape(filters: PerformanceFilters):
     }))
 }
 
-/** Hourly slice used to synthesize missing daily_performance rows (same filters as daily query). */
+/** Hourly slice used to synthesize missing daily_performance rows (legacy client-side path). */
 async function fetchHourlyRowsForDailyRollup(filters: PerformanceFilters): Promise<any[]> {
     let q = supabase
         .from('hourly_performance')
@@ -187,6 +187,100 @@ async function fetchHourlyRowsForDailyRollup(filters: PerformanceFilters): Promi
     const { data, error } = await q
     if (error) throw error
     return data || []
+}
+
+async function resolvePerformanceClientIds(f: PerformanceFilters): Promise<string[]> {
+    if (f.clientId && f.clientId !== 'all') return [f.clientId]
+    return cachedActiveClientIds()
+}
+
+/** Prefer Postgres RPC; fall back to legacy browser merge when migration not applied. */
+async function fetchMergedDailyPerformanceRpc(
+    f: PerformanceFilters,
+    clientIds: string[],
+    plat: string | null,
+    includeShopify: boolean,
+): Promise<any[] | null> {
+    if (clientIds.length === 0) return []
+
+    const { data, error } = await supabase.rpc('get_merged_daily_performance', {
+        p_client_ids: clientIds,
+        p_platform: plat,
+        p_ad_account_id: f.adAccountId || null,
+        p_start_date: f.startDate || null,
+        p_end_date: f.endDate || null,
+        p_include_shopify: includeShopify,
+        p_result_limit: f.limit || 5000,
+        p_result_offset: f.offset || 0,
+    })
+
+    if (error) {
+        const code = (error as { code?: string }).code
+        if (code === '42883' || code === 'PGRST202' || /get_merged_daily_performance/i.test(error.message ?? '')) {
+            return null
+        }
+        throw error
+    }
+    return data || []
+}
+
+async function getDailyPerformanceLegacy(f: PerformanceFilters, plat: string | null, includeShopify: boolean) {
+    let query = supabase
+        .from('daily_performance')
+        .select('id, client_id, client_name, date, platform, ad_account_id, data_timezone, impressions, clicks, conversions, cost, revenue')
+
+    if (f.clientId && f.clientId !== 'all') {
+        query = query.eq('client_id', f.clientId)
+    } else {
+        const activeIds = await cachedActiveClientIds()
+        if (activeIds.length === 0) return []
+        query = query.in('client_id', activeIds)
+    }
+
+    if (plat) {
+        query = query.eq('platform', plat)
+    }
+
+    if (f.adAccountId) {
+        query = query.eq('ad_account_id', f.adAccountId)
+    }
+
+    if (f.startDate) {
+        query = query.gte('date', f.startDate)
+    }
+
+    if (f.endDate) {
+        query = query.lte('date', f.endDate)
+    }
+
+    query = query.order('date', { ascending: false }).limit(20000)
+
+    const { data, error } = await query
+    if (error) throw error
+    const dailyRows = data || []
+
+    const hourlyRaw = await fetchHourlyRowsForDailyRollup(f)
+    const rolled = rollupHourlyToDailyShape(hourlyRaw)
+    const datesWithDailyData = new Set(dailyRows.map((r: { client_id: string; date: string }) => `${r.client_id}|${r.date}`))
+    const merged = [...dailyRows]
+    for (const r of rolled) {
+        const dateKey = `${r.client_id}|${r.date}`
+        if (!datesWithDailyData.has(dateKey)) merged.push(r)
+    }
+
+    if (includeShopify) {
+        const shopRows = await fetchShopifyDailyAsPerformanceShape(f)
+        merged.push(...shopRows)
+    }
+
+    merged.sort((a: any, b: any) => {
+        const db = (b.date || '').localeCompare(a.date || '')
+        if (db !== 0) return db
+        return dailyPerfRowKey(b).localeCompare(dailyPerfRowKey(a))
+    })
+    const lim = f.limit || 5000
+    const off = f.offset || 0
+    return merged.slice(off, off + lim)
 }
 
 /**
@@ -218,62 +312,13 @@ export const db = {
             return shopOnly.slice(offS, offS + limS)
         }
 
-        let query = supabase
-            .from('daily_performance')
-            .select('id, client_id, client_name, date, platform, ad_account_id, data_timezone, impressions, clicks, conversions, cost, revenue')
+        const clientIds = await resolvePerformanceClientIds(f)
+        if (clientIds.length === 0) return []
 
-        if (f.clientId && f.clientId !== 'all') {
-            query = query.eq('client_id', f.clientId)
-        } else {
-            const activeIds = await cachedActiveClientIds()
-            if (activeIds.length === 0) return []
-            query = query.in('client_id', activeIds)
-        }
+        const rpcRows = await fetchMergedDailyPerformanceRpc(f, clientIds, plat, includeShopify)
+        if (rpcRows !== null) return rpcRows
 
-        if (plat) {
-            query = query.eq('platform', plat)
-        }
-
-        if (f.adAccountId) {
-            query = query.eq('ad_account_id', f.adAccountId)
-        }
-
-        if (f.startDate) {
-            query = query.gte('date', f.startDate)
-        }
-
-        if (f.endDate) {
-            query = query.lte('date', f.endDate)
-        }
-
-        query = query.order('date', { ascending: false }).limit(20000)
-
-        const { data, error } = await query
-        if (error) throw error
-        const dailyRows = data || []
-
-        const hourlyRaw = await fetchHourlyRowsForDailyRollup(f)
-        const rolled = rollupHourlyToDailyShape(hourlyRaw)
-        const datesWithDailyData = new Set(dailyRows.map((r: { client_id: string; date: string }) => `${r.client_id}|${r.date}`))
-        const merged = [...dailyRows]
-        for (const r of rolled) {
-            const dateKey = `${r.client_id}|${r.date}`
-            if (!datesWithDailyData.has(dateKey)) merged.push(r)
-        }
-
-        if (includeShopify) {
-            const shopRows = await fetchShopifyDailyAsPerformanceShape(f)
-            merged.push(...shopRows)
-        }
-
-        merged.sort((a: any, b: any) => {
-            const db = (b.date || '').localeCompare(a.date || '')
-            if (db !== 0) return db
-            return dailyPerfRowKey(b).localeCompare(dailyPerfRowKey(a))
-        })
-        const lim = f.limit || 5000
-        const off = f.offset || 0
-        return merged.slice(off, off + lim)
+        return getDailyPerformanceLegacy(f, plat, includeShopify)
     },
 
     /**

@@ -18,11 +18,12 @@ import ResizableColgroup from '../components/ResizableColgroup'
 import { useResizableColumns } from '../hooks/useResizableColumns'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
+import { useOverviewFilters } from '../contexts/OverviewFiltersContext'
 import { useUiDensity } from '../contexts/UiDensityContext'
 import { canAccessAlerts, scopedClientIdFromUser } from '../lib/rbac'
 import AccountDateRangePicker from '../components/AccountDateRangePicker'
 import FilterShell from '../components/FilterShell'
-import { defaultCalendarRangeLastNDays, previousComparableCalendarRange } from '../lib/dashboardDateRange'
+import { previousComparableCalendarRange } from '../lib/dashboardDateRange'
 import { AGENCY_REPORTING_TZ } from '../lib/hourlyBuckets'
 import { filterAdsDailyRows, sumAdsMetrics } from '../lib/adsRows'
 import { rollupShopifyDaily } from '../lib/shopifyMetrics'
@@ -220,12 +221,26 @@ export default function DataAnalytics({
   const { appUser } = useAuth()
   const uiDensity = useUiDensity()
   const scopedClientId = useMemo(() => scopedClientIdFromUser(appUser), [appUser])
+  const {
+    ready: filtersReady,
+    filters,
+    ui,
+    setSelectedClient,
+    setSelectedPlatform,
+    setSelectedAdAccount,
+    setDateRange,
+    patchUi,
+  } = useOverviewFilters()
+  const { selectedClient, selectedPlatform, selectedAdAccount, dateRange } = filters
+  const {
+    businessType,
+    businessTypeManual,
+    selectedMetric,
+    secondaryMetric,
+    showRolling7,
+    heatedDrillTab,
+  } = ui
 
-  // Core states
-  const [selectedClient, setSelectedClient] = useState<string>('all')
-  const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
-  const [selectedAdAccount, setSelectedAdAccount] = useState<string>('')
-  const [dateRange, setDateRange] = useState({ start: '', end: '' })
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -235,28 +250,19 @@ export default function DataAnalytics({
   const keywordSort = useTableSort('spend')
   const searchTermSort = useTableSort('spend')
 
-  // Business Type and Selected Metric
-  const [businessType, setBusinessType] = useState<'leadgen' | 'ecommerce'>('ecommerce')
-  const [businessTypeManual, setBusinessTypeManual] = useState(false)
-  const [selectedMetric, setSelectedMetric] = useState<MetricKey>('roas')
-  const [secondaryMetric, setSecondaryMetric] = useState<MetricKey | 'none'>('none')
-  const [showRolling7, setShowRolling7] = useState(false)
-  type HeatedDrillTab = 'daily' | 'meta' | 'google' | 'keywords' | 'search' | 'adsets'
-  const [heatedDrillTab, setHeatedDrillTab] = useState<HeatedDrillTab>('daily')
+  // Business Type and Selected Metric (persisted via OverviewFiltersContext sessionStorage)
   const metaDrillActive = heatedDrillTab === 'meta'
   const googleDrillActive = heatedDrillTab === 'google'
   const keywordsDrillActive = heatedDrillTab === 'keywords'
   const searchDrillActive = heatedDrillTab === 'search'
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
 
-  // Load settings
+  // Load settings (cache timeout only; filters come from OverviewFiltersContext)
   useEffect(() => {
     const loadSettings = async () => {
       const userId = 'default_user'
       const loaded = await getDashboardSettings(userId)
       setSettings(loaded)
-      setBusinessType(loaded.defaultBusinessType)
-      setSelectedMetric(loaded.defaultMetric)
     }
     loadSettings()
   }, [])
@@ -301,11 +307,13 @@ export default function DataAnalytics({
     if (clientId && clientId !== 'all') {
       const client = clients_data.find(c => c.id === clientId)
       if (client?.business_type) {
-        setBusinessType(client.business_type)
-        setSelectedMetric(client.business_type === 'leadgen' ? 'costperconv' : 'roas')
+        patchUi({
+          businessType: client.business_type,
+          selectedMetric: client.business_type === 'leadgen' ? 'costperconv' : 'roas',
+        })
       }
     }
-  }, [selectedClient, selectedAdAccount, clientsFromTable, adAccountsFromDB, businessTypeManual])
+  }, [selectedClient, selectedAdAccount, clientsFromTable, adAccountsFromDB, businessTypeManual, patchUi])
 
   // Current period performance
   const { data: performance, isFetching: perfFetching } = useQuery({
@@ -319,6 +327,7 @@ export default function DataAnalytics({
       scopedClientId: scopedClientId || undefined,
       adsOnly: embedded,
     }),
+    enabled: filtersReady && !!dateRange.start && !!dateRange.end,
     staleTime: settings.cacheTimeout * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -747,8 +756,8 @@ export default function DataAnalytics({
   }, [dailyDataWithMetrics, shopifyDailyRows])
 
   useEffect(() => {
-    if (!showMerKpi && selectedMetric === 'mer') setSelectedMetric('roas')
-  }, [showMerKpi, selectedMetric])
+    if (!showMerKpi && selectedMetric === 'mer') patchUi({ selectedMetric: 'roas' })
+  }, [showMerKpi, selectedMetric, patchUi])
 
   const showPlatformInDailyDrill = selectedPlatform === 'all'
   const dailyDrillTableRows = useMemo(() => {
@@ -879,17 +888,11 @@ export default function DataAnalytics({
     }
   }, [error])
 
-  // Default date range
-  useEffect(() => {
-    setDateRange(defaultCalendarRangeLastNDays(settings.defaultDateRange))
-  }, [settings.defaultDateRange])
-
   useEffect(() => {
     if (scopedClientId) {
       setSelectedClient(scopedClientId)
-      setSelectedAdAccount('')
     }
-  }, [scopedClientId])
+  }, [scopedClientId, setSelectedClient])
 
   const fmtDailyMoney = (n: number) =>
     new Intl.NumberFormat('en-US', {
@@ -949,13 +952,21 @@ export default function DataAnalytics({
       (heatedDrillTab === 'search' && canSearchTab) ||
       (heatedDrillTab === 'adsets' && canAdsetsTab)
     if (ok) return
-    if (canDailyTab) setHeatedDrillTab('daily')
-    else if (canMetaTab) setHeatedDrillTab('meta')
-    else if (canGoogleTab) setHeatedDrillTab('google')
-    else if (canKwTab) setHeatedDrillTab('keywords')
-    else if (canSearchTab) setHeatedDrillTab('search')
-    else if (canAdsetsTab) setHeatedDrillTab('adsets')
-  }, [heatedDrillTab, canDailyTab, canMetaTab, canGoogleTab, canKwTab, canSearchTab, canAdsetsTab])
+    if (canDailyTab) patchUi({ heatedDrillTab: 'daily' })
+    else if (canMetaTab) patchUi({ heatedDrillTab: 'meta' })
+    else if (canGoogleTab) patchUi({ heatedDrillTab: 'google' })
+    else if (canKwTab) patchUi({ heatedDrillTab: 'keywords' })
+    else if (canSearchTab) patchUi({ heatedDrillTab: 'search' })
+    else if (canAdsetsTab) patchUi({ heatedDrillTab: 'adsets' })
+  }, [heatedDrillTab, canDailyTab, canMetaTab, canGoogleTab, canKwTab, canSearchTab, canAdsetsTab, patchUi])
+
+  if (!filtersReady) {
+    return (
+      <div className="flex items-center justify-center py-16 text-sm text-gray-400">
+        Loading filters…
+      </div>
+    )
+  }
 
   const mainContent = (
     <div className={`${rootStack}${perfFetching ? ' opacity-95 transition-opacity duration-200' : ''}`} aria-busy={perfFetching || undefined}>
@@ -986,20 +997,20 @@ export default function DataAnalytics({
           {/* Business Type Toggle */}
           <div className="flex rounded-md border border-gray-200 p-0.5 shrink-0">
             <button
-              onClick={() => { setBusinessType('leadgen'); setBusinessTypeManual(true); setSelectedMetric('costperconv') }}
+              onClick={() => patchUi({ businessType: 'leadgen', businessTypeManual: true, selectedMetric: 'costperconv' })}
               className={`px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center gap-1 ${businessType === 'leadgen' ? 'bg-[var(--brand-600)] text-white' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <Users size={13} /> Lead Gen
             </button>
             <button
-              onClick={() => { setBusinessType('ecommerce'); setBusinessTypeManual(true); setSelectedMetric('roas') }}
+              onClick={() => patchUi({ businessType: 'ecommerce', businessTypeManual: true, selectedMetric: 'roas' })}
               className={`px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center gap-1 ${businessType === 'ecommerce' ? 'bg-[var(--brand-600)] text-white' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <ShoppingCart size={13} /> eCommerce
             </button>
           </div>
           {businessTypeManual && (
-            <button onClick={() => setBusinessTypeManual(false)} className="text-xs text-[var(--brand-600)] underline shrink-0">Auto</button>
+            <button onClick={() => patchUi({ businessTypeManual: false })} className="text-xs text-[var(--brand-600)] underline shrink-0">Auto</button>
           )}
 
           <div className="w-px h-6 bg-gray-200 hidden sm:block" />
@@ -1020,9 +1031,9 @@ export default function DataAnalytics({
               </button>
               {showClientDropdown && (
                 <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-56 overflow-y-auto">
-                  <button onClick={() => { setSelectedClient('all'); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm text-gray-900">All Clients</button>
+                  <button onClick={() => { setSelectedClient('all'); patchUi({ businessTypeManual: false }); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm text-gray-900">All Clients</button>
                   {clients?.map(client => (
-                    <button key={client.id} onClick={() => { setSelectedClient(client.id); setSelectedAdAccount(''); setBusinessTypeManual(false); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-900">
+                    <button key={client.id} onClick={() => { setSelectedClient(client.id); patchUi({ businessTypeManual: false }); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-900">
                       <div className="text-sm font-medium">{client.name}</div>
                       {client.business_type && <div className="text-xs text-gray-500">{client.business_type === 'leadgen' ? 'Lead Gen' : 'eCommerce'}</div>}
                     </button>
@@ -1099,7 +1110,7 @@ export default function DataAnalytics({
           return (
             <div
               key={kpi.key}
-              onClick={() => setSelectedMetric(kpi.key)}
+              onClick={() => patchUi({ selectedMetric: kpi.key })}
               className={
                 embedded
                   ? `bg-white rounded-lg shadow-sm border cursor-pointer transition p-3 ${
@@ -1166,7 +1177,7 @@ export default function DataAnalytics({
               <label className="text-xs text-gray-500">Overlay:</label>
               <select
                 value={secondaryMetric}
-                onChange={e => setSecondaryMetric(e.target.value as MetricKey | 'none')}
+                onChange={e => patchUi({ secondaryMetric: e.target.value as MetricKey | 'none' })}
                 className="text-xs px-2 py-1 border border-gray-200 rounded-lg bg-gray-50"
               >
                 <option value="none">None</option>
@@ -1180,7 +1191,7 @@ export default function DataAnalytics({
               <input
                 type="checkbox"
                 checked={showRolling7}
-                onChange={e => setShowRolling7(e.target.checked)}
+                onChange={e => patchUi({ showRolling7: e.target.checked })}
                 className="rounded"
               />
               7-day avg
@@ -1288,7 +1299,7 @@ export default function DataAnalytics({
                 key={tab.id}
                 type="button"
                 disabled={tab.disabled}
-                onClick={() => !tab.disabled && setHeatedDrillTab(tab.id)}
+                onClick={() => !tab.disabled && patchUi({ heatedDrillTab: tab.id })}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
                   tab.disabled
                     ? 'opacity-40 cursor-not-allowed border-gray-100 text-gray-400'
