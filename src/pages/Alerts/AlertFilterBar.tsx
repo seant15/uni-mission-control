@@ -143,8 +143,8 @@ export default function AlertFilterBar({ filters, onChange }: Props) {
               className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                 filters.platform.includes(p)
                   ? p === 'google_ads'
-                    ? 'bg-blue-100 text-blue-700 border-blue-200'
-                    : 'bg-indigo-100 text-indigo-700 border-indigo-200'
+                    ? 'uni-platform-badge uni-platform-badge--google'
+                    : 'uni-platform-badge uni-platform-badge--meta'
                   : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
               }`}
             >
