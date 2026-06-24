@@ -13,6 +13,8 @@ type VirtualizedTableShellProps<T> = {
   tbodyClassName?: string
   renderRow: (row: T, index: number) => ReactNode
   wrapperClassName?: string
+  /** When set, enables table-fixed layout with persisted column widths */
+  colgroup?: ReactNode
 }
 
 /**
@@ -29,6 +31,7 @@ export default function VirtualizedTableShell<T>({
   tbodyClassName = 'divide-y divide-gray-200',
   renderRow,
   wrapperClassName = '',
+  colgroup,
 }: VirtualizedTableShellProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const useVirtual = rows.length >= VIRTUAL_THRESHOLD
@@ -77,7 +80,8 @@ export default function VirtualizedTableShell<T>({
       className={`${useVirtual ? 'overflow-auto' : 'overflow-x-auto overflow-y-auto'} ${wrapperClassName}`.trim()}
       style={maxHeight ? { maxHeight } : undefined}
     >
-      <table className={tableClassName}>
+      <table className={`${tableClassName}${colgroup ? ' table-fixed' : ''}`}>
+        {colgroup}
         <thead className={useVirtual ? 'uni-table-head-row sticky top-0 z-10' : 'uni-table-head-row'}>{thead}</thead>
         <tbody className={tbodyClassName}>{tbodyContent}</tbody>
       </table>

@@ -11,6 +11,10 @@ import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
 import type { CalendarDateRange } from '../lib/dashboardDateRange'
 import { previousComparableCalendarRange } from '../lib/dashboardDateRange'
+import ResizableColgroup from '../components/ResizableColgroup'
+import ResizableTh from '../components/ResizableTh'
+import { useResizableColumns } from '../hooks/useResizableColumns'
+import { AGENCY_BY_ACCOUNT_COL_WIDTHS } from '../lib/tableResizeDefaults'
 import { useChartAxisStroke, useChartGridStroke } from '../lib/chartTheme'
 
 type ChartMetric = 'total_spend' | 'total_revenue' | 'roas' | 'conversions'
@@ -100,6 +104,11 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform, sec
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const chartGridStroke = useChartGridStroke()
   const chartAxisStroke = useChartAxisStroke()
+  const accountTableCols = ['account_name', 'platform', 'total_spend', 'total_revenue', 'roas', 'conversions', 'ctr', 'currency'] as const
+  const { widths: accountColW, startResize: accountColResize } = useResizableColumns(
+    'agency-by-account-v1',
+    AGENCY_BY_ACCOUNT_COL_WIDTHS,
+  )
 
   const previousRange = useMemo(
     () => (dateRange.start && dateRange.end ? previousComparableCalendarRange(dateRange) : { start: '', end: '' }),
@@ -285,7 +294,8 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform, sec
                 <span className="uni-table-head">By account</span>
               </div>
               <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm table-fixed">
+                  <ResizableColgroup cols={[...accountTableCols]} widths={accountColW} />
                   <thead className="uni-table-head-row sticky top-0">
                     <tr>
                       {([
@@ -296,19 +306,26 @@ export default function AgencyClientBreakdown({ dateRange, selectedPlatform, sec
                         ['roas', 'ROAS', 'text-right'],
                         ['conversions', 'Conv.', 'text-right'],
                       ] as [SortField, string, string][]).map(([f, l, alignClass]) => (
-                        <th key={f} className={`px-2 py-1.5 ${alignClass}`}>
+                        <ResizableTh
+                          key={f}
+                          id={f}
+                          widths={accountColW}
+                          startResize={accountColResize}
+                          align={alignClass === 'text-right' ? 'right' : 'left'}
+                          variant="compact"
+                        >
                           <button
                             type="button"
                             onClick={() => handleSort(f)}
-                            className={`flex items-center gap-1 text-[10px] font-semibold text-slate-500 uppercase hover:text-slate-800 ${alignClass === 'text-right' ? 'ml-auto' : ''}`}
+                            className={`flex items-center gap-1 hover:text-slate-800 ${alignClass === 'text-right' ? 'ml-auto' : ''}`}
                           >
                             {l}
                             {sortField === f && <ArrowUpDown size={10} />}
                           </button>
-                        </th>
+                        </ResizableTh>
                       ))}
-                      <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase">CTR</th>
-                      <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase">CCY</th>
+                      <ResizableTh id="ctr" widths={accountColW} startResize={accountColResize} variant="compact">CTR</ResizableTh>
+                      <ResizableTh id="currency" widths={accountColW} startResize={accountColResize} variant="compact">CCY</ResizableTh>
                     </tr>
                   </thead>
                   <tbody className="uni-table-body divide-y divide-slate-100">

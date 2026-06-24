@@ -15,6 +15,10 @@ import { canAccessAlerts, scopedClientIdFromUser } from '../lib/rbac'
 import FilterShell from '../components/FilterShell'
 import AgencyClientBreakdown from '../components/AgencyClientBreakdown'
 import PlatformBadge from '../components/PlatformBadge'
+import ResizableColgroup from '../components/ResizableColgroup'
+import ResizableTh from '../components/ResizableTh'
+import { useResizableColumns } from '../hooks/useResizableColumns'
+import { OVERVIEW_PLATFORM_COL_WIDTHS } from '../lib/tableResizeDefaults'
 import AlertSystemGuideLink from '../components/AlertSystemGuideLink'
 import {
   adsPurchasesPctOfShopify,
@@ -311,6 +315,18 @@ export default function MarketingOverview({
   )
 
   const hasSpendTargets = (aggregatedSpendTargets.meta_ads ?? 0) > 0 || (aggregatedSpendTargets.google_ads ?? 0) > 0
+
+  const platformTableCols = useMemo(() => {
+    const cols = ['platform', 'spend']
+    if (hasSpendTargets) cols.push('target')
+    cols.push('revenue', 'roas', 'conversions', 'cpa', 'share')
+    return cols
+  }, [hasSpendTargets])
+
+  const { widths: platformColW, startResize: platformColResize } = useResizableColumns(
+    'overview-platform-v1',
+    OVERVIEW_PLATFORM_COL_WIDTHS,
+  )
 
   const { data: rolling30SpendRows = [] } = useQuery({
     queryKey: ['agency-rolling30-spend', selectedClient, scopedClientId ?? ''],
@@ -874,19 +890,20 @@ export default function MarketingOverview({
                 title={`Performance by platform — ${periodLabel}`}
               />
               <div className="overflow-x-auto mt-3">
-                <table className="w-full">
+                <table className="w-full table-fixed">
+                  <ResizableColgroup cols={platformTableCols} widths={platformColW} />
                   <thead className="uni-table-head-row">
                     <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Platform</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Spend</th>
+                      <ResizableTh id="platform" widths={platformColW} startResize={platformColResize} variant="compact">Platform</ResizableTh>
+                      <ResizableTh id="spend" widths={platformColW} startResize={platformColResize} align="right" variant="compact">Spend</ResizableTh>
                       {hasSpendTargets && (
-                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">30d target</th>
+                        <ResizableTh id="target" widths={platformColW} startResize={platformColResize} align="right" variant="compact">30d target</ResizableTh>
                       )}
-                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Revenue</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">ROAS</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Conversions</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">CPA</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Share</th>
+                      <ResizableTh id="revenue" widths={platformColW} startResize={platformColResize} align="right" variant="compact">Revenue</ResizableTh>
+                      <ResizableTh id="roas" widths={platformColW} startResize={platformColResize} align="right" variant="compact">ROAS</ResizableTh>
+                      <ResizableTh id="conversions" widths={platformColW} startResize={platformColResize} align="right" variant="compact">Conversions</ResizableTh>
+                      <ResizableTh id="cpa" widths={platformColW} startResize={platformColResize} align="right" variant="compact">CPA</ResizableTh>
+                      <ResizableTh id="share" widths={platformColW} startResize={platformColResize} align="right" variant="compact">Share</ResizableTh>
                     </tr>
                   </thead>
                   <tbody className="uni-table-body divide-y divide-gray-100">

@@ -1,4 +1,4 @@
-/** Unified platform labels + badge colors (Google amber, Meta navy, Shopify green). */
+/** Unified platform labels + badge colors (Meta navy, Google orange, Shopify green). */
 
 export type PlatformId = 'meta_ads' | 'google_ads' | 'shopify' | string
 

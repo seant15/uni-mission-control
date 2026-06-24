@@ -3,6 +3,11 @@ import { useQuery } from '@tanstack/react-query'
 import { ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from 'lucide-react'
 import { db } from '../lib/api'
 import VirtualizedTableShell from './VirtualizedTableShell'
+import ResizableColgroup from './ResizableColgroup'
+import ResizableTh from './ResizableTh'
+import { useResizableColumns } from '../hooks/useResizableColumns'
+import { META_ADSET_COL_WIDTHS } from '../lib/tableResizeDefaults'
+import type { MouseEvent as ReactMouseEvent } from 'react'
 
 function useTableSort(defaultField: string, defaultDir: 'asc' | 'desc' = 'desc') {
   const [sortField, setSortField] = useState(defaultField)
@@ -30,25 +35,41 @@ function SortTh({
   field,
   sort,
   align = 'right',
+  colId,
+  widths,
+  startResize,
 }: {
   label: string
   field: string
   sort: ReturnType<typeof useTableSort>
   align?: 'left' | 'right'
+  colId?: string
+  widths?: Record<string, number>
+  startResize?: (colId: string, e: ReactMouseEvent) => void
 }) {
   const active = sort.sortField === field
   const Icon = !active ? ArrowUpDown : sort.sortDir === 'asc' ? ArrowUp : ArrowDown
   const alignClass = align === 'left' ? 'text-left' : 'text-right'
+  const button = (
+    <button
+      type="button"
+      onClick={() => sort.toggle(field)}
+      className={`flex items-center gap-1 hover:text-[var(--uni-text)] ${align === 'right' ? 'ml-auto' : ''} ${active ? 'text-[var(--brand-600)]' : ''}`}
+    >
+      {label}
+      <Icon size={11} className={active ? 'text-[var(--brand-600)]' : 'text-gray-400'} />
+    </button>
+  )
+  if (colId && widths && startResize) {
+    return (
+      <ResizableTh id={colId} widths={widths} startResize={startResize} align={align} variant="data-table">
+        {button}
+      </ResizableTh>
+    )
+  }
   return (
     <th className={`uni-data-table-th ${alignClass}`}>
-      <button
-        type="button"
-        onClick={() => sort.toggle(field)}
-        className={`flex items-center gap-1 hover:text-[var(--uni-text)] ${align === 'right' ? 'ml-auto' : ''} ${active ? 'text-[var(--brand-600)]' : ''}`}
-      >
-        {label}
-        <Icon size={11} className={active ? 'text-[var(--brand-600)]' : 'text-gray-400'} />
-      </button>
+      {button}
     </th>
   )
 }
@@ -104,6 +125,16 @@ export default function MetaAdSetPerformanceTable({
   className = '',
 }: Props) {
   const adsetSort = useTableSort('spend')
+  const adsetTableCols = useMemo(
+    () => (nestedCreatives
+      ? ['expand', 'ad_set', 'campaign', 'spend', 'impressions', 'clicks', 'conv', 'revenue', 'roas']
+      : ['ad_set', 'campaign', 'spend', 'impressions', 'clicks', 'conv', 'revenue', 'roas']),
+    [nestedCreatives],
+  )
+  const { widths: adsetColW, startResize: adsetColResize } = useResizableColumns(
+    'meta-adset-v1',
+    META_ADSET_COL_WIDTHS,
+  )
   const [expandedAdSets, setExpandedAdSets] = useState<Set<string>>(() => new Set())
 
   const { data: rawAdsets = [], isLoading } = useQuery({
@@ -220,17 +251,21 @@ export default function MetaAdSetPerformanceTable({
 
   const tableHead = (
     <tr>
-      {nestedCreatives && <th className="px-3 py-2.5 w-8" />}
-      <SortTh label="Ad Set" field="ad_set_name" sort={adsetSort} align="left" />
-      <SortTh label="Campaign" field="campaign_name" sort={adsetSort} align="left" />
-      <SortTh label="Spend" field="spend" sort={adsetSort} />
-      <SortTh label="Impressions" field="impressions" sort={adsetSort} />
-      <SortTh label="Clicks" field="clicks" sort={adsetSort} />
-      <SortTh label="Conversions" field="conversions" sort={adsetSort} />
-      <SortTh label="Revenue" field="revenue" sort={adsetSort} />
-      <SortTh label="ROAS" field="roas" sort={adsetSort} />
+      {nestedCreatives && (
+        <ResizableTh id="expand" widths={adsetColW} startResize={adsetColResize} variant="data-table" />
+      )}
+      <SortTh label="Ad Set" field="ad_set_name" sort={adsetSort} align="left" colId="ad_set" widths={adsetColW} startResize={adsetColResize} />
+      <SortTh label="Campaign" field="campaign_name" sort={adsetSort} align="left" colId="campaign" widths={adsetColW} startResize={adsetColResize} />
+      <SortTh label="Spend" field="spend" sort={adsetSort} colId="spend" widths={adsetColW} startResize={adsetColResize} />
+      <SortTh label="Impressions" field="impressions" sort={adsetSort} colId="impressions" widths={adsetColW} startResize={adsetColResize} />
+      <SortTh label="Clicks" field="clicks" sort={adsetSort} colId="clicks" widths={adsetColW} startResize={adsetColResize} />
+      <SortTh label="Conversions" field="conversions" sort={adsetSort} colId="conv" widths={adsetColW} startResize={adsetColResize} />
+      <SortTh label="Revenue" field="revenue" sort={adsetSort} colId="revenue" widths={adsetColW} startResize={adsetColResize} />
+      <SortTh label="ROAS" field="roas" sort={adsetSort} colId="roas" widths={adsetColW} startResize={adsetColResize} />
     </tr>
   )
+
+  const tableColgroup = <ResizableColgroup cols={adsetTableCols} widths={adsetColW} />
 
   return (
     <div className={className}>
@@ -251,7 +286,8 @@ export default function MetaAdSetPerformanceTable({
         </div>
       ) : nestedCreatives ? (
         <div className="uni-data-table-shell">
-          <table className="uni-data-table text-sm">
+          <table className="uni-data-table text-sm table-fixed">
+            {tableColgroup}
             <thead className="uni-data-table-head">{tableHead}</thead>
             <tbody className="divide-y divide-gray-50">
               {sortedAdSets.map(row => renderAdSetRow(row))}
@@ -262,7 +298,8 @@ export default function MetaAdSetPerformanceTable({
         <div className="uni-data-table-shell">
           <VirtualizedTableShell
             rows={sortedAdSets}
-            colSpan={8}
+            colSpan={adsetTableCols.length}
+            colgroup={tableColgroup}
             maxHeight={520}
             rowHeight={42}
             tableClassName="uni-data-table text-sm"

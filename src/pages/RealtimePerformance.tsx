@@ -10,7 +10,9 @@ import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
 import PlatformBadge from '../components/PlatformBadge'
 import ResizableColgroup from '../components/ResizableColgroup'
+import ResizableTh from '../components/ResizableTh'
 import { useResizableColumns } from '../hooks/useResizableColumns'
+import { RT_CLIENT_COMPARE_COL_WIDTHS } from '../lib/tableResizeDefaults'
 
 // Timezone display options
 type TzMode = 'utc' | 'browser' | 'account'
@@ -142,17 +144,9 @@ function RtResizeTh({
   children: ReactNode
 }) {
   return (
-    <th
-      style={{ width: widths[id], minWidth: widths[id] }}
-      className={`relative px-4 py-3 text-xs font-medium text-gray-500 ${align === 'right' ? 'text-right' : 'text-left'} border-b border-gray-200`}
-    >
-      <span className={align === 'right' ? 'pr-2 inline-block' : ''}>{children}</span>
-      <div
-        aria-hidden
-        className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-[var(--brand-600)]/25 z-10"
-        onMouseDown={e => startResize(id, e)}
-      />
-    </th>
+    <ResizableTh id={id} widths={widths} startResize={startResize} align={align} className="border-b border-gray-200">
+      {children}
+    </ResizableTh>
   )
 }
 
@@ -323,17 +317,7 @@ export default function RealtimePerformance() {
     return sortDir === 'asc' ? av - bv : bv - av
   })
 
-  const { widths: rtColW, startResize: rtColResize } = useResizableColumns('rt-client-compare-v1', {
-    account: 132,
-    platform: 92,
-    client: 120,
-    spend: 84,
-    spendVs: 72,
-    conv: 72,
-    convVs: 72,
-    roas: 72,
-    roasVs: 72,
-  })
+  const { widths: rtColW, startResize: rtColResize } = useResizableColumns('rt-client-compare-v1', RT_CLIENT_COMPARE_COL_WIDTHS)
 
   const windowBoundsLabel = useMemo(() => {
     if (!hourlyData?.windowStart || !hourlyData?.windowEnd) return null

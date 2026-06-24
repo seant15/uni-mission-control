@@ -8,10 +8,14 @@ import DashboardSection, {
   DataTableShell,
   DataTable,
   DataTableHead,
-  DataTableHeadCell,
   DataTableBody,
 } from '../../components/ui/DataTable'
 import EmptyState from '../../components/ui/EmptyState'
+import PlatformBadge from '../../components/PlatformBadge'
+import ResizableColgroup from '../../components/ResizableColgroup'
+import ResizableTh from '../../components/ResizableTh'
+import { useResizableColumns } from '../../hooks/useResizableColumns'
+import { ALERT_COL_WIDTHS } from '../../lib/tableResizeDefaults'
 import AlertActionPanel from './AlertActionPanel'
 import type { AlertGroup, Alert, AlertSeverity, AlertStatus } from '../../types/alerts'
 
@@ -41,18 +45,6 @@ const STATUS_BADGE: Record<AlertStatus, string> = {
   resolved:     'bg-green-50 text-green-700',
   ignored:      'bg-gray-50 text-gray-500',
   dismissed:    'bg-slate-50 text-slate-500',
-}
-
-const PLATFORM_LABEL: Record<string, string> = {
-  google_ads: 'Google',
-  meta_ads:   'Meta',
-  tiktok_ads: 'TikTok',
-  all:        'All',
-}
-
-const PLATFORM_COLOR: Record<string, string> = {
-  google_ads: 'bg-blue-100 text-blue-700',
-  meta_ads:   'bg-indigo-100 text-indigo-700',
 }
 
 function relativeTime(iso: string): string {
@@ -168,19 +160,15 @@ function SingleAlertRow({
           <td className="px-4 py-3">
             <div className="text-sm font-medium text-gray-800">{alert.account_name || '—'}</div>
             {alert.platform && (
-              <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-xs font-medium ${PLATFORM_COLOR[alert.platform] || 'bg-gray-100 text-gray-600'}`}>
-                {PLATFORM_LABEL[alert.platform] || alert.platform}
+              <span className="inline-block mt-0.5">
+                <PlatformBadge platform={alert.platform} />
               </span>
             )}
           </td>
         )}
         {visibleColumns.includes('platform') && (
           <td className="px-4 py-3">
-            {alert.platform && (
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${PLATFORM_COLOR[alert.platform] || 'bg-gray-100 text-gray-600'}`}>
-                {PLATFORM_LABEL[alert.platform] || alert.platform}
-              </span>
-            )}
+            {alert.platform && <PlatformBadge platform={alert.platform} />}
           </td>
         )}
         {visibleColumns.includes('type') && (
@@ -373,19 +361,15 @@ function GroupRow({
               </span>
             </div>
             {rep.platform && (
-              <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-xs font-medium ${PLATFORM_COLOR[rep.platform] || 'bg-gray-100 text-gray-600'}`}>
-                {PLATFORM_LABEL[rep.platform] || rep.platform}
+              <span className="inline-block mt-0.5">
+                <PlatformBadge platform={rep.platform} />
               </span>
             )}
           </td>
         )}
         {visibleColumns.includes('platform') && (
           <td className="px-4 py-3">
-            {rep.platform && (
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${PLATFORM_COLOR[rep.platform] || 'bg-gray-100 text-gray-600'}`}>
-                {PLATFORM_LABEL[rep.platform] || rep.platform}
-              </span>
-            )}
+            {rep.platform && <PlatformBadge platform={rep.platform} />}
           </td>
         )}
         {visibleColumns.includes('type') && (
@@ -491,16 +475,29 @@ export default function AlertGroupList({
     detected: 'Detected',
     status:   'Status',
     assigned: 'Assigned',
+    source:   'Source',
+    rule:     'Rule',
+    resolved_at: 'Resolved',
     actions:  '',
   }
 
+  const colOrder = useMemo(() => {
+    const cols: string[] = []
+    if (showBulk) cols.push('bulk')
+    cols.push(...visibleColumns)
+    return cols
+  }, [showBulk, visibleColumns])
+
+  const { widths: colW, startResize: colResize } = useResizableColumns('alerts-list-v1', ALERT_COL_WIDTHS)
+
   return (
     <DataTableShell>
-      <DataTable>
+      <DataTable className="table-fixed" minWidth={720}>
+        <ResizableColgroup cols={colOrder} widths={colW} />
         <DataTableHead>
           <tr>
             {showBulk && (
-              <DataTableHeadCell className="w-10">
+              <ResizableTh id="bulk" widths={colW} startResize={colResize} variant="data-table" className="w-10">
                 <input
                   ref={pageCheckboxRef}
                   type="checkbox"
@@ -510,12 +507,12 @@ export default function AlertGroupList({
                   title="Select all on this page"
                   aria-label="Select all alerts on this page"
                 />
-              </DataTableHeadCell>
+              </ResizableTh>
             )}
             {visibleColumns.map(col => (
-              <DataTableHeadCell key={col}>
+              <ResizableTh key={col} id={col} widths={colW} startResize={colResize} variant="data-table">
                 {COLUMN_HEADERS[col] ?? col}
-              </DataTableHeadCell>
+              </ResizableTh>
             ))}
           </tr>
         </DataTableHead>

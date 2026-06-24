@@ -4,6 +4,10 @@ import { toast } from 'sonner'
 import { db } from '../lib/api'
 import { parseAdSpendTargets } from '../lib/adSpendTarget'
 import { formatSupabaseError } from '../lib/supabaseErrors'
+import ResizableColgroup from './ResizableColgroup'
+import ResizableTh from './ResizableTh'
+import { useResizableColumns } from '../hooks/useResizableColumns'
+import { CLIENT_SPEND_TARGETS_COL_WIDTHS } from '../lib/tableResizeDefaults'
 
 type ClientRow = {
   id: string
@@ -21,6 +25,11 @@ export default function ClientAdSpendTargetsPanel({
   const [draft, setDraft] = useState<Record<string, { meta: string; google: string }>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const spendTargetCols = ['client', 'meta', 'google', 'actions'] as const
+  const { widths: spendColW, startResize: spendColResize } = useResizableColumns(
+    'client-spend-targets-v1',
+    CLIENT_SPEND_TARGETS_COL_WIDTHS,
+  )
 
   useEffect(() => {
     const next: Record<string, { meta: string; google: string }> = {}
@@ -83,13 +92,14 @@ export default function ClientAdSpendTargetsPanel({
       </button>
       {expanded && (
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-stone-50 text-xs text-stone-500 uppercase">
+        <table className="w-full text-sm table-fixed">
+          <ResizableColgroup cols={[...spendTargetCols]} widths={spendColW} />
+          <thead className="uni-table-head-row text-xs text-stone-500 uppercase">
             <tr>
-              <th className="text-left px-4 py-2 font-medium">Client</th>
-              <th className="text-left px-3 py-2 font-medium">Meta ($ / 30d)</th>
-              <th className="text-left px-3 py-2 font-medium">Google ($ / 30d)</th>
-              <th className="px-3 py-2 w-24" />
+              <ResizableTh id="client" widths={spendColW} startResize={spendColResize} variant="compact">Client</ResizableTh>
+              <ResizableTh id="meta" widths={spendColW} startResize={spendColResize} variant="compact">Meta ($ / 30d)</ResizableTh>
+              <ResizableTh id="google" widths={spendColW} startResize={spendColResize} variant="compact">Google ($ / 30d)</ResizableTh>
+              <ResizableTh id="actions" widths={spendColW} startResize={spendColResize} variant="compact" />
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100">

@@ -13,6 +13,11 @@ import { defaultCalendarRangeLastNDays, CREATIVE_DATE_PRESETS } from '../lib/das
 import { getDashboardSettings } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { scopedClientIdFromUser } from '../lib/rbac'
+import ResizableColgroup from '../components/ResizableColgroup'
+import ResizableTh from '../components/ResizableTh'
+import { useResizableColumns } from '../hooks/useResizableColumns'
+import { CREATIVE_COL_WIDTHS } from '../lib/tableResizeDefaults'
+import type { MouseEvent as ReactMouseEvent } from 'react'
 import {
   ResponsiveContainer,
   PieChart,
@@ -42,21 +47,46 @@ function useTableSort(defaultField: string, defaultDir: 'asc' | 'desc' = 'desc')
   return { sortField, sortDir, toggle, sortRows }
 }
 
-function SortTh({ label, field, sort, align = 'right' }: {
-  label: string; field: string; sort: ReturnType<typeof useTableSort>; align?: 'left' | 'right'
+function SortTh({
+  label,
+  field,
+  sort,
+  align = 'right',
+  colId,
+  widths,
+  startResize,
+}: {
+  label: string
+  field: string
+  sort: ReturnType<typeof useTableSort>
+  align?: 'left' | 'right'
+  colId?: string
+  widths?: Record<string, number>
+  startResize?: (colId: string, e: ReactMouseEvent) => void
 }) {
   const active = sort.sortField === field
   const Icon = !active ? ArrowUpDown : sort.sortDir === 'asc' ? ArrowUp : ArrowDown
   const alignClass = align === 'left' ? 'text-left' : 'text-right'
+  const button = (
+    <button
+      type="button"
+      onClick={() => sort.toggle(field)}
+      className={`flex items-center gap-1 text-xs font-medium uppercase hover:text-gray-800 ${align === 'right' ? 'ml-auto' : ''} ${active ? 'text-[var(--brand-600)]' : 'text-gray-500'}`}
+    >
+      {label}
+      <Icon size={11} className={active ? 'text-[var(--brand-600)]' : 'text-gray-400'} />
+    </button>
+  )
+  if (colId && widths && startResize) {
+    return (
+      <ResizableTh id={colId} widths={widths} startResize={startResize} align={align} variant="compact">
+        {button}
+      </ResizableTh>
+    )
+  }
   return (
     <th className={`px-3 py-3 text-xs font-medium text-gray-500 ${alignClass}`}>
-      <button
-        onClick={() => sort.toggle(field)}
-        className={`flex items-center gap-1 text-xs font-medium uppercase hover:text-gray-800 ${align === 'right' ? 'ml-auto' : ''} ${active ? 'text-[var(--brand-600)]' : 'text-gray-500'}`}
-      >
-        {label}
-        <Icon size={11} className={active ? 'text-[var(--brand-600)]' : 'text-gray-400'} />
-      </button>
+      {button}
     </th>
   )
 }
@@ -543,6 +573,11 @@ export default function CreativePerformance() {
   }, [])
 
   const creativeSort = useTableSort('spend')
+  const creativeTableCols = ['visual', 'ad_name', 'spend', 'impressions', 'clicks', 'ctr', 'conversions', 'revenue', 'roas', 'cpa'] as const
+  const { widths: creativeColW, startResize: creativeColResize } = useResizableColumns(
+    'creative-performance-v1',
+    CREATIVE_COL_WIDTHS,
+  )
 
   // Clients
   const { data: clients = [] } = useQuery({
@@ -940,19 +975,20 @@ export default function CreativePerformance() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
+              <table className="w-full text-sm table-fixed">
+                <ResizableColgroup cols={[...creativeTableCols]} widths={creativeColW} />
+                <thead className="uni-table-head-row border-b border-gray-200">
                   <tr>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase w-16">Visual</th>
-                    <SortTh label="Ad Name" field="ad_name" sort={creativeSort} align="left" />
-                    <SortTh label="Spend" field="spend" sort={creativeSort} />
-                    <SortTh label="Impressions" field="impressions" sort={creativeSort} />
-                    <SortTh label="Clicks" field="clicks" sort={creativeSort} />
-                    <SortTh label="CTR" field="ctr" sort={creativeSort} />
-                    <SortTh label="Conversions" field="conversions" sort={creativeSort} />
-                    <SortTh label="Revenue" field="revenue" sort={creativeSort} />
-                    <SortTh label="ROAS" field="roas" sort={creativeSort} />
-                    <SortTh label="CPA" field="cpa" sort={creativeSort} />
+                    <ResizableTh id="visual" widths={creativeColW} startResize={creativeColResize} variant="compact">Visual</ResizableTh>
+                    <SortTh label="Ad Name" field="ad_name" sort={creativeSort} align="left" colId="ad_name" widths={creativeColW} startResize={creativeColResize} />
+                    <SortTh label="Spend" field="spend" sort={creativeSort} colId="spend" widths={creativeColW} startResize={creativeColResize} />
+                    <SortTh label="Impressions" field="impressions" sort={creativeSort} colId="impressions" widths={creativeColW} startResize={creativeColResize} />
+                    <SortTh label="Clicks" field="clicks" sort={creativeSort} colId="clicks" widths={creativeColW} startResize={creativeColResize} />
+                    <SortTh label="CTR" field="ctr" sort={creativeSort} colId="ctr" widths={creativeColW} startResize={creativeColResize} />
+                    <SortTh label="Conversions" field="conversions" sort={creativeSort} colId="conversions" widths={creativeColW} startResize={creativeColResize} />
+                    <SortTh label="Revenue" field="revenue" sort={creativeSort} colId="revenue" widths={creativeColW} startResize={creativeColResize} />
+                    <SortTh label="ROAS" field="roas" sort={creativeSort} colId="roas" widths={creativeColW} startResize={creativeColResize} />
+                    <SortTh label="CPA" field="cpa" sort={creativeSort} colId="cpa" widths={creativeColW} startResize={creativeColResize} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">

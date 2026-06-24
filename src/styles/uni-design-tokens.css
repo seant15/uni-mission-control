@@ -462,9 +462,9 @@
 }
 
 .uni-platform-badge--google {
-  background: #fef3c7;
-  color: #78350f;
-  border-color: #fcd34d;
+  background: #ffedd5;
+  color: #9a3412;
+  border-color: #fdba74;
 }
 
 .uni-platform-badge--shopify {
@@ -501,9 +501,9 @@ html[data-theme='dark'] .uni-callout-warn {
 }
 
 html[data-theme='dark'] .uni-platform-badge--google {
-  background: rgba(251, 191, 36, 0.16);
-  color: #fcd34d;
-  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(249, 115, 22, 0.18);
+  color: #fdba74;
+  border-color: rgba(249, 115, 22, 0.42);
 }
 
 html[data-theme='dark'] .uni-platform-badge--shopify {

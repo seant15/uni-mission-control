@@ -15,7 +15,15 @@ import { db } from '../lib/api'
 import PerformanceRhythmSection from '../components/PerformanceRhythmSection'
 import ReportSectionHeader from '../components/ReportSectionHeader'
 import ResizableColgroup from '../components/ResizableColgroup'
+import ResizableTh from '../components/ResizableTh'
 import { useResizableColumns } from '../hooks/useResizableColumns'
+import {
+  HEATED_DAILY_DRILL_COL_WIDTHS,
+  HEATED_META_CAMPAIGN_COL_WIDTHS,
+  HEATED_GOOGLE_CAMPAIGN_COL_WIDTHS,
+  HEATED_KEYWORDS_COL_WIDTHS,
+  HEATED_SEARCH_TERMS_COL_WIDTHS,
+} from '../lib/tableResizeDefaults'
 import { getDashboardSettings, DEFAULT_SETTINGS } from '../lib/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { useOverviewFilters } from '../contexts/OverviewFiltersContext'
@@ -60,19 +68,46 @@ function useTableSort(defaultField: string, defaultDir: 'asc' | 'desc' = 'desc')
   return { sortField, sortDir, toggle, sortRows }
 }
 
-function SortTh({ label, field, sort, align = 'right' }: { label: string; field: string; sort: ReturnType<typeof useTableSort>; align?: 'left' | 'right' }) {
+function SortTh({
+  label,
+  field,
+  sort,
+  align = 'right',
+  colId,
+  widths,
+  startResize,
+}: {
+  label: string
+  field: string
+  sort: ReturnType<typeof useTableSort>
+  align?: 'left' | 'right'
+  colId?: string
+  widths?: Record<string, number>
+  startResize?: (colId: string, e: ReactMouseEvent) => void
+}) {
   const active = sort.sortField === field
   const Icon = !active ? ArrowUpDown : sort.sortDir === 'asc' ? ArrowUp : ArrowDown
   const alignClass = align === 'left' ? 'text-left' : 'text-right'
+  const button = (
+    <button
+      type="button"
+      onClick={() => sort.toggle(field)}
+      className={`flex items-center gap-1 text-xs font-medium uppercase hover:text-gray-800 ${align === 'right' ? 'ml-auto' : ''} ${active ? 'text-[var(--brand-600)]' : 'text-gray-500'}`}
+    >
+      {label}
+      <Icon size={11} className={active ? 'text-[var(--brand-600)]' : 'text-gray-400'} />
+    </button>
+  )
+  if (colId && widths && startResize) {
+    return (
+      <ResizableTh id={colId} widths={widths} startResize={startResize} align={align} variant="compact">
+        {button}
+      </ResizableTh>
+    )
+  }
   return (
     <th className={`px-4 py-3 text-xs font-medium text-gray-500 ${alignClass}`}>
-      <button
-        onClick={() => sort.toggle(field)}
-        className={`flex items-center gap-1 text-xs font-medium uppercase hover:text-gray-800 ${align === 'right' ? 'ml-auto' : ''} ${active ? 'text-[var(--brand-600)]' : 'text-gray-500'}`}
-      >
-        {label}
-        <Icon size={11} className={active ? 'text-[var(--brand-600)]' : 'text-gray-400'} />
-      </button>
+      {button}
     </th>
   )
 }
@@ -230,17 +265,9 @@ function DailyDrillTh({
   startResize: (colId: string, e: ReactMouseEvent) => void
 }) {
   return (
-    <th
-      style={{ width: widths[id], minWidth: widths[id], maxWidth: widths[id] }}
-      className={`relative px-2 py-1.5 ${align === 'right' ? 'text-right' : 'text-left'} font-medium text-slate-500`}
-    >
-      <span className={align === 'right' ? 'pr-2' : 'pl-0'}>{children}</span>
-      <div
-        aria-hidden
-        className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 hover:bg-[var(--brand-600)]/30"
-        onMouseDown={e => startResize(id, e)}
-      />
-    </th>
+    <ResizableTh id={id} widths={widths} startResize={startResize} align={align} variant="compact">
+      {children}
+    </ResizableTh>
   )
 }
 
@@ -826,13 +853,11 @@ export default function DataAnalytics({
     })
   }, [kpiRows, dailyDataWithMetrics, selectedPlatform, showPlatformInDailyDrill])
 
-  const { widths: ddColW, startResize: ddColResize } = useResizableColumns('heated-daily-drill-v1', {
-    date: 112,
-    platform: 94,
-    spend: 78,
-    revenue: 84,
-    conv: 64,
-  })
+  const { widths: ddColW, startResize: ddColResize } = useResizableColumns('heated-daily-drill-v1', HEATED_DAILY_DRILL_COL_WIDTHS)
+  const { widths: metaColW, startResize: metaColResize } = useResizableColumns('heated-meta-campaign-v1', HEATED_META_CAMPAIGN_COL_WIDTHS)
+  const { widths: googleColW, startResize: googleColResize } = useResizableColumns('heated-google-campaign-v1', HEATED_GOOGLE_CAMPAIGN_COL_WIDTHS)
+  const { widths: kwColW, startResize: kwColResize } = useResizableColumns('heated-keywords-v1', HEATED_KEYWORDS_COL_WIDTHS)
+  const { widths: stColW, startResize: stColResize } = useResizableColumns('heated-search-terms-v1', HEATED_SEARCH_TERMS_COL_WIDTHS)
 
   // 7-day rolling avg
   const chartData = chartDailyData.map((d, i) => {
@@ -1411,19 +1436,25 @@ export default function DataAnalytics({
                 <VirtualizedTableShell
                   rows={metaCampaignTableRows}
                   colSpan={11}
+                  colgroup={(
+                    <ResizableColgroup
+                      cols={['campaign_name', 'spend', 'clicks', 'ctr', 'reach', 'frequency', 'outbound', 'video25', 'conv', 'cpa', 'roas']}
+                      widths={metaColW}
+                    />
+                  )}
                   thead={(
                     <tr>
-                      <SortTh label="Campaign" field="campaign_name" sort={metaCampaignSort} align="left" />
-                      <SortTh label="Spend" field="spend" sort={metaCampaignSort} />
-                      <SortTh label="Clicks" field="clicks" sort={metaCampaignSort} />
-                      <SortTh label="CTR" field="_ctr" sort={metaCampaignSort} />
-                      <SortTh label="Reach" field="reach" sort={metaCampaignSort} />
-                      <SortTh label="Freq" field="frequency" sort={metaCampaignSort} />
-                      <SortTh label="Outbound" field="outbound_clicks" sort={metaCampaignSort} />
-                      <SortTh label="Video 25%" field="video_p25_watched" sort={metaCampaignSort} />
-                      <SortTh label="Conv." field="conversions" sort={metaCampaignSort} />
-                      <SortTh label="CPA" field="_cpa" sort={metaCampaignSort} />
-                      <SortTh label="ROAS" field="_roas" sort={metaCampaignSort} />
+                      <SortTh label="Campaign" field="campaign_name" sort={metaCampaignSort} align="left" colId="campaign_name" widths={metaColW} startResize={metaColResize} />
+                      <SortTh label="Spend" field="spend" sort={metaCampaignSort} colId="spend" widths={metaColW} startResize={metaColResize} />
+                      <SortTh label="Clicks" field="clicks" sort={metaCampaignSort} colId="clicks" widths={metaColW} startResize={metaColResize} />
+                      <SortTh label="CTR" field="_ctr" sort={metaCampaignSort} colId="ctr" widths={metaColW} startResize={metaColResize} />
+                      <SortTh label="Reach" field="reach" sort={metaCampaignSort} colId="reach" widths={metaColW} startResize={metaColResize} />
+                      <SortTh label="Freq" field="frequency" sort={metaCampaignSort} colId="frequency" widths={metaColW} startResize={metaColResize} />
+                      <SortTh label="Outbound" field="outbound_clicks" sort={metaCampaignSort} colId="outbound" widths={metaColW} startResize={metaColResize} />
+                      <SortTh label="Video 25%" field="video_p25_watched" sort={metaCampaignSort} colId="video25" widths={metaColW} startResize={metaColResize} />
+                      <SortTh label="Conv." field="conversions" sort={metaCampaignSort} colId="conv" widths={metaColW} startResize={metaColResize} />
+                      <SortTh label="CPA" field="_cpa" sort={metaCampaignSort} colId="cpa" widths={metaColW} startResize={metaColResize} />
+                      <SortTh label="ROAS" field="_roas" sort={metaCampaignSort} colId="roas" widths={metaColW} startResize={metaColResize} />
                     </tr>
                   )}
                   renderRow={(camp: any) => {
@@ -1510,15 +1541,21 @@ export default function DataAnalytics({
                 <VirtualizedTableShell
                   rows={googleCampaignTableRows}
                   colSpan={7}
+                  colgroup={(
+                    <ResizableColgroup
+                      cols={['campaign_name', 'spend', 'clicks', 'ctr', 'conv', 'cpa', 'roas']}
+                      widths={googleColW}
+                    />
+                  )}
                   thead={(
                     <tr>
-                      <SortTh label="Campaign" field="campaign_name" sort={googleCampaignSort} align="left" />
-                      <SortTh label="Spend" field="spend" sort={googleCampaignSort} />
-                      <SortTh label="Clicks" field="clicks" sort={googleCampaignSort} />
-                      <SortTh label="CTR" field="_ctr" sort={googleCampaignSort} />
-                      <SortTh label="Conv." field="conversions" sort={googleCampaignSort} />
-                      <SortTh label="CPA" field="_cpa" sort={googleCampaignSort} />
-                      <SortTh label="ROAS" field="_roas" sort={googleCampaignSort} />
+                      <SortTh label="Campaign" field="campaign_name" sort={googleCampaignSort} align="left" colId="campaign_name" widths={googleColW} startResize={googleColResize} />
+                      <SortTh label="Spend" field="spend" sort={googleCampaignSort} colId="spend" widths={googleColW} startResize={googleColResize} />
+                      <SortTh label="Clicks" field="clicks" sort={googleCampaignSort} colId="clicks" widths={googleColW} startResize={googleColResize} />
+                      <SortTh label="CTR" field="_ctr" sort={googleCampaignSort} colId="ctr" widths={googleColW} startResize={googleColResize} />
+                      <SortTh label="Conv." field="conversions" sort={googleCampaignSort} colId="conv" widths={googleColW} startResize={googleColResize} />
+                      <SortTh label="CPA" field="_cpa" sort={googleCampaignSort} colId="cpa" widths={googleColW} startResize={googleColResize} />
+                      <SortTh label="ROAS" field="_roas" sort={googleCampaignSort} colId="roas" widths={googleColW} startResize={googleColResize} />
                     </tr>
                   )}
                   renderRow={(camp: any) => {
@@ -1590,17 +1627,23 @@ export default function DataAnalytics({
                 <VirtualizedTableShell
                   rows={keywordTableRows}
                   colSpan={9}
+                  colgroup={(
+                    <ResizableColgroup
+                      cols={['keyword', 'campaign', 'ad_group', 'match', 'spend', 'clicks', 'ctr', 'conv', 'cpc']}
+                      widths={kwColW}
+                    />
+                  )}
                   thead={(
                     <tr>
-                      <SortTh label="Keyword" field="keyword" sort={keywordSort} align="left" />
-                      <SortTh label="Campaign" field="campaign_name" sort={keywordSort} align="left" />
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Ad Group</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Match</th>
-                      <SortTh label="Spend" field="spend" sort={keywordSort} />
-                      <SortTh label="Clicks" field="clicks" sort={keywordSort} />
-                      <SortTh label="CTR" field="_ctr" sort={keywordSort} />
-                      <SortTh label="Conv." field="conversions" sort={keywordSort} />
-                      <SortTh label="CPC" field="_cpc" sort={keywordSort} />
+                      <SortTh label="Keyword" field="keyword" sort={keywordSort} align="left" colId="keyword" widths={kwColW} startResize={kwColResize} />
+                      <SortTh label="Campaign" field="campaign_name" sort={keywordSort} align="left" colId="campaign" widths={kwColW} startResize={kwColResize} />
+                      <ResizableTh id="ad_group" widths={kwColW} startResize={kwColResize} align="left" variant="compact">Ad Group</ResizableTh>
+                      <ResizableTh id="match" widths={kwColW} startResize={kwColResize} align="left" variant="compact">Match</ResizableTh>
+                      <SortTh label="Spend" field="spend" sort={keywordSort} colId="spend" widths={kwColW} startResize={kwColResize} />
+                      <SortTh label="Clicks" field="clicks" sort={keywordSort} colId="clicks" widths={kwColW} startResize={kwColResize} />
+                      <SortTh label="CTR" field="_ctr" sort={keywordSort} colId="ctr" widths={kwColW} startResize={kwColResize} />
+                      <SortTh label="Conv." field="conversions" sort={keywordSort} colId="conv" widths={kwColW} startResize={kwColResize} />
+                      <SortTh label="CPC" field="_cpc" sort={keywordSort} colId="cpc" widths={kwColW} startResize={kwColResize} />
                     </tr>
                   )}
                   renderRow={(kw: any) => {
@@ -1653,17 +1696,23 @@ export default function DataAnalytics({
                 <VirtualizedTableShell
                   rows={searchTermTableRows}
                   colSpan={9}
+                  colgroup={(
+                    <ResizableColgroup
+                      cols={['search_term', 'campaign', 'match', 'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'conv']}
+                      widths={stColW}
+                    />
+                  )}
                   thead={(
                     <tr>
-                      <SortTh label="Search Term" field="search_term" sort={searchTermSort} align="left" />
-                      <SortTh label="Campaign" field="campaign_name" sort={searchTermSort} align="left" />
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Match</th>
-                      <SortTh label="Spend" field="spend" sort={searchTermSort} />
-                      <SortTh label="Impr." field="impressions" sort={searchTermSort} />
-                      <SortTh label="Clicks" field="clicks" sort={searchTermSort} />
-                      <SortTh label="CTR" field="_ctr" sort={searchTermSort} />
-                      <SortTh label="CPC" field="_cpc" sort={searchTermSort} />
-                      <SortTh label="Conv." field="conversions" sort={searchTermSort} />
+                      <SortTh label="Search Term" field="search_term" sort={searchTermSort} align="left" colId="search_term" widths={stColW} startResize={stColResize} />
+                      <SortTh label="Campaign" field="campaign_name" sort={searchTermSort} align="left" colId="campaign" widths={stColW} startResize={stColResize} />
+                      <ResizableTh id="match" widths={stColW} startResize={stColResize} align="left" variant="compact">Match</ResizableTh>
+                      <SortTh label="Spend" field="spend" sort={searchTermSort} colId="spend" widths={stColW} startResize={stColResize} />
+                      <SortTh label="Impr." field="impressions" sort={searchTermSort} colId="impressions" widths={stColW} startResize={stColResize} />
+                      <SortTh label="Clicks" field="clicks" sort={searchTermSort} colId="clicks" widths={stColW} startResize={stColResize} />
+                      <SortTh label="CTR" field="_ctr" sort={searchTermSort} colId="ctr" widths={stColW} startResize={stColResize} />
+                      <SortTh label="CPC" field="_cpc" sort={searchTermSort} colId="cpc" widths={stColW} startResize={stColResize} />
+                      <SortTh label="Conv." field="conversions" sort={searchTermSort} colId="conv" widths={stColW} startResize={stColResize} />
                     </tr>
                   )}
                   renderRow={(term: any) => {
