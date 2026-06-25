@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { Settings as SettingsIcon, Save, ArrowLeft, Check, Users, UserCircle } from 'lucide-react'
+import { Settings as SettingsIcon, Save, ArrowLeft, Check, Users, UserCircle, Key, Eye, EyeOff } from 'lucide-react'
 import {
   getDashboardSettings,
   saveDashboardSettings,
@@ -21,6 +21,7 @@ import { supabase } from '../lib/supabase'
 import { getStoredAccent, setStoredAccent, type AccentId } from '../lib/themeAccent'
 import type { UiTheme } from '../lib/themePreference'
 import { applyUiThemeToDocument, setStoredUiTheme } from '../lib/themePreference'
+import { changeOwnPassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
 
 type SettingsTab = 'dashboard' | 'users' | 'profile'
 
@@ -90,6 +91,14 @@ export default function DashboardSettingsPage() {
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileError, setProfileError] = useState('')
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwMessage, setPwMessage] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const isSuperAdmin = appUser?.role === 'super_admin'
 
   useEffect(() => {
     if (appUser) setProfileName(appUser.display_name)
@@ -108,6 +117,15 @@ export default function DashboardSettingsPage() {
       didApplySuperAdminDefaultTab.current = true
     }
   }, [appUser?.role, searchParams])
+
+  // Users & Access is super_admin only — redirect deep links for everyone else.
+  useEffect(() => {
+    if (!appUser) return
+    if (activeTab === 'users' && appUser.role !== 'super_admin') {
+      setActiveTab('profile')
+      navigate('/dashboard/settings?tab=profile', { replace: true })
+    }
+  }, [appUser, activeTab, navigate])
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -232,6 +250,20 @@ export default function DashboardSettingsPage() {
     setTimeout(() => setProfileSaved(false), 3000)
   }
 
+  async function handlePasswordChange() {
+    setPwSaving(true)
+    setPwMessage(null)
+    const result = await changeOwnPassword(newPassword, confirmPassword)
+    setPwSaving(false)
+    if (result.ok) {
+      setPwMessage({ ok: true, text: 'Password updated.' })
+      setNewPassword('')
+      setConfirmPassword('')
+    } else {
+      setPwMessage({ ok: false, text: result.error })
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -300,21 +332,23 @@ export default function DashboardSettingsPage() {
           <SettingsIcon size={15} />
           Defaults &amp; charts
         </button>
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
-            activeTab === 'users'
-              ? 'border-[var(--brand-600)] text-[var(--brand-700)]'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Users size={15} />
-          Users & Access
-        </button>
+        {isSuperAdmin && (
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
+              activeTab === 'users'
+                ? 'border-[var(--brand-600)] text-[var(--brand-700)]'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Users size={15} />
+            Users & Access
+          </button>
+        )}
       </div>
 
-      {/* Users tab */}
-      {activeTab === 'users' && (
+      {/* Users tab — super_admin only */}
+      {activeTab === 'users' && isSuperAdmin && (
         <div className="space-y-4">
           {appUser?.role === 'super_admin' && shellPreview?.previewUserId && (
             <div className="uni-callout-warn rounded-xl px-4 py-3 text-sm leading-relaxed">
@@ -404,6 +438,72 @@ export default function DashboardSettingsPage() {
                 readOnly
                 className="uni-native-field w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed capitalize"
               />
+            </div>
+
+            <div className="pt-4 border-t border-gray-100 space-y-3">
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <Key size={15} className="text-[var(--brand-600)]" />
+                Change password
+              </h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Updates your login password for this account. Minimum {MIN_PASSWORD_LENGTH} characters.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">New password</label>
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    autoComplete="new-password"
+                    className="uni-native-field w-full px-4 py-2.5 pr-10 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)] outline-none"
+                    placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(v => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Confirm new password</label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    autoComplete="new-password"
+                    className="uni-native-field w-full px-4 py-2.5 pr-10 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[var(--brand-500)] outline-none"
+                    placeholder="Re-enter new password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(v => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+              {pwMessage && (
+                <p className={`text-sm ${pwMessage.ok ? 'text-green-700' : 'text-red-600'}`}>
+                  {pwMessage.text}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handlePasswordChange}
+                disabled={pwSaving || !newPassword || !confirmPassword}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-800 hover:bg-gray-50 disabled:opacity-50 transition"
+              >
+                <Key size={15} />
+                {pwSaving ? 'Updating…' : 'Update password'}
+              </button>
             </div>
 
             <div className="pt-4 border-t border-gray-100 space-y-4">
