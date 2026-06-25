@@ -22,6 +22,7 @@ export interface AppUser {
   primary_client_id: string | null   // only for client_user
   agency_id: string | null
   avatar_preset?: string | null
+  avatar_url?: string | null
   notes: string | null
   invite_sent_at: string | null
   invite_accepted_at: string | null

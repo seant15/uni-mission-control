@@ -1,4 +1,4 @@
-/** Preset avatars — images under /public/avatars/ when uploaded; gradient fallback until then. */
+/** Preset avatars — gradient swatches; optional PNGs under /public/avatars/ are unused by default. */
 
 export type AvatarPresetId =
   | 'preset-01'

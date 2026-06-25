@@ -20,6 +20,7 @@ interface AppUser {
   primary_client_id?: string | null
   agency_id?: string | null
   avatar_preset?: string | null
+  avatar_url?: string | null
 }
 
 interface AuthContextValue {

@@ -15,6 +15,7 @@ import { useAuth } from '../contexts/AuthContext'
 import UserAvatar from '../components/UserAvatar'
 import AvatarPickerModal from '../components/AvatarPickerModal'
 import type { AvatarPresetId } from '../lib/avatarPresets'
+import { deleteProfileAvatar, uploadProfileAvatar } from '../lib/avatar'
 import { useShellPreview } from '../contexts/ShellPreviewContext'
 import { useDensitySectionClass, useUiDensity } from '../contexts/UiDensityContext'
 import { supabase } from '../lib/supabase'
@@ -91,6 +92,7 @@ export default function DashboardSettingsPage() {
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileError, setProfileError] = useState('')
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
+  const [avatarCacheBust, setAvatarCacheBust] = useState(0)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showNewPassword, setShowNewPassword] = useState(false)
@@ -377,23 +379,58 @@ export default function DashboardSettingsPage() {
                 <UserAvatar
                   displayName={profileName || appUser?.display_name}
                   avatarPreset={appUser?.avatar_preset}
+                  avatarUrl={appUser?.avatar_url}
+                  avatarCacheBust={avatarCacheBust || undefined}
                   size="lg"
                 />
               </button>
               <AvatarPickerModal
                 open={avatarPickerOpen}
                 currentPreset={appUser?.avatar_preset}
+                currentAvatarUrl={appUser?.avatar_url}
                 displayName={profileName || appUser?.display_name}
                 onClose={() => setAvatarPickerOpen(false)}
-                onSelect={async (presetId: AvatarPresetId) => {
-                  if (!appUser?.id) return
-                  await supabase.from('app_users').update({ avatar_preset: presetId }).eq('id', appUser.id)
+                onSelectPreset={async (presetId: AvatarPresetId) => {
+                  if (!appUser?.id || !user?.id) throw new Error('Not signed in.')
+                  if (appUser.avatar_url) {
+                    try {
+                      await deleteProfileAvatar(appUser.avatar_url)
+                    } catch {
+                      /* storage cleanup best-effort */
+                    }
+                  }
+                  const { error } = await supabase
+                    .from('app_users')
+                    .update({ avatar_preset: presetId, avatar_url: null })
+                    .eq('id', appUser.id)
+                  if (error) throw error
+                  await refreshAppUser()
+                }}
+                onUpload={async (file: File) => {
+                  if (!appUser?.id || !user?.id) throw new Error('Not signed in.')
+                  const path = await uploadProfileAvatar(user.id, file)
+                  const { error } = await supabase
+                    .from('app_users')
+                    .update({ avatar_url: path })
+                    .eq('id', appUser.id)
+                  if (error) throw error
+                  setAvatarCacheBust(Date.now())
+                  await refreshAppUser()
+                }}
+                onRemoveUpload={async () => {
+                  if (!appUser?.id || !appUser.avatar_url) return
+                  await deleteProfileAvatar(appUser.avatar_url)
+                  const { error } = await supabase
+                    .from('app_users')
+                    .update({ avatar_url: null })
+                    .eq('id', appUser.id)
+                  if (error) throw error
                   await refreshAppUser()
                 }}
               />
               <div>
                 <p className="text-sm font-medium text-gray-700">Profile avatar</p>
-                <p className="text-xs text-gray-400">Shown in the sidebar and footer. Click the image to pick a preset.</p>
+                <p className="text-xs text-gray-400">Shown in the sidebar and footer. Pick a color or upload a photo.</p>
                 <button
                   type="button"
                   onClick={() => setAvatarPickerOpen(true)}

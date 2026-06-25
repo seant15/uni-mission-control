@@ -1,31 +1,33 @@
-import { useState } from 'react'
-import { AVATAR_PRESETS, avatarPresetImageUrl, isAvatarPresetId, type AvatarPresetId } from '../lib/avatarPresets'
+import { AVATAR_PRESETS, isAvatarPresetId } from '../lib/avatarPresets'
+import { profileAvatarPublicUrl } from '../lib/avatar'
 
 export default function UserAvatar({
   displayName,
   avatarPreset,
+  avatarUrl,
+  avatarCacheBust,
   size = 'md',
   className = '',
 }: {
   displayName?: string | null
   avatarPreset?: string | null
+  avatarUrl?: string | null
+  avatarCacheBust?: number
   size?: 'sm' | 'md' | 'lg'
   className?: string
 }) {
   const initial = (displayName || 'U')[0].toUpperCase()
   const preset = isAvatarPresetId(avatarPreset) ? avatarPreset : null
   const presetMeta = preset ? AVATAR_PRESETS.find(p => p.id === preset) : null
-  const [imgOk, setImgOk] = useState(true)
 
   const dim =
     size === 'sm' ? 'w-8 h-8 text-[10px]' : size === 'lg' ? 'w-11 h-11 text-sm' : 'w-9 h-9 text-[11px]'
 
-  if (preset && imgOk) {
+  if (avatarUrl) {
     return (
       <img
-        src={avatarPresetImageUrl(preset as AvatarPresetId)}
+        src={profileAvatarPublicUrl(avatarUrl, avatarCacheBust)}
         alt=""
-        onError={() => setImgOk(false)}
         className={`${dim} rounded-full object-cover ring-2 ring-orange-200/70 shrink-0 ${className}`}
       />
     )

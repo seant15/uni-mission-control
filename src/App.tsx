@@ -375,6 +375,7 @@ function AppShell() {
                 <UserAvatar
                   displayName={appUser?.display_name}
                   avatarPreset={appUser?.avatar_preset}
+                  avatarUrl={appUser?.avatar_url}
                   size="md"
                 />
               </button>
