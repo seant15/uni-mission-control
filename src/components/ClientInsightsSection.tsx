@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ArrowDownRight, ArrowUpRight, Package, Sparkles, type LucideIcon } from 'lucide-react'
 import { db } from '../lib/api'
 import { parseKulProductSplitConfig, type ClientDashboardModule } from '../lib/clientDashboardModules'
-import { rollupShopifyProductSplit, type ShopifyProductSplitRollup } from '../lib/shopifyProductSplit'
+import { rollupShopifyProductSplit, productLineGross, type ShopifyProductSplitRollup } from '../lib/shopifyProductSplit'
 import type { CalendarDateRange } from '../lib/dashboardDateRange'
 import { previousComparableCalendarRange } from '../lib/dashboardDateRange'
 import ReportSectionHeader from './ReportSectionHeader'
@@ -99,6 +99,77 @@ function MixBar({ label, machinePct }: { label: string; machinePct: number }) {
   )
 }
 
+function ReconciliationStrip({
+  rollup,
+  currencySymbol,
+}: {
+  rollup: ShopifyProductSplitRollup
+  currencySymbol: string
+}) {
+  const productLines = productLineGross(rollup)
+  const shopifyOrderGross = rollup.orderGross
+  const taxShippingGap = Math.max(0, shopifyOrderGross - productLines)
+  const subtotalRef = rollup.productSubtotal > 0 ? rollup.productSubtotal : productLines
+  const splitVsSubtotalGap =
+    rollup.productSubtotal > 0 ? Math.max(0, rollup.productSubtotal - productLines) : 0
+
+  const needsBackfill =
+    rollup.daysWithOrders > 0 &&
+    rollup.daysWithProductSplit < rollup.daysWithOrders &&
+    productLines < shopifyOrderGross * 0.85
+
+  const splitPctOfShopify =
+    shopifyOrderGross > 0 ? (productLines / shopifyOrderGross) * 100 : null
+
+  return (
+    <div className="rounded-lg border border-[var(--uni-border)] bg-[color-mix(in_srgb,var(--uni-border)_18%,var(--uni-surface))] px-3 py-2.5 space-y-2">
+      <p className="text-[11px] text-[var(--uni-text-muted)] leading-snug">
+        Machine + accessory = product line items only. Shopify gross (top KPI) = order total incl. tax &amp; shipping.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+        <div>
+          <span className="text-[var(--uni-text-muted)]">Shopify gross (orders)</span>
+          <div className="font-semibold text-[var(--uni-text)] tabular-nums">
+            {fmtMoney(shopifyOrderGross, currencySymbol)}
+          </div>
+          <span className="text-[10px] text-[var(--uni-text-dim)]">Same as Performance KPI</span>
+        </div>
+        <div>
+          <span className="text-[var(--uni-text-muted)]">Product lines (machines + accessories)</span>
+          <div className="font-semibold text-[var(--uni-text)] tabular-nums">
+            {fmtMoney(productLines, currencySymbol)}
+            {splitPctOfShopify != null && (
+              <span className="ml-1 font-normal text-[var(--uni-text-muted)]">
+                ({splitPctOfShopify.toFixed(0)}% of order gross)
+              </span>
+            )}
+          </div>
+        </div>
+        <div>
+          <span className="text-[var(--uni-text-muted)]">Tax, shipping &amp; other</span>
+          <div className="font-semibold text-[var(--uni-text)] tabular-nums">
+            {fmtMoney(taxShippingGap, currencySymbol)}
+          </div>
+        </div>
+      </div>
+      {needsBackfill && (
+        <p className="uni-callout-warn text-[11px]">
+          Product split only covers {rollup.daysWithProductSplit} of {rollup.daysWithOrders} day(s) with Shopify
+          orders in this range. Re-run{' '}
+          <code className="text-[10px]">sync_shopify_data.py --client kul --backfill-days 30</code> on the sync host
+          to backfill machine/accessory columns.
+        </p>
+      )}
+      {!needsBackfill && splitVsSubtotalGap > shopifyOrderGross * 0.05 && rollup.productSubtotal > 0 && (
+        <p className="text-[11px] text-[var(--uni-text-muted)]">
+          Line-item split is {fmtMoney(splitVsSubtotalGap, currencySymbol)} below Shopify product subtotal (
+          {fmtMoney(subtotalRef, currencySymbol)}) — check for bundles or custom line items.
+        </p>
+      )}
+    </div>
+  )
+}
+
 function KulProductSplitPanel({
   clientName,
   title,
@@ -113,10 +184,10 @@ function KulProductSplitPanel({
   currencySymbol: string
 }) {
   const gap = useDensityStackGap()
-  const totalGross = rollup.machineGross + rollup.accessoryGross
+  const productLines = productLineGross(rollup)
   const totalUnits = rollup.machineUnits + rollup.accessoryUnits
-  const machineRevPct = totalGross > 0 ? (rollup.machineGross / totalGross) * 100 : 0
-  const accessoryRevPct = totalGross > 0 ? (rollup.accessoryGross / totalGross) * 100 : 0
+  const machineRevPct = productLines > 0 ? (rollup.machineGross / productLines) * 100 : 0
+  const accessoryRevPct = productLines > 0 ? (rollup.accessoryGross / productLines) * 100 : 0
   const machineUnitPct = totalUnits > 0 ? (rollup.machineUnits / totalUnits) * 100 : 0
   const accessoryUnitPct = totalUnits > 0 ? (rollup.accessoryUnits / totalUnits) * 100 : 0
 
@@ -128,15 +199,16 @@ function KulProductSplitPanel({
           title={`${title} — ${clientName}`}
         />
         <p className="text-[11px] text-[var(--uni-text-muted)] mt-1 px-4 pb-2">
-          Spark / Spring = machines; all other line items = accessories. Change % vs prior period of equal length.
+          Spark / Spring = machines; all other line items = accessories. Mix % is of product lines only (not Shopify order gross).
         </p>
       </div>
       <div className={`uni-card-body space-y-3`}>
+        <ReconciliationStrip rollup={rollup} currencySymbol={currencySymbol} />
         <div className={`grid grid-cols-2 lg:grid-cols-4 ${gap}`}>
           <SplitMetricCard
             title="Machine sales (gross)"
             value={fmtMoney(rollup.machineGross, currencySymbol)}
-            shareLabel={`${machineRevPct.toFixed(1)}% of sales`}
+            shareLabel={`${machineRevPct.toFixed(1)}% of product lines`}
             change={pctChange(rollup.machineGross, prevRollup.machineGross)}
             icon={Sparkles}
             tone="brand"
@@ -144,7 +216,7 @@ function KulProductSplitPanel({
           <SplitMetricCard
             title="Accessory sales (gross)"
             value={fmtMoney(rollup.accessoryGross, currencySymbol)}
-            shareLabel={`${accessoryRevPct.toFixed(1)}% of sales`}
+            shareLabel={`${accessoryRevPct.toFixed(1)}% of product lines`}
             change={pctChange(rollup.accessoryGross, prevRollup.accessoryGross)}
             icon={Package}
             tone="slate"

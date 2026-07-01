@@ -1103,7 +1103,7 @@ export const db = {
         let q = supabase
             .from('shopify_daily_performance')
             .select(
-                'client_id, date, machine_units, machine_gross, accessory_units, accessory_gross, currency',
+                'client_id, date, gross_revenue, product_subtotal, machine_units, machine_gross, accessory_units, accessory_gross, currency',
             )
             .eq('client_id', f.clientId)
         if (f.startDate) q = q.gte('date', f.startDate)
