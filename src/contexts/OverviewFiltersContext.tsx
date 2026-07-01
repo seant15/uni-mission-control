@@ -58,6 +58,8 @@ export function OverviewFiltersProvider({ children }: { children: ReactNode }) {
 
       let nextUi = mergeOverviewUi(DEFAULT_OVERVIEW_UI, stored?.ui)
 
+      const resolvedClient = nextFilters.selectedClient
+
       if (!urlPartial?.dateRange?.start && !stored?.filters?.dateRange?.start) {
         try {
           const settings = await getDashboardSettings('default_user')
@@ -66,10 +68,12 @@ export function OverviewFiltersProvider({ children }: { children: ReactNode }) {
             ...nextFilters,
             dateRange: defaultCalendarRangeLastNDays(settings.defaultDateRange),
           }
-          nextUi = mergeOverviewUi(nextUi, {
-            businessType: settings.defaultBusinessType,
-            selectedMetric: settings.defaultMetric,
-          })
+          if (resolvedClient === 'all') {
+            nextUi = mergeOverviewUi(nextUi, {
+              businessType: settings.defaultBusinessType,
+              selectedMetric: settings.defaultMetric,
+            })
+          }
         } catch {
           /* keep defaults */
         }
@@ -112,7 +116,10 @@ export function OverviewFiltersProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const setSelectedClient = useCallback(
-    (clientId: string) => patchFilters({ selectedClient: clientId, selectedAdAccount: '' }),
+    (clientId: string) => {
+      patchFilters({ selectedClient: clientId, selectedAdAccount: '' })
+      setUi(prev => ({ ...prev, businessTypeManual: false }))
+    },
     [patchFilters],
   )
 

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import AddClientModal from '../components/AddClientModal'
 import ClientAdSpendTargetsPanel from '../components/ClientAdSpendTargetsPanel'
+import ClientBusinessTypePanel from '../components/ClientBusinessTypePanel'
 import { supabase } from '../lib/supabase'
 import { ACTIVE_CLIENT_STATUSES } from '../lib/api'
 import {
@@ -734,6 +735,7 @@ export default function UserManagement() {
         </div>
       )}
 
+      <ClientBusinessTypePanel clients={clients} />
       <ClientAdSpendTargetsPanel clients={clients} onSaved={loadData} />
 
       {/* Role legend */}

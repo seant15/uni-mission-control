@@ -7,6 +7,7 @@ import ResizableColgroup from './ResizableColgroup'
 import ResizableTh from './ResizableTh'
 import { useResizableColumns } from '../hooks/useResizableColumns'
 import { META_ADSET_COL_WIDTHS } from '../lib/tableResizeDefaults'
+import { normalizeBusinessType, type BusinessType } from '../lib/businessType'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 
 function useTableSort(defaultField: string, defaultDir: 'asc' | 'desc' = 'desc') {
@@ -113,6 +114,8 @@ type Props = {
   nestedCreatives?: any[]
   compact?: boolean
   className?: string
+  businessType?: BusinessType | string | null
+  targetCpa?: number | null
 }
 
 export default function MetaAdSetPerformanceTable({
@@ -123,14 +126,19 @@ export default function MetaAdSetPerformanceTable({
   nestedCreatives,
   compact = false,
   className = '',
+  businessType,
+  targetCpa,
 }: Props) {
-  const adsetSort = useTableSort('spend')
-  const adsetTableCols = useMemo(
-    () => (nestedCreatives
-      ? ['expand', 'ad_set', 'campaign', 'spend', 'impressions', 'clicks', 'conv', 'revenue', 'roas']
-      : ['ad_set', 'campaign', 'spend', 'impressions', 'clicks', 'conv', 'revenue', 'roas']),
-    [nestedCreatives],
-  )
+  const bt = normalizeBusinessType(businessType)
+  const isLeadGen = bt === 'leadgen'
+  const adsetSort = useTableSort(isLeadGen ? '_cpa' : 'spend')
+  const adsetTableCols = useMemo(() => {
+    const base = nestedCreatives
+      ? ['expand', 'ad_set', 'campaign', 'spend', 'impressions', 'clicks', 'conv']
+      : ['ad_set', 'campaign', 'spend', 'impressions', 'clicks', 'conv']
+    if (isLeadGen) return [...base, 'cpa']
+    return [...base, 'revenue', 'roas']
+  }, [nestedCreatives, isLeadGen])
   const { widths: adsetColW, startResize: adsetColResize } = useResizableColumns(
     'meta-adset-v1',
     META_ADSET_COL_WIDTHS,
@@ -152,12 +160,27 @@ export default function MetaAdSetPerformanceTable({
 
   const allAdSets = aggregateAdSets(rawAdsets as any[])
   const sortedAdSets = useMemo(
-    () => adsetSort.sortRows(allAdSets.map(row => ({ ...row, roas: row.spend > 0 ? row.revenue / row.spend : 0 }))),
+    () =>
+      adsetSort.sortRows(
+        allAdSets.map(row => ({
+          ...row,
+          roas: row.spend > 0 ? row.revenue / row.spend : 0,
+          _cpa: row.conversions > 0 ? row.spend / row.conversions : 0,
+        })),
+      ),
     [allAdSets, adsetSort.sortField, adsetSort.sortDir],
   )
 
+  const cpaTone = (cpa: number) => {
+    if (cpa <= 0 || !targetCpa) return 'text-gray-700'
+    if (cpa > targetCpa * 1.25) return 'text-red-600 font-semibold'
+    if (cpa > targetCpa) return 'text-amber-600 font-semibold'
+    return 'text-green-700 font-semibold'
+  }
+
   const renderAdSetRow = (row: any) => {
     const roas = row.spend > 0 ? row.revenue / row.spend : 0
+    const cpa = row.conversions > 0 ? row.spend / row.conversions : 0
     const expanded = expandedAdSets.has(row._key)
     const adsetCreatives =
       nestedCreatives?.filter(
@@ -197,20 +220,28 @@ export default function MetaAdSetPerformanceTable({
           <td className="px-3 py-2.5 text-right text-xs text-gray-600">
             {row.conversions > 0 ? fmtN(row.conversions) : '—'}
           </td>
-          <td className="px-3 py-2.5 text-right text-xs text-gray-600">
-            {row.revenue > 0 ? fmt$(row.revenue) : '—'}
-          </td>
-          <td className="px-3 py-2.5 text-right text-xs">
-            {roas > 0 ? (
-              <span
-                className={`font-semibold ${roas >= 3 ? 'text-green-600' : roas >= 1.5 ? 'text-yellow-600' : 'text-red-500'}`}
-              >
-                {fmtRoas(roas)}
-              </span>
-            ) : (
-              '—'
-            )}
-          </td>
+          {isLeadGen ? (
+            <td className={`px-3 py-2.5 text-right text-xs ${cpaTone(cpa)}`}>
+              {cpa > 0 ? fmt$(cpa) : '—'}
+            </td>
+          ) : (
+            <>
+              <td className="px-3 py-2.5 text-right text-xs text-gray-600">
+                {row.revenue > 0 ? fmt$(row.revenue) : '—'}
+              </td>
+              <td className="px-3 py-2.5 text-right text-xs">
+                {roas > 0 ? (
+                  <span
+                    className={`font-semibold ${roas >= 3 ? 'text-green-600' : roas >= 1.5 ? 'text-yellow-600' : 'text-red-500'}`}
+                  >
+                    {fmtRoas(roas)}
+                  </span>
+                ) : (
+                  '—'
+                )}
+              </td>
+            </>
+          )}
         </tr>
         {expanded &&
           nestedCreatives &&
@@ -228,20 +259,28 @@ export default function MetaAdSetPerformanceTable({
                 <td className="px-3 py-2 text-right text-xs text-gray-500">
                   {cr.conversions > 0 ? fmtN(cr.conversions) : '—'}
                 </td>
-                <td className="px-3 py-2 text-right text-xs text-gray-500">
-                  {cr.revenue > 0 ? fmt$(cr.revenue) : '—'}
-                </td>
-                <td className="px-3 py-2 text-right text-xs">
-                  {crRoas > 0 ? (
-                    <span
-                      className={`font-semibold ${crRoas >= 3 ? 'text-green-600' : crRoas >= 1.5 ? 'text-yellow-600' : 'text-red-500'}`}
-                    >
-                      {fmtRoas(crRoas)}
-                    </span>
-                  ) : (
-                    '—'
-                  )}
-                </td>
+                {isLeadGen ? (
+                  <td className="px-3 py-2 text-right text-xs text-gray-500">
+                    {cr.conversions > 0 ? fmt$(cr.spend / cr.conversions) : '—'}
+                  </td>
+                ) : (
+                  <>
+                    <td className="px-3 py-2 text-right text-xs text-gray-500">
+                      {cr.revenue > 0 ? fmt$(cr.revenue) : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right text-xs">
+                      {crRoas > 0 ? (
+                        <span
+                          className={`font-semibold ${crRoas >= 3 ? 'text-green-600' : crRoas >= 1.5 ? 'text-yellow-600' : 'text-red-500'}`}
+                        >
+                          {fmtRoas(crRoas)}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                  </>
+                )}
               </tr>
             )
           })}
@@ -259,9 +298,15 @@ export default function MetaAdSetPerformanceTable({
       <SortTh label="Spend" field="spend" sort={adsetSort} colId="spend" widths={adsetColW} startResize={adsetColResize} />
       <SortTh label="Impressions" field="impressions" sort={adsetSort} colId="impressions" widths={adsetColW} startResize={adsetColResize} />
       <SortTh label="Clicks" field="clicks" sort={adsetSort} colId="clicks" widths={adsetColW} startResize={adsetColResize} />
-      <SortTh label="Conversions" field="conversions" sort={adsetSort} colId="conv" widths={adsetColW} startResize={adsetColResize} />
-      <SortTh label="Revenue" field="revenue" sort={adsetSort} colId="revenue" widths={adsetColW} startResize={adsetColResize} />
-      <SortTh label="ROAS" field="roas" sort={adsetSort} colId="roas" widths={adsetColW} startResize={adsetColResize} />
+      <SortTh label={isLeadGen ? 'Leads' : 'Conversions'} field="conversions" sort={adsetSort} colId="conv" widths={adsetColW} startResize={adsetColResize} />
+      {isLeadGen ? (
+        <SortTh label="CPL" field="_cpa" sort={adsetSort} colId="cpa" widths={adsetColW} startResize={adsetColResize} />
+      ) : (
+        <>
+          <SortTh label="Revenue" field="revenue" sort={adsetSort} colId="revenue" widths={adsetColW} startResize={adsetColResize} />
+          <SortTh label="ROAS" field="roas" sort={adsetSort} colId="roas" widths={adsetColW} startResize={adsetColResize} />
+        </>
+      )}
     </tr>
   )
 

@@ -412,7 +412,7 @@ export const db = {
         const agencyId = getScopedAgencyId()
         let q = supabase
             .from('clients')
-            .select('id, name, business_type, currency, currency_symbol, meta_ad_account_id, google_ads_customer_id, agency_id, status, target_ad_spend_30d_by_platform')
+            .select('id, name, business_type, currency, currency_symbol, meta_ad_account_id, google_ads_customer_id, agency_id, status, target_ad_spend_30d_by_platform, target_cpa')
             .in('status', [...ACTIVE_CLIENT_STATUSES])
             .order('name')
         if (opts?.scopedClientId) {
@@ -1156,6 +1156,31 @@ export const db = {
                 status: 'active',
             })
             .select('id, name')
+            .single()
+        if (error) {
+            if (rpcError && /function.*does not exist/i.test(rpcError.message ?? '')) {
+                throw error
+            }
+            throw rpcError ?? error
+        }
+        return data
+    },
+
+    async updateClientBusinessType(clientId: string, businessType: 'leadgen' | 'ecommerce') {
+        const { data: rpcData, error: rpcError } = await supabase.rpc('update_client_business_type', {
+            p_client_id: clientId,
+            p_business_type: businessType,
+        })
+        if (!rpcError && rpcData) {
+            const row = Array.isArray(rpcData) ? rpcData[0] : rpcData
+            if (row?.id) return row as { id: string; name: string; business_type: string }
+        }
+
+        const { data, error } = await supabase
+            .from('clients')
+            .update({ business_type: businessType })
+            .eq('id', clientId)
+            .select('id, name, business_type')
             .single()
         if (error) {
             if (rpcError && /function.*does not exist/i.test(rpcError.message ?? '')) {

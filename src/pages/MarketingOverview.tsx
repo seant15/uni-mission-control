@@ -12,6 +12,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useOverviewFilters } from '../contexts/OverviewFiltersContext'
 import { useDensityStackGap } from '../contexts/UiDensityContext'
 import { canAccessAlerts, scopedClientIdFromUser } from '../lib/rbac'
+import { businessTypeLabel, normalizeBusinessType } from '../lib/businessType'
 import FilterShell from '../components/FilterShell'
 import AgencyClientBreakdown from '../components/AgencyClientBreakdown'
 import PlatformBadge from '../components/PlatformBadge'
@@ -209,7 +210,6 @@ export default function MarketingOverview({
   const availablePlatforms = platformsFromDB || []
 
   useEffect(() => {
-    if (businessTypeManual) return
     let clientId = selectedClient
     if (clientId === 'all' && selectedAdAccount && adAccountsFromDB) {
       const match = adAccountsFromDB.find((a: any) => a.id === selectedAdAccount)
@@ -217,11 +217,16 @@ export default function MarketingOverview({
     }
     if (clientId && clientId !== 'all') {
       const client = clients.find(c => c.id === clientId)
-      if (client?.business_type) {
-        patchUi({ businessType: client.business_type })
+      if (client) {
+        const bt = normalizeBusinessType(client.business_type)
+        patchUi({
+          businessType: bt,
+          businessTypeManual: false,
+          selectedMetric: bt === 'leadgen' ? 'costperconv' : 'roas',
+        })
       }
     }
-  }, [selectedClient, selectedAdAccount, clients, adAccountsFromDB, businessTypeManual, patchUi])
+  }, [selectedClient, selectedAdAccount, clients, adAccountsFromDB, patchUi])
 
   const { data: dailyCurRows, isLoading: loadingDailyCur, error: errDailyCur } = useQuery({
     queryKey: ['mkt_cur', dateRange.start, dateRange.end, selectedClient, selectedPlatform, selectedAdAccount, scopedClientId ?? ''],
@@ -776,7 +781,7 @@ export default function MarketingOverview({
                     >
                       <div className="text-sm font-medium">{client.name}</div>
                       {client.business_type && (
-                        <div className="text-xs text-gray-500">{client.business_type === 'leadgen' ? 'Lead Gen' : 'eCommerce'}</div>
+                        <div className="text-xs text-gray-500">{businessTypeLabel(normalizeBusinessType(client.business_type))}</div>
                       )}
                     </button>
                   ))}

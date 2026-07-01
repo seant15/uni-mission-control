@@ -37,6 +37,7 @@ import { filterAdsDailyRows, sumAdsMetrics } from '../lib/adsRows'
 import { rollupShopifyDaily } from '../lib/shopifyMetrics'
 import { useChartAxisStroke, useChartGridStroke } from '../lib/chartTheme'
 import { shouldShowHeatedMer, shopifyAfterReturnForShapedRow } from '../lib/heatedMerEligibility'
+import { BUSINESS_TYPE_UI_REGISTRY, businessTypeLabel, normalizeBusinessType } from '../lib/businessType'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ComposedChart, Area, Line, LineChart, ReferenceLine
@@ -133,6 +134,7 @@ interface Client {
   name: string
   industry?: string
   business_type?: 'leadgen' | 'ecommerce'
+  target_cpa?: number | null
   currency?: string
   currency_symbol?: string
   meta_ad_account_id?: string | null
@@ -358,9 +360,8 @@ export default function DataAnalytics({
     gcTime: 60 * 60 * 1000,
   })
 
-  // Auto-detect business type
+  // Auto-detect business type from client record (always when a specific client is selected).
   useEffect(() => {
-    if (businessTypeManual) return
     const clients_data: Client[] = clientsFromTable || []
     let clientId = selectedClient
     if (clientId === 'all' && selectedAdAccount && adAccountsFromDB) {
@@ -369,14 +370,16 @@ export default function DataAnalytics({
     }
     if (clientId && clientId !== 'all') {
       const client = clients_data.find(c => c.id === clientId)
-      if (client?.business_type) {
+      if (client) {
+        const bt = normalizeBusinessType(client.business_type)
         patchUi({
-          businessType: client.business_type,
-          selectedMetric: client.business_type === 'leadgen' ? 'costperconv' : 'roas',
+          businessType: bt,
+          businessTypeManual: false,
+          selectedMetric: bt === 'leadgen' ? 'costperconv' : 'roas',
         })
       }
     }
-  }, [selectedClient, selectedAdAccount, clientsFromTable, adAccountsFromDB, businessTypeManual, patchUi])
+  }, [selectedClient, selectedAdAccount, clientsFromTable, adAccountsFromDB, patchUi])
 
   // Current period performance
   const { data: performance, isFetching: perfFetching } = useQuery({
@@ -442,6 +445,15 @@ export default function DataAnalytics({
     () => (selectedClient !== 'all' ? clientsFromTable?.find(c => c.id === selectedClient) : undefined),
     [selectedClient, clientsFromTable],
   )
+
+  const drillBusinessType = useMemo(
+    () => normalizeBusinessType(selectedClientRecord?.business_type ?? businessType),
+    [selectedClientRecord, businessType],
+  )
+  const drillUi = BUSINESS_TYPE_UI_REGISTRY.heatedDrill[drillBusinessType]
+  const hideDrillRoas = drillUi.hideRoas
+  const drillConvLabel = drillUi.conversionLabel
+  const drillCpaLabel = drillUi.cpaLabel
 
   const showMerKpi = useMemo(
     () =>
@@ -1096,7 +1108,7 @@ export default function DataAnalytics({
                   {clients?.map(client => (
                     <button key={client.id} onClick={() => { setSelectedClient(client.id); patchUi({ businessTypeManual: false }); setShowClientDropdown(false) }} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-900">
                       <div className="text-sm font-medium">{client.name}</div>
-                      {client.business_type && <div className="text-xs text-gray-500">{client.business_type === 'leadgen' ? 'Lead Gen' : 'eCommerce'}</div>}
+                      {client.business_type && <div className="text-xs text-gray-500">{businessTypeLabel(normalizeBusinessType(client.business_type))}</div>}
                     </button>
                   ))}
                 </div>
@@ -1435,10 +1447,12 @@ export default function DataAnalytics({
               <div className={tableWrapMt}>
                 <VirtualizedTableShell
                   rows={metaCampaignTableRows}
-                  colSpan={11}
+                  colSpan={hideDrillRoas ? 10 : 11}
                   colgroup={(
                     <ResizableColgroup
-                      cols={['campaign_name', 'spend', 'clicks', 'ctr', 'reach', 'frequency', 'outbound', 'video25', 'conv', 'cpa', 'roas']}
+                      cols={hideDrillRoas
+                        ? ['campaign_name', 'spend', 'clicks', 'ctr', 'reach', 'frequency', 'outbound', 'video25', 'conv', 'cpa']
+                        : ['campaign_name', 'spend', 'clicks', 'ctr', 'reach', 'frequency', 'outbound', 'video25', 'conv', 'cpa', 'roas']}
                       widths={metaColW}
                     />
                   )}
@@ -1452,9 +1466,11 @@ export default function DataAnalytics({
                       <SortTh label="Freq" field="frequency" sort={metaCampaignSort} colId="frequency" widths={metaColW} startResize={metaColResize} />
                       <SortTh label="Outbound" field="outbound_clicks" sort={metaCampaignSort} colId="outbound" widths={metaColW} startResize={metaColResize} />
                       <SortTh label="Video 25%" field="video_p25_watched" sort={metaCampaignSort} colId="video25" widths={metaColW} startResize={metaColResize} />
-                      <SortTh label="Conv." field="conversions" sort={metaCampaignSort} colId="conv" widths={metaColW} startResize={metaColResize} />
-                      <SortTh label="CPA" field="_cpa" sort={metaCampaignSort} colId="cpa" widths={metaColW} startResize={metaColResize} />
-                      <SortTh label="ROAS" field="_roas" sort={metaCampaignSort} colId="roas" widths={metaColW} startResize={metaColResize} />
+                      <SortTh label={drillConvLabel} field="conversions" sort={metaCampaignSort} colId="conv" widths={metaColW} startResize={metaColResize} />
+                      <SortTh label={drillCpaLabel} field="_cpa" sort={metaCampaignSort} colId="cpa" widths={metaColW} startResize={metaColResize} />
+                      {!hideDrillRoas && (
+                        <SortTh label="ROAS" field="_roas" sort={metaCampaignSort} colId="roas" widths={metaColW} startResize={metaColResize} />
+                      )}
                     </tr>
                   )}
                   renderRow={(camp: any) => {
@@ -1513,13 +1529,15 @@ export default function DataAnalytics({
                             invertTrend
                           />
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold min-w-[7rem]">
-                          <ValueWithTrend
-                            value={roas > 0 ? `${roas.toFixed(2)}x` : '-'}
-                            current={roas}
-                            previous={prevRoas}
-                          />
-                        </td>
+                        {!hideDrillRoas && (
+                          <td className="px-4 py-3 text-right font-semibold min-w-[7rem]">
+                            <ValueWithTrend
+                              value={roas > 0 ? `${roas.toFixed(2)}x` : '-'}
+                              current={roas}
+                              previous={prevRoas}
+                            />
+                          </td>
+                        )}
                       </tr>
                     )
                   }}
@@ -1540,10 +1558,12 @@ export default function DataAnalytics({
               <div className={tableWrapMt}>
                 <VirtualizedTableShell
                   rows={googleCampaignTableRows}
-                  colSpan={7}
+                  colSpan={hideDrillRoas ? 6 : 7}
                   colgroup={(
                     <ResizableColgroup
-                      cols={['campaign_name', 'spend', 'clicks', 'ctr', 'conv', 'cpa', 'roas']}
+                      cols={hideDrillRoas
+                        ? ['campaign_name', 'spend', 'clicks', 'ctr', 'conv', 'cpa']
+                        : ['campaign_name', 'spend', 'clicks', 'ctr', 'conv', 'cpa', 'roas']}
                       widths={googleColW}
                     />
                   )}
@@ -1553,9 +1573,11 @@ export default function DataAnalytics({
                       <SortTh label="Spend" field="spend" sort={googleCampaignSort} colId="spend" widths={googleColW} startResize={googleColResize} />
                       <SortTh label="Clicks" field="clicks" sort={googleCampaignSort} colId="clicks" widths={googleColW} startResize={googleColResize} />
                       <SortTh label="CTR" field="_ctr" sort={googleCampaignSort} colId="ctr" widths={googleColW} startResize={googleColResize} />
-                      <SortTh label="Conv." field="conversions" sort={googleCampaignSort} colId="conv" widths={googleColW} startResize={googleColResize} />
-                      <SortTh label="CPA" field="_cpa" sort={googleCampaignSort} colId="cpa" widths={googleColW} startResize={googleColResize} />
-                      <SortTh label="ROAS" field="_roas" sort={googleCampaignSort} colId="roas" widths={googleColW} startResize={googleColResize} />
+                      <SortTh label={drillConvLabel} field="conversions" sort={googleCampaignSort} colId="conv" widths={googleColW} startResize={googleColResize} />
+                      <SortTh label={drillCpaLabel} field="_cpa" sort={googleCampaignSort} colId="cpa" widths={googleColW} startResize={googleColResize} />
+                      {!hideDrillRoas && (
+                        <SortTh label="ROAS" field="_roas" sort={googleCampaignSort} colId="roas" widths={googleColW} startResize={googleColResize} />
+                      )}
                     </tr>
                   )}
                   renderRow={(camp: any) => {
@@ -1599,13 +1621,15 @@ export default function DataAnalytics({
                             invertTrend
                           />
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold min-w-[7rem]">
-                          <ValueWithTrend
-                            value={roas > 0 ? `${roas.toFixed(2)}x` : '-'}
-                            current={roas}
-                            previous={prevRoas}
-                          />
-                        </td>
+                        {!hideDrillRoas && (
+                          <td className="px-4 py-3 text-right font-semibold min-w-[7rem]">
+                            <ValueWithTrend
+                              value={roas > 0 ? `${roas.toFixed(2)}x` : '-'}
+                              current={roas}
+                              previous={prevRoas}
+                            />
+                          </td>
+                        )}
                       </tr>
                     )
                   }}
@@ -1642,14 +1666,22 @@ export default function DataAnalytics({
                       <SortTh label="Spend" field="spend" sort={keywordSort} colId="spend" widths={kwColW} startResize={kwColResize} />
                       <SortTh label="Clicks" field="clicks" sort={keywordSort} colId="clicks" widths={kwColW} startResize={kwColResize} />
                       <SortTh label="CTR" field="_ctr" sort={keywordSort} colId="ctr" widths={kwColW} startResize={kwColResize} />
-                      <SortTh label="Conv." field="conversions" sort={keywordSort} colId="conv" widths={kwColW} startResize={kwColResize} />
-                      <SortTh label="CPC" field="_cpc" sort={keywordSort} colId="cpc" widths={kwColW} startResize={kwColResize} />
+                      <SortTh label={drillConvLabel} field="conversions" sort={keywordSort} colId="conv" widths={kwColW} startResize={kwColResize} />
+                      <SortTh
+                        label={drillBusinessType === 'leadgen' ? drillCpaLabel : 'CPC'}
+                        field={drillBusinessType === 'leadgen' ? '_cpa' : '_cpc'}
+                        sort={keywordSort}
+                        colId={drillBusinessType === 'leadgen' ? 'cpa' : 'cpc'}
+                        widths={kwColW}
+                        startResize={kwColResize}
+                      />
                     </tr>
                   )}
                   renderRow={(kw: any) => {
                     const prev = prevAggKeywordsMap.get(kw.keyword_id)
                     const ctr = kw.impressions > 0 ? kw.clicks / kw.impressions * 100 : 0
                     const cpc = kw.clicks > 0 ? kw.spend / kw.clicks : 0
+                    const cpa = kw.conversions > 0 ? kw.spend / kw.conversions : 0
                     return (
                       <tr key={kw._key} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium">{kw.keyword}</td>
@@ -1674,7 +1706,11 @@ export default function DataAnalytics({
                             previous={prev?.conversions}
                           />
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums">{cpc > 0 ? `$${cpc.toFixed(2)}` : '-'}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {drillBusinessType === 'leadgen'
+                            ? (cpa > 0 ? `${selectedClientCurrencySym}${cpa.toFixed(2)}` : '-')
+                            : (cpc > 0 ? `$${cpc.toFixed(2)}` : '-')}
+                        </td>
                       </tr>
                     )
                   }}
@@ -1711,14 +1747,22 @@ export default function DataAnalytics({
                       <SortTh label="Impr." field="impressions" sort={searchTermSort} colId="impressions" widths={stColW} startResize={stColResize} />
                       <SortTh label="Clicks" field="clicks" sort={searchTermSort} colId="clicks" widths={stColW} startResize={stColResize} />
                       <SortTh label="CTR" field="_ctr" sort={searchTermSort} colId="ctr" widths={stColW} startResize={stColResize} />
-                      <SortTh label="CPC" field="_cpc" sort={searchTermSort} colId="cpc" widths={stColW} startResize={stColResize} />
-                      <SortTh label="Conv." field="conversions" sort={searchTermSort} colId="conv" widths={stColW} startResize={stColResize} />
+                      <SortTh
+                        label={drillBusinessType === 'leadgen' ? drillCpaLabel : 'CPC'}
+                        field={drillBusinessType === 'leadgen' ? '_cpa' : '_cpc'}
+                        sort={searchTermSort}
+                        colId={drillBusinessType === 'leadgen' ? 'cpa' : 'cpc'}
+                        widths={stColW}
+                        startResize={stColResize}
+                      />
+                      <SortTh label={drillConvLabel} field="conversions" sort={searchTermSort} colId="conv" widths={stColW} startResize={stColResize} />
                     </tr>
                   )}
                   renderRow={(term: any) => {
                     const prev = prevAggSearchTermsMap.get(term.search_term)
                     const ctr = term.impressions > 0 ? term.clicks / term.impressions * 100 : 0
                     const cpc = term.clicks > 0 ? term.spend / term.clicks : 0
+                    const cpa = term.conversions > 0 ? term.spend / term.conversions : 0
                     return (
                       <tr key={term._key} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium max-w-[220px] truncate">{term.search_term}</td>
@@ -1736,7 +1780,11 @@ export default function DataAnalytics({
                         <td className="px-4 py-3 text-right tabular-nums">{term.impressions.toLocaleString()}</td>
                         <td className="px-4 py-3 text-right tabular-nums">{term.clicks}</td>
                         <td className="px-4 py-3 text-right tabular-nums">{ctr.toFixed(2)}%</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{cpc > 0 ? `$${cpc.toFixed(2)}` : '-'}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {drillBusinessType === 'leadgen'
+                            ? (cpa > 0 ? `${selectedClientCurrencySym}${cpa.toFixed(2)}` : '-')
+                            : (cpc > 0 ? `$${cpc.toFixed(2)}` : '-')}
+                        </td>
                         <td className="px-4 py-3 text-right min-w-[6rem]">
                           <ValueWithTrend
                             value={
@@ -1766,6 +1814,8 @@ export default function DataAnalytics({
                 startDate={dateRange.start}
                 endDate={dateRange.end}
                 scopedClientId={scopedClientId || undefined}
+                businessType={drillBusinessType}
+                targetCpa={selectedClientRecord?.target_cpa as number | undefined}
               />
             </div>
           )}
