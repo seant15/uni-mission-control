@@ -1131,18 +1131,38 @@ export const db = {
         currency?: string
     }) {
         const agencyId = input.agency_id ?? getScopedAgencyId() ?? null
+        const payload = {
+            p_name: input.name.trim(),
+            p_business_type: input.business_type ?? 'ecommerce',
+            p_agency_id: agencyId,
+            p_currency: input.currency ?? 'USD',
+        }
+
+        // Prefer RPC (SECURITY DEFINER) — works even when INSERT RLS policy was not migrated yet.
+        const { data: rpcData, error: rpcError } = await supabase.rpc('create_client_record', payload)
+        if (!rpcError && rpcData) {
+            const row = Array.isArray(rpcData) ? rpcData[0] : rpcData
+            if (row?.id) return row as { id: string; name: string }
+        }
+
+        // Fallback: direct insert when RPC not deployed (migration pending).
         const { data, error } = await supabase
             .from('clients')
             .insert({
-                name: input.name.trim(),
-                business_type: input.business_type ?? 'ecommerce',
+                name: payload.p_name,
+                business_type: payload.p_business_type,
                 agency_id: agencyId,
-                currency: input.currency ?? 'USD',
+                currency: payload.p_currency,
                 status: 'active',
             })
             .select('id, name')
             .single()
-        if (error) throw error
+        if (error) {
+            if (rpcError && /function.*does not exist/i.test(rpcError.message ?? '')) {
+                throw error
+            }
+            throw rpcError ?? error
+        }
         return data
     },
 

@@ -16,6 +16,25 @@ function pctChange(cur: number, prev: number) {
 
 const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 
+/** Signed % + arrow direction (down arrow must pair with −%, not +%). */
+function MetricChangeBadge({
+  change,
+  invertTrend = false,
+}: {
+  change: number
+  invertTrend?: boolean
+}) {
+  const isGood = invertTrend ? change <= 0 : change >= 0
+  const isUp = change > 0
+  const isDown = change < 0
+  return (
+    <div className={`flex items-center gap-0.5 text-xs font-medium shrink-0 ${isGood ? 'text-green-600' : 'text-red-600'}`}>
+      {isUp ? <ArrowUpRight size={12} /> : isDown ? <ArrowDownRight size={12} /> : null}
+      {fmtPct(change)}
+    </div>
+  )
+}
+
 function fmtMoney(v: number, sym = '$') {
   if (!Number.isFinite(v)) return '—'
   return `${sym}${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
@@ -45,7 +64,6 @@ function SplitMetricCard({
   tone: keyof typeof TONE_SHELL
   invertTrend?: boolean
 }) {
-  const isGood = change === undefined ? true : invertTrend ? change <= 0 : change >= 0
   const shell = TONE_SHELL[tone] ?? TONE_SHELL.slate
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 transition-shadow hover:shadow-md hover:border-gray-300/80">
@@ -54,10 +72,7 @@ function SplitMetricCard({
           <Icon className="w-4 h-4" />
         </div>
         {change !== undefined && (
-          <div className={`flex items-center gap-0.5 text-xs font-medium shrink-0 ${isGood ? 'text-green-600' : 'text-red-600'}`}>
-            {isGood ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-            {fmtPct(Math.abs(change))}
-          </div>
+          <MetricChangeBadge change={change} invertTrend={invertTrend} />
         )}
       </div>
       <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight truncate">{value}</div>

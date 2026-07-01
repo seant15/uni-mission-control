@@ -76,6 +76,24 @@ function pctChange(cur: number, prev: number) {
 
 const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 
+function MetricChangeBadge({
+  change,
+  invertTrend = false,
+}: {
+  change: number
+  invertTrend?: boolean
+}) {
+  const isGood = invertTrend ? change <= 0 : change >= 0
+  const isUp = change > 0
+  const isDown = change < 0
+  return (
+    <div className={`flex items-center gap-0.5 text-xs font-medium shrink-0 ${isGood ? 'text-green-600' : 'text-red-600'}`}>
+      {isUp ? <ArrowUpRight size={12} /> : isDown ? <ArrowDownRight size={12} /> : null}
+      {fmtPct(change)}
+    </div>
+  )
+}
+
 const KPI_ICON_SHELL: Record<string, string> = {
   blue: 'p-1.5 rounded-md bg-[var(--brand-50)] text-[var(--brand-600)]',
   violet: 'p-1.5 rounded-md bg-violet-50 text-violet-600',
@@ -95,8 +113,6 @@ function MetricCard({ title, value, change, icon: Icon, tone, invertTrend = fals
   tone: keyof typeof KPI_ICON_SHELL
   invertTrend?: boolean
 }) {
-  const isGood = change === undefined ? true : invertTrend ? change <= 0 : change >= 0
-  const absChange = change !== undefined ? Math.abs(change) : undefined
   const shell = KPI_ICON_SHELL[tone] ?? KPI_ICON_SHELL.slate
   return (
     <div className="uni-metric-card rounded-lg shadow-sm border p-3 transition-shadow hover:shadow-md">
@@ -105,10 +121,7 @@ function MetricCard({ title, value, change, icon: Icon, tone, invertTrend = fals
           <Icon className="w-4 h-4" />
         </div>
         {change !== undefined && (
-          <div className={`flex items-center gap-0.5 text-xs font-medium shrink-0 ${isGood ? 'text-green-600' : 'text-red-600'}`}>
-            {isGood ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-            {fmtPct(absChange!)}
-          </div>
+          <MetricChangeBadge change={change} invertTrend={invertTrend} />
         )}
       </div>
       <div className="text-lg sm:text-xl font-bold text-gray-900 leading-tight truncate">{value}</div>
